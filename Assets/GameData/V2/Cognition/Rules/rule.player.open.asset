@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e23e3f66600846faa4e5b10a81bfd5d5, type: 3}
+  m_Name: rule.player.open
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.Cognition.CognitionRule
+  id: rule.player.open
+  words:
+  - {fileID: 11400000, guid: 03f4497e514a4e19839603ad3397c707, type: 2}
+  - {fileID: 11400000, guid: 24915b76b5604ab290ea5b22028c68a0, type: 2}
+  - {fileID: 11400000, guid: 1a28461cab74402cb6bb5427809aa9ce, type: 2}
+  effect: 3

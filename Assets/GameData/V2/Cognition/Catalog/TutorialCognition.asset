@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7074fdb42f0e4b87859ce7571dc5ec52, type: 3}
+  m_Name: TutorialCognition
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.Cognition.CognitionCatalog
+  words:
+  - {fileID: 11400000, guid: 03f4497e514a4e19839603ad3397c707, type: 2}
+  - {fileID: 11400000, guid: 52d69257bab940bab7dc630378f1a29c, type: 2}
+  - {fileID: 11400000, guid: e86acf9d88ce48678ad2eaf8ae322dc5, type: 2}
+  - {fileID: 11400000, guid: cff32c29791845148e1c1123b14b1049, type: 2}
+  - {fileID: 11400000, guid: f777ec58536d4c439c34ed7d51c8f393, type: 2}
+  - {fileID: 11400000, guid: 24915b76b5604ab290ea5b22028c68a0, type: 2}
+  - {fileID: 11400000, guid: 1a28461cab74402cb6bb5427809aa9ce, type: 2}
+  rules:
+  - {fileID: 11400000, guid: 9a05bb5b32334e4880c0dde0476130e0, type: 2}
+  - {fileID: 11400000, guid: 518f9ca450c04b48a7b38cf94efd7029, type: 2}
+  - {fileID: 11400000, guid: 400e4e08b3cc452ab2d569ac99fa0595, type: 2}
+  - {fileID: 11400000, guid: bbac8e0441964051bc184eb33d5fde2a, type: 2}
+  - {fileID: 11400000, guid: f793fc284f444c18838c61c5194ec761, type: 2}
+  conflicts:
+  - {fileID: 11400000, guid: 7f4e928eba294c3d95c9564a4dcf460f, type: 2}

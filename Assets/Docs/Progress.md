@@ -1,12 +1,20 @@
 # 当前进度
 
+## 2026-09-29：三个平级原型与符号占位
+- 整理为 General / V1 / V2 / V3 归属：原英文场景移动到 `Scenes/V1/TutorialLevel.unity`；新增 `Scenes/V2/SymbolLanguage.unity` 和 `Scenes/V3/SymbolSandbox.unity`。现有资源移动时保留 meta/GUID，维护脚本、文档和构建路径同步更新。源模型、空间材质和渲染资源共用；玩法、功能 prefab、SO 与专属道具资源按版本隔离。
+- V2 独立复制原流程，采用 `PuzzleApple.V2` 命名空间与独立配置。7 个词汇增加 Symbol 引用，暂用 Unity 内置 sprite；词块、拖拽预览和收词动画均改为图片。句式语义和词序保持不变。修正 sprite pivot/裁剪边距造成的居中偏差、吸附圆点位置、漂浮词拾取位置及重写动画透明命中区。
+- V3 保留当前模型、灯光、镜面和碰撞，移除教学、认知面板、收词、苹果/钥匙/门玩法组件与苹果动力学。只接入通用基础玩家控制器；新语法和解谜流程等待用户文档。
+- 检查通过：V1/V2 各 17 项 SO、30 项认知状态、36 项苹果到开门流程；V2 45 项开场与 29 项实际 UI 几何/漂浮/重写检查；V3 6 项基础移动、碰撞、跌落复位和无旧玩法检查。共 246 项。截图核对首次符号、边走边收词和吸附显示；检查实际 UI 网格而非只检查布局预测值。
+- 三个场景均无缺失脚本、断开的序列化引用或跨版本专属资产依赖；原场景、原运行时代码与既有资源内容比对无意外变化，原 GUID 保留。编译无错误，退出 Play，临时输入设置恢复，编辑器停在 V2。未验证独立构建，正式 sprite 导入后的视觉重心和操作手感仍需再验收。
+- 场景入口、共享边界和替换方式见 [Prototypes.md](Prototypes.md)。菜单 `PuzzleApple > Prototypes` 可切换场景；构建首场景仍是 V1。无运行时原型选择 UI。
+
 ## 2026-09-24：门收词与 I open door
 - 新增 `Words/door.asset` 并加入正式 SO 目录（现有 7 个词汇）；保留开门规则 ID，将词序改为 `I open door`。`I open` 不再成立。
 - 门首次交互显示眼睛，播放收词表现并仅发放一次 `door`，不自动开面板或开门。收词后按完整句子切换禁止／问号；破句锁住未开门，已开门保留结果。钥匙的 `open` 获取流程保留，与门共用单词收集表现。
 - 验证：17 项 SO、30 项认知状态、36 项苹果至开门流程检查通过，覆盖先收 door、重复点击、I open 无效、完整拼句、拆掉 door、开门及不可逆结果。编译无错误，已退出 Play；未验证独立构建。
 
 ## 2026-09-24：认知规则迁移到 ScriptableObject
-- 新建 `Assets/GameData/Cognition/`：Words（6 个词汇）、Rules（5 条句式）、Conflicts（1 条玩家移动冲突）、Catalog（正式关卡总目录）。TutorialLevel 的 CognitionBoard 显式引用目录；原配置入口也接入目录。
+- 新建 `Assets/GameData/V1/Cognition/`：Words（6 个词汇）、Rules（5 条句式）、Conflicts（1 条玩家移动冲突）、Catalog（正式关卡总目录）。TutorialLevel 的 CognitionBoard 显式引用目录；原配置入口也接入目录。
 - 词汇保存语义 ID 与显示文字，规则保存稳定 ID、有序词汇引用和效果，冲突保存效果配对。运行时建立查找表；组实例、收集来源、冲突结果及世界事实不写回 SO。未登记词汇会在提交前报错，失败不会消耗获取来源。
 - 删除原写死句式表、固定冲突调用、静态词汇实例和 FromText 临时构造接口；保留现有世界行为的枚举接口和执行代码。没有保留第二套默认配置或运行时任意加词入口，原 WordDefinition 脚本 GUID 保留。
 - 新增目录 Inspector 校验、Validate catalogs 菜单和 SO 配置检查。覆盖重复 ID／句式、缺失与越界引用、无效效果和冲突配对。编辑方式记录在 GameDesign 的“当前 SO 配置方式”。
@@ -147,10 +155,10 @@
 - 建立项目协作规则及文档入口；沿用 `Assets/Docs/` 和 `Assets/Scripts/` 等现有分类。
 
 ## 当前状态
-- SacredSpaceV2 已接入 `Assets/Prefabs/UI/GameplayPanel.prefab`：左侧全高 1/3 面板，Tab 切换并滑入/滑出；右侧视口保持不变。场景实例新增认知组件，运行时在 `Panel/Content` 下生成正式词汇与句子；基础 prefab 继续承担面板滑动与控制切换。
+- SacredSpaceV2 已接入 `Assets/Prefabs/V1/UI/GameplayPanel.prefab`：左侧全高 1/3 面板，Tab 切换并滑入/滑出；右侧视口保持不变。场景实例新增认知组件，运行时在 `Panel/Content` 下生成正式词汇与句子；基础 prefab 继续承担面板滑动与控制切换。
 - 面板基础运行验证通过：注入 Tab 按下/松开/再次按下分别展开/保持/收起；0.2 秒内减速至停止、左右 UI 射线隔离、动态改色、快速切换和关闭后释放控制，截图确认比例与参考一致。按手感反馈取消鼠标左侧限制及鼠标驱动视角，改为随机左右 idle；60 秒模拟检查角度限幅、平滑变化、上下视角保持、收起无跳转及交互状态切换通过，控制台无编译/运行错误。修改后的真人手感及独立构建尚未验收。
 - 当前打开 SacredSpaceV2：走廊 3.2×4 米，主房占地 18×20 米、高 12 米；台座保持原中心。关闭 V2 的 SSAO 暗边，保持白色柔和空间方向。材质分区、反射与碰撞同步，通行验证通过；旧方案已在本次清理移除。
-- 苹果材质已修复：AppleNormal 按 Normal Map 导入；AppleRoughness 按线性数据处理，反相写入派生 AppleMetallicSmoothness.png 的 alpha（RGB=0，非金属）。外部 `Assets/Materials/Apple.mat` 使用 URP/Lit，并通过 FBX 材质 remap 保持重新导入后的引用。粗糙度源图若更新，需重新生成派生贴图。临时照明截图已确认纹理和高光正常；封闭房间内仍较暗，未改变场景照明。
+- 苹果材质已修复：AppleNormal 按 Normal Map 导入；AppleRoughness 按线性数据处理，反相写入派生 AppleMetallicSmoothness.png 的 alpha（RGB=0，非金属）。外部 `Assets/Materials/General/Apple.mat` 使用 URP/Lit，并通过 FBX 材质 remap 保持重新导入后的引用。粗糙度源图若更新，需重新生成派生贴图。临时照明截图已确认纹理和高光正常；封闭房间内仍较暗，未改变场景照明。
 - MCP 可用；后续连接时应重新验证实例和编辑器状态。
 - Play Mode 验证：落地稳定、走廊侧墙/尽头阻挡、门洞通行、主房远墙/侧墙阻挡。脚本与两个 shader 无编译错误；尚未进行真人键鼠手感验收或独立构建验证。
 

@@ -1,5 +1,9 @@
 # 当前进度
 
+## 2026-09-29：V2 补齐 consume / open
+- 将 V2 的 consume、open 分别替换为 `Assets/Sprites/v2_260929/consume.png` 和 `open.png`，七个词汇现均使用用户素材。
+- 已确认 Sprite 导入与保存后的引用，目录配置校验通过；其余词汇、素材、规则和场景未修改。本轮未进入 Play 或重跑完整流程。
+
 ## 2026-09-29：V2 接入用户符号素材
 - 将 V2 的 i、apple、door、move、no 的 Symbol 分别改为 `Assets/Sprites/v2_260929/` 中的 I、Apple、Door、Move、Negative。consume 与 open 继续使用内置占位，其余新素材不使用、不修改。
 - 移除上述五个旧占位在 V2 词汇配置中的引用；原占位属于 Unity 内置资源，没有独立项目文件需要删除。V1/V3 和解谜规则未改动。

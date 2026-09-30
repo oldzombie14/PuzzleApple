@@ -25,19 +25,21 @@ Unity 菜单 `PuzzleApple > Prototypes` 可分别打开三个场景，也可检�
 
 ## V2 替换符号
 
-在 `Assets/GameData/V2/Cognition/Words/` 中选择词汇 SO，将 `Symbol` 指向用户提供的 sprite。建议新增资源归档到 `Assets/UI/V2/Symbols/`；纹理导入为 Sprite，尽量裁去无用透明边距。
+在 `Assets/GameData/V2/Cognition/Words/` 中选择词汇 SO，将 `Symbol` 指向用户提供的 sprite。当前用户素材位于 `Assets/Sprites/v2_260929/`，沿用该目录；纹理导入为 Sprite，尽量裁去无用透明边距。
 
-`Id` 用于认知判断，应保持稳定；`Display Text` 保留为语义调试信息，不在 V2 的词块和收词动画中显示。句式、词序和冲突规则仍与 V1 相同。当前 Unity 内置 sprite 只是占位，不代表已经确定的符号设计：
+`Id` 用于认知判断，应保持稳定；`Display Text` 保留为语义调试信息，不在 V2 的词块和收词动画中显示。句式、词序和冲突规则仍与 V1 相同。2026-09-29 按用户要求接入以下素材；consume/open 素材未到，保留 Unity 内置占位：
 
-| ID | 内置占位 |
+| ID | 当前 sprite |
 | --- | --- |
-| i | Knob |
-| no | DropdownArrow |
-| move | Checkmark |
-| consume | UISprite |
-| apple | Background |
-| open | InputFieldBackground |
-| door | UIMask |
+| i | I.png |
+| no | Negative.png |
+| move | Move.png |
+| consume | UISprite（保留占位） |
+| apple | Apple.png |
+| open | InputFieldBackground（保留占位） |
+| door | Door.png |
+
+Equal、Light、Mirror、Positive 等未使用素材保持原样。旧五个内置占位已从 V2 词汇配置解除引用；它们属于 Unity 内置资源，无需删除引擎资源。
 
 面板、单词拖拽预览、整句拖拽和收词动画统一读取 Symbol，保持图片纵横比。词块宽度、句子容纳判断和吸附提示基于 sprite 尺寸；首次符号居中，句首方块、无效句划线与冲突淡化沿用原流程。替换正式素材后仍需检查透明边距、视觉重心和实际辨识度。
 

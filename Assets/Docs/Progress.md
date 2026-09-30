@@ -1,5 +1,10 @@
 # 当前进度
 
+## 2026-09-29：V2 接入用户符号素材
+- 将 V2 的 i、apple、door、move、no 的 Symbol 分别改为 `Assets/Sprites/v2_260929/` 中的 I、Apple、Door、Move、Negative。consume 与 open 继续使用内置占位，其余新素材不使用、不修改。
+- 移除上述五个旧占位在 V2 词汇配置中的引用；原占位属于 Unity 内置资源，没有独立项目文件需要删除。V1/V3 和解谜规则未改动。
+- 在当前 `Scenes/V2/P2.unity` 的 Play 会话中核对了七个实际词块 sprite 引用，配置校验通过，控制台无错误或警告。临时预览词汇随退出 Play 丢弃；本轮未重跑完整解谜回归或独立构建，截图捕获未生成文件，未据此宣称视觉验收。
+
 ## 2026-09-29：三个平级原型与符号占位
 - 整理为 General / V1 / V2 / V3 归属：原英文场景移动到 `Scenes/V1/TutorialLevel.unity`；新增 `Scenes/V2/SymbolLanguage.unity` 和 `Scenes/V3/SymbolSandbox.unity`。现有资源移动时保留 meta/GUID，维护脚本、文档和构建路径同步更新。源模型、空间材质和渲染资源共用；玩法、功能 prefab、SO 与专属道具资源按版本隔离。
 - V2 独立复制原流程，采用 `PuzzleApple.V2` 命名空间与独立配置。7 个词汇增加 Symbol 引用，暂用 Unity 内置 sprite；词块、拖拽预览和收词动画均改为图片。句式语义和词序保持不变。修正 sprite pivot/裁剪边距造成的居中偏差、吸附圆点位置、漂浮词拾取位置及重写动画透明命中区。

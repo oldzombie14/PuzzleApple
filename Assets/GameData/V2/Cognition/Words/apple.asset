@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.Cognition.WordDefinition
   id: apple
   displayText: apple
-  symbol: {fileID: 10907, guid: 0000000000000000f000000000000000, type: 0}
+  symbol: {fileID: 21300000, guid: 93c6377fd3e850b49b534c0d25caf0dd, type: 3}

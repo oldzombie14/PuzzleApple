@@ -1,6 +1,6 @@
 # 当前画面方案
 
-2026-09-29 起，以下空间资源由三个平级原型复用。原英文入口已移动到 V1，V2 为符号替换，V3 为新流程底板；具体入口和共享资源修改边界见 [Prototypes.md](Prototypes.md)。本页旧记录中的 V2 指美术空间方案，并非新的符号原型编号。
+2026-09-29 起，以下空间资源由三个平级原型复用。V1 为英文流程，V2 为符号替换，V3 为天平解谜；实际场景入口和共享资源修改边界见 [Prototypes.md](Prototypes.md)。本页旧记录中的 V2 指美术空间方案，并非新的符号原型编号。
 
 ## 已确认方向
 - 当前场景为 `Assets/Scenes/V1/TutorialLevel.unity`（原 SacredSpaceV2 改名，仍使用 V2 空间资源）。旧 SampleScene、WhiteRoomStudy、WhiteGalleryStudy、SacredSpaceStudy 及其专用资源已按用户确认删除；当前构建入口为 TutorialLevel。
@@ -8,6 +8,16 @@
 - 走廊约 3.2 米宽、4 米高；主房约 18×20 米、高 12 米。出生 X=9.05，朝向主房；台座中心保持 Unity X≈-8/Z=0，尺寸 1.2×2 米、高 1 米，底部 Y=0.04。后方留给未来的门。
 
 ## 当前资源与维护
+
+- 2026-09-30 V3 试玩修订：睁眼改为宽羽化曲边，暗处逐渐显露场景，低分辨率双向高斯模糊逐步退去；初始黑屏约 0.45 秒、睁眼 5.5 秒、稳定 1.2 秒后收【我】。收词约 3.4 秒，淡入／停留／收入，白色符号加细暗边提高明亮背景可读性。参数为本轮试调值。
+- Tab 保持约 1/3 屏宽：炭黑底、中性白符号、左侧窄词列与细滚动条，右侧大面积留白供组句。快照在右侧居中显示，右上角小 X 关闭；`MemoryPrint` 材质降低饱和度、中性灰调色、暗角与静态细颗粒，不改变原始快照。移除备注区和保存键，不显示解释性词义。
+- 开场学步沿用 V2 的 26% 初速度、短步起步、步频迟疑和轻微 yaw／上下起伏；按实际行走距离渐退，不偏转运动方向。当前 2.3 米获得【移动】，4.6 米恢复正常步态；苹果身份／运送时不叠加踉跄。
+- 2026-09-30 V3 玩法制作补充：P3 的双扇门已接入平移开关，指示灯使用运行时材质显示黑／白。天平从原混合网格派生 `Generated/Balance-0/1/2.asset`，将支架、两盘分离，原混合 renderer 停用；横梁、链条和两盘围绕专属枢轴运动，用户源模型保持原样。
+- 为完成本轮玩法，P3 后墙另用局部场景几何留出通道，设置无【门】词义的升降石板及短出口通道。此项是玩法新增，不是用户此前源文件中的墙面改动；V1/V2 后墙与模型保持原样。
+- 睁眼模糊和相同视角分屏由 V3 专属全屏材质处理；词库快照来自该玩家相机，不含面板。符号从已有用户素材复制到 `Sprites/V3`，没有修改 V2 素材配置。
+- 2026-09-30 V3 新资源：`ArtAssets-3D/V3/Balance.fbx` 由外部 `balance.glb` 转换，门与指示灯 FBX 从各自包含整套旧场景的外部导出中提取。`Scripts/V3/Editor/Blender/prepare_models.py` 在 Blender 后台运行，`--` 后依次传源目录与输出目录，保留外部原件。天平枢轴归到底部中心、导出高约 2.4 米；金色材质抽取为 `Materials/V3/BalanceBrass.mat`。
+- V3 `P3.unity` 的天平基座落在台座顶面 Y=1.04；苹果初始放在台座旁，最低点 Y=0.045。门位于入口 X=2，底部 Y=0.04、顶部约 Y=3.5455；指示灯中心约 (2.096, 3.767, 0)，编辑态用黑色 `IndicatorOff.mat`，Play 中闪烁。单网格指示灯 prefab 保留 FBX 自带的 100 倍单位换算，在此基础上放大 1.3 倍。
+- 本次只同步用户改动的「主房-入口」，对比基准是 9 月 24 日的 `PuzzleApple-场景-0.fbx`。使用 V3 派生 `ArtAssets-3D/V3/Generated/EntranceWall.asset` 将现有空间门洞顶部降低 0.4 米，MeshFilter 与 MeshCollider 同步引用；房间其他尺寸及后墙不变。后墙源文件开口是历史差异，不属于本轮改动。
 
 - 开场镜框共用 `GalleryWall.mat`；镜面使用 `MirrorSurface.mat`（由 FrostedMirror 重命名，保留 GUID）＋`PlanarMirror` 平面反射组件与 Shader。运行时反射走廊，无玩家模型；镜面不可见时不更新反射，旧 `Corridor reflection` 探针已删除。
 - 建筑模型：`Assets/ArtAssets-3D/General/PuzzleApple-SpaceStudyV2.fbx`；源文件在项目外 `D:/NYU/Study/26Fall/Thesis/PuzzleAppleAssets/PuzzleApple-sacred-space-v2.blend`。

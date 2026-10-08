@@ -1,0 +1,842 @@
+{
+  "schemaVersion": 1,
+  "catalogPath": "Assets/GameData/V3/Opening/OpeningCatalog.asset",
+  "sourceHash": "f7da4430f1ccdeb88d83548939f0156a6457fa1a09e14ad83303c97f341f2300",
+  "sources": {
+    "Assets/GameData/V3/Cognition/Words/door.asset": "a139ed86c35d65984947802a5874506423d73815acff6940d8374b72ec425028",
+    "Assets/GameData/V3/Cognition/Words/door.asset.meta": "d7257795928f402df545b46869d54d4fca29e433bac173a9bfe118418c53f395",
+    "Assets/GameData/V3/Cognition/Words/equal.asset": "ad7cc864622d1e8d71debfefb31b5d58f287ace43824e643ed56b7dfcbf41f37",
+    "Assets/GameData/V3/Cognition/Words/equal.asset.meta": "65147a614873eb3eac6c2dbab11a65af696112fc6d56c3d4f23e81d16ebe00b0",
+    "Assets/GameData/V3/Cognition/Words/i.asset": "f2ecde484ebcb7ade272469985823836e4db9e0ffd82c304408bf5888024c36d",
+    "Assets/GameData/V3/Cognition/Words/i.asset.meta": "e092ee7d1707f3630401ffcc5ad6488ab540d192b78d587eea07c44f729c3c9e",
+    "Assets/GameData/V3/Cognition/Words/mirror.asset": "85c59ec6402eba925f8fb6802d1a1e66fc63f5dbd24792f1821b9b15673e0a93",
+    "Assets/GameData/V3/Cognition/Words/mirror.asset.meta": "25efadd5b02d33838c4c435ab3531e8635c4bf0dc569d3d78b95198d18f7a1ee",
+    "Assets/GameData/V3/Cognition/Words/move.asset": "6e25bd86c82f149e57a74c896509660967e20bf6165cda8a35db94295ae416bc",
+    "Assets/GameData/V3/Cognition/Words/move.asset.meta": "92e6a5badaf31fe43540388123d617ce0f72bc1fdee8889520150d629659c99e",
+    "Assets/GameData/V3/Cognition/Words/negative.asset": "f971900b688986436f566c619ad70bbd83c75178d292575231f10f2d83f68f06",
+    "Assets/GameData/V3/Cognition/Words/negative.asset.meta": "2aa802dd60038c8db13b1d5917735ff52dd4f81e562c75c0c2f7a363e70eb159",
+    "Assets/GameData/V3/Cognition/Words/positive.asset": "b84a5418214581ecdac50376690e0daeb3d4637703e51a3a50ef709da42291e4",
+    "Assets/GameData/V3/Cognition/Words/positive.asset.meta": "75282b65b9d8bf03bc4ea179126d6eeead7079190c1605b3b4b6f78260b19660",
+    "Assets/GameData/V3/Opening/OpeningCatalog.asset": "6baab0b728466127e8734759b53d145afa0cd46ec3240d4217f54c6eac867860",
+    "Assets/GameData/V3/Opening/Rules/apple-move-analyzer.asset": "30d32bb5b779271cc7b04b93be81229ef49ae6240ca2c6e6b86bd0539b04e6fc",
+    "Assets/GameData/V3/Opening/Rules/apple-move-analyzer.asset.meta": "7bca1693b0d1a1bdbebfa4187a96f115289dccaf36a80d27fec2e9445339a9a5",
+    "Assets/GameData/V3/Opening/Rules/apple-move-apple.asset": "86f4f075de9aad13858423ee26268ca13b7d14124dec5013bbb61c9a6996b199",
+    "Assets/GameData/V3/Opening/Rules/apple-move-apple.asset.meta": "ecfcdf99c810a91898eced267da83377b70fd13ef5f04d87e6b8b7ee0259864f",
+    "Assets/GameData/V3/Opening/Rules/apple-move-door.asset": "9b73ea7b3ddb95efe55192303498af13aaf74dafd706f93e5cbf77a3129c0987",
+    "Assets/GameData/V3/Opening/Rules/apple-move-door.asset.meta": "9ff843c0e1bacf05a4f443ab755959f2b2e26d5f270146562d988e294e7769b7",
+    "Assets/GameData/V3/Opening/Rules/apple-move-equal.asset": "1e6b91f7f1807a93fedde1daf24abc1b6fd6efc75fe81defedb51ff0f23bcb53",
+    "Assets/GameData/V3/Opening/Rules/apple-move-equal.asset.meta": "9300dcc55daf94cb85fb8352dc87e462ed6edf37468d560aa69bb79a615f829f",
+    "Assets/GameData/V3/Opening/Rules/apple-move-i.asset": "80dd9c15ecda3477d0b712b62833dd2774daf010bcabe4f58e0155e67a4e95c4",
+    "Assets/GameData/V3/Opening/Rules/apple-move-i.asset.meta": "d782fec9f42e8745f92a1f1dc5c07b1dcd0f74d6156f0019524fac2ab545c770",
+    "Assets/GameData/V3/Opening/Rules/apple-move-mirror.asset": "c8f11a779118fd79327698828a3bbe0a5e965f4107f85ddedb0da21cdb11544c",
+    "Assets/GameData/V3/Opening/Rules/apple-move-mirror.asset.meta": "f5934d365df14d4dc3ec95633d297fa309957acd3102394e1ee45b23e45b5ac1",
+    "Assets/GameData/V3/Opening/Rules/apple-move.asset": "c85f8c101ad1bb6ff489f91da4359db49610ac44ec77f98971856d3e166469b6",
+    "Assets/GameData/V3/Opening/Rules/apple-move.asset.meta": "791c8728be29f6f7ef0626b4c15b1ef6b35ffa0dbee8a5d90b66cb24832b99cf",
+    "Assets/GameData/V3/Opening/Rules/apple-negative-move.asset": "3224b536a9535ebf6b6b2e34c272a640a7b27094027ea1c66876f9b1a4222cd5",
+    "Assets/GameData/V3/Opening/Rules/apple-negative-move.asset.meta": "db1ac69728816871b2995be659c8ce11e7bd690b524c18808a9691f3565d3109",
+    "Assets/GameData/V3/Opening/Rules/apple-positive-move.asset": "bd202e4283f747f204de5b33a09553bcf4d81d86fd8723be61919fb88fe346d0",
+    "Assets/GameData/V3/Opening/Rules/apple-positive-move.asset.meta": "c4d0ba5d44411e29e792c55aa6c854d9a55bd6bfa426045bda57272a55e527bc",
+    "Assets/GameData/V3/Opening/Rules/door-move-apple.asset": "d83413ef23a2d39691d7fa8e800bb983987daa7887b8bee52981f32d6a52186d",
+    "Assets/GameData/V3/Opening/Rules/door-move-apple.asset.meta": "4c0caf91f3a443c60774f86dfc4dd4f02e1b37f4d994c4615abb77bf4d542ecd",
+    "Assets/GameData/V3/Opening/Rules/door-move-door.asset": "e9c7ab9a27b6845f05c53529cab0a07bea21e2ad8ad6f8d02502086da7bdd6f1",
+    "Assets/GameData/V3/Opening/Rules/door-move-door.asset.meta": "5821f157fd51721f45fd37f981adf61a38c3bdba3fde3adb1df0b8ba786daa1b",
+    "Assets/GameData/V3/Opening/Rules/door-move-i.asset": "21547ba61b12e4b419025bbb5fbbd5170faa9f6ab2afb33d72d24c6641a0459f",
+    "Assets/GameData/V3/Opening/Rules/door-move-i.asset.meta": "33d8f928d86cc1ca54830660952925ba1997bf871298f544e521dce98c595fb2",
+    "Assets/GameData/V3/Opening/Rules/door-move-mirror.asset": "8b70dcf219c7a13b8123dbc7392f55db416fe85a8fcaee0384d4c1d8ff2b8b24",
+    "Assets/GameData/V3/Opening/Rules/door-move-mirror.asset.meta": "7078c2ace501a5fe48a3c23cad5b6b9dbe48794242decc7b3c6e51bea280ae71",
+    "Assets/GameData/V3/Opening/Rules/door-move.asset": "c52fc463b9e65576ece433f2a32abe7c6f02d5cd81e13d932ad816bd68f51b7e",
+    "Assets/GameData/V3/Opening/Rules/door-move.asset.meta": "9a3f9fd63a34096870e248aaa4418d126149c71790bcb03f7f8a938e7b5a6d83",
+    "Assets/GameData/V3/Opening/Rules/door-negative-move.asset": "55aca30cb4f1fc03e0d44cb5d55b7e5f2038839d81e1ac3238644ab40cd8447a",
+    "Assets/GameData/V3/Opening/Rules/door-negative-move.asset.meta": "ba59c775630160fcf13048f004968249bc67988e1c9675da4b03ba332712e736",
+    "Assets/GameData/V3/Opening/Rules/door-positive-move.asset": "a5497281949903e80a681e46a9dab7edd5eb1c534f675c0bd0955a145f159630",
+    "Assets/GameData/V3/Opening/Rules/door-positive-move.asset.meta": "9dc9850c4c535fd8493ab602d94c6bbce7f272f8087c1cbfb1b0997383d0039b",
+    "Assets/GameData/V3/Opening/Rules/i-analyzer.asset": "135149eab5261a5f3d1d8a81fbff09239a6684052e6e3341b8f60f1f2b48f826",
+    "Assets/GameData/V3/Opening/Rules/i-analyzer.asset.meta": "74a060b4dba2de55c2a1018136aa6fe66daadd5bf0e87739c1052e970a1634a6",
+    "Assets/GameData/V3/Opening/Rules/i-apple.asset": "c8ff3e615abbde4e03b2a478eab98765f44d9d263193e31a5f3bdcfe6f1c895c",
+    "Assets/GameData/V3/Opening/Rules/i-apple.asset.meta": "a965297fb812cf8638213f47b76245ca2af7c2c8ddafedd2cb5a6bd4bb2784ab",
+    "Assets/GameData/V3/Opening/Rules/i-door.asset": "c660b9ef6b3b302396e3ffd8aabcfcadc82c0f0e58373af65edf30ebb85f9175",
+    "Assets/GameData/V3/Opening/Rules/i-door.asset.meta": "d78e5b758753aae026cfd2f1157e47b0f8f01bddebaeb0527e5ceb66995851ef",
+    "Assets/GameData/V3/Opening/Rules/i-equal-apple.asset": "e8c6f135f27ee48820927d7605a0b1101f07b20ff4abc3fbef245605eab1eb30",
+    "Assets/GameData/V3/Opening/Rules/i-equal-apple.asset.meta": "af752026f0fd815b870f07152f632ecf858484e805f2e409222b24ebed30ca0b",
+    "Assets/GameData/V3/Opening/Rules/i-equal.asset": "048e53029691ffeed6a7a14d9092752d164d8dfce954b0399b08682b9b2243b1",
+    "Assets/GameData/V3/Opening/Rules/i-equal.asset.meta": "8c99c7eb6ba8b9991d53fbff37aa34dee5401dbda5965e4805b90a849c2ab9fc",
+    "Assets/GameData/V3/Opening/Rules/i-i.asset": "c61fa92892152eb8ec4d095d86a5c267687796fb39ed61bd741fa0ae0a61d58e",
+    "Assets/GameData/V3/Opening/Rules/i-i.asset.meta": "89eaff15621ac82e1bd5e848f1333e275828f93c77d14acf0f975b558e9b3fb7",
+    "Assets/GameData/V3/Opening/Rules/i-mirror.asset": "343a685a6ab7e30c4cb8a9e8d3e3df7a5ee74c8510c8934ebaaf718e4a8f1678",
+    "Assets/GameData/V3/Opening/Rules/i-mirror.asset.meta": "cfcd84f05aebe98161e24b7d8fbc0880fb86534aa5fc8c9517a75f6a28dfde8c",
+    "Assets/GameData/V3/Opening/Rules/i-move-apple.asset": "16413c07e8af17c482fa9de542c61f43d36261838ca27fbd5f432c5852577739",
+    "Assets/GameData/V3/Opening/Rules/i-move-apple.asset.meta": "eeb2f17dae68d8dd53b9e261a3a808ae327ebc17a107342b35c1e4845ebdb02b",
+    "Assets/GameData/V3/Opening/Rules/i-move-door.asset": "fcc50be865a014b477ec6d39e2c8a74b6b4eaad08606c3709f45308d29ab670d",
+    "Assets/GameData/V3/Opening/Rules/i-move-door.asset.meta": "5fb88f15e251c3de972ce0e4c6f77bdb7422d42a8edb02f2eccb6ea481921447",
+    "Assets/GameData/V3/Opening/Rules/i-move-equal.asset": "dbaee69d88c55f2fb00c07684bc4c289f573654652af8b99220604df3b2f7d2a",
+    "Assets/GameData/V3/Opening/Rules/i-move-equal.asset.meta": "d42a7f07ea49718030a02485b55e96300d0cf03ea0790d2d2880008a212b7882",
+    "Assets/GameData/V3/Opening/Rules/i-move-i.asset": "ca15e22390453f9085a26e39040df1e8682b0ddbe316ef968befa32ae3030c73",
+    "Assets/GameData/V3/Opening/Rules/i-move-i.asset.meta": "24358dc8c4449e59309303c1005a175421f8357115e3f6f87751169880fd1706",
+    "Assets/GameData/V3/Opening/Rules/i-move-mirror.asset": "8594e2e4bdcff6810a252bb61767eb96f06bcd0e3f1c735edbbb5c7e68e2b286",
+    "Assets/GameData/V3/Opening/Rules/i-move-mirror.asset.meta": "e340927fa326c6082fe18cff551c46611ed1ec6f8ca6aec2013f78d36e3cecb0",
+    "Assets/GameData/V3/Opening/Rules/i-move.asset": "7974f0bd4f8dbf157fb40ca4d9a138fa3c11a3257e0eaa349b00127fd6fa729b",
+    "Assets/GameData/V3/Opening/Rules/i-move.asset.meta": "0e3546c1ac626ddf655e0fd6c6ecaf575357f07de56e343a40b98697be519cc7",
+    "Assets/GameData/V3/Opening/Rules/i-negative-move.asset": "8b54dc3b5c814f4b5f6c5d9491b893f411703483a49e924196268cc153cbf567",
+    "Assets/GameData/V3/Opening/Rules/i-negative-move.asset.meta": "433fc2d90c4df06f768e93c9e98d1d7215a87d46caee16808a845105d2a33678",
+    "Assets/GameData/V3/Opening/Rules/i-positive-move.asset": "3b12e2522e87010c11fc1cb46c9525ec28848a00319fd5d1337a10a658ec25c5",
+    "Assets/GameData/V3/Opening/Rules/i-positive-move.asset.meta": "8e473e876eb9f36835b4f84f5eb3a8fc0001287c0f352158a0c311a38d0a584e",
+    "Assets/GameData/V3/Opening/Rules/mirror-apple.asset": "8231e92509f199da6704092858c7480148a7ed125ca57ddfa6fc3701749bd0c0",
+    "Assets/GameData/V3/Opening/Rules/mirror-apple.asset.meta": "bfd3bb3d04d7ae75bd70a014e1f51683346350282ddb2de8a66727cf2702c0d7",
+    "Assets/GameData/V3/Opening/Rules/mirror-door.asset": "3a98bcaa3f454d473843c6ecd745d3d2fc86a757858e65a256194744f8cdc6cc",
+    "Assets/GameData/V3/Opening/Rules/mirror-door.asset.meta": "5c2937c60aec36c1eca63277891d74cf28894d72646587159a5ea8f5805eb758",
+    "Assets/GameData/V3/Opening/Rules/mirror-i.asset": "203ebfbca27aeadfb9592ad66b3c6a5b1e7297e0a760ee2c0b9b94397fb29cc3",
+    "Assets/GameData/V3/Opening/Rules/mirror-i.asset.meta": "334701401b7d3948e353b0377d24c8e40f65111c8d93ac3b70b28b911a985038",
+    "Assets/GameData/V3/Opening/Rules/mirror-mirror.asset": "969837fe282d085ab04f168bb5a252116fc39b451f85b5acc2153052c2b86566",
+    "Assets/GameData/V3/Opening/Rules/mirror-mirror.asset.meta": "a6f46362be4903920ba131ab2f52b32deeb731c25372b0807809509da31c3eb3",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-apple.asset": "f2cc0fe745162ad863e0ed1836d6c5b8382db87e96770265f9c2af196ab1afd1",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-apple.asset.meta": "b60bf73cb2e964a066bf0b08da55ce6a3eaa38b2a83d7cf448b095cf90f39c0c",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-door.asset": "b36248346887fede21e7a0588eb04175eb36e9db1148f65cf61b38d5d91dfaa0",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-door.asset.meta": "e5c96a10b996f245cce717fc762502ab5667274015484aae7523b192cd8761e3",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-i.asset": "2a79d145dee3455de80f3a2d1e2fad6f61c300149095f04b788af2fec3167f10",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-i.asset.meta": "b57381ae48ccb5a2cff349f97519792d08fab0ecaa6570088fd9b71c0429aef4",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-mirror.asset": "abac1c76add61ad8b51e4476aeb4a6d14d91da597d63ef3da442d8e6942aa59d",
+    "Assets/GameData/V3/Opening/Rules/mirror-move-mirror.asset.meta": "3dc36b58cd7a5669b081dc8ce8641382617b186bef70ffce182ce5aaf9b63f04",
+    "Assets/GameData/V3/Opening/Rules/mirror-move.asset": "ee1f044504560069dfbaa89e882274c0df32a33908b2ea70e454432edc0f48c0",
+    "Assets/GameData/V3/Opening/Rules/mirror-move.asset.meta": "30f223dea13505c7f5374cfb8abc3b7221ad896f465fe917e83e9640a7ab0d1d",
+    "Assets/GameData/V3/Opening/Rules/mirror-negative-move.asset": "1884c43758bec665559adb9ca1802781c5f808a3074c0c2447dd3e7d6abd559d",
+    "Assets/GameData/V3/Opening/Rules/mirror-negative-move.asset.meta": "1457efb9334bc0689b664e5be460debef51ca1ae018d620b335461a7520f1d00",
+    "Assets/GameData/V3/Opening/Rules/mirror-positive-move.asset": "f5db90dbf0ffd2a406016a72328a5ea12fc71b9a1b92aa5222e8a138f93cfbb8",
+    "Assets/GameData/V3/Opening/Rules/mirror-positive-move.asset.meta": "c062170d3e5cba3afdf16b416997c0ccab0636908d4332f12eeee6b27939b64b",
+    "Assets/GameData/V3/Opening/Rules/negative-door.asset": "bb06a5db7762ad2ca136640fc6376fa5ff43ccf12ef21eddc1b1e85e529ed71b",
+    "Assets/GameData/V3/Opening/Rules/negative-door.asset.meta": "ed5e6d7e3fa39177b25d9d3f0a6e3c6d5c67f724ecd49b1a3c3fab322f962eb7",
+    "Assets/GameData/V3/Opening/Rules/positive-door.asset": "064b88ce30bddc6591c5c5ffe264379048abcca023e4d590c49fe3e41427a8d1",
+    "Assets/GameData/V3/Opening/Rules/positive-door.asset.meta": "a96c246a4243943665fffe2b3a241e3e32f05899c6917e708b854cdaa0223d5b",
+    "Assets/GameData/V3/Opening/Rules/red-analyzer.asset": "03c78bdd3c7c9da101adf2ece220d0b29d110d293322cb4a577544a16dc3756e",
+    "Assets/GameData/V3/Opening/Rules/red-analyzer.asset.meta": "ac7e33798dce325e854ead221e6ec3c8d9ec6376356c3d596ec2dfbf9e69da5f",
+    "Assets/GameData/V3/Opening/Rules/red-equal.asset": "0b7fad8a5c5c6c817a04c5bf1745a2ef562a53437278bbff8e9735ee68bfafc1",
+    "Assets/GameData/V3/Opening/Rules/red-equal.asset.meta": "200d01c3ef8dc169b49a00e26dd3c305dfbf78b07c56aa10ba1e662682648c5a",
+    "Assets/GameData/V3/Opening/Rules/red-mirror.asset": "e5f256f28a79eea987cb685834e63e8caba0c577fe96730a8a6272db01767a94",
+    "Assets/GameData/V3/Opening/Rules/red-mirror.asset.meta": "f7d25d7ea86afb76575b030b157f47fe1785237042677efd5a6d91225aec5b19",
+    "Assets/GameData/V3/Opening/Rules/round-equal.asset": "26b08cfcbe05541907cf9b556423f793dc56a6cc0511eaaae9387a6d67b18540",
+    "Assets/GameData/V3/Opening/Rules/round-equal.asset.meta": "9f720f1a1947ecfbf422889e86e7f0a1f0958c904bf585ad85f5667e12ba9163",
+    "Assets/GameData/V3/Opening/Words/analyzer.asset": "8b309c3a971360265778ae6661f9bd8f918a658d80897220ca1503e000d9e924",
+    "Assets/GameData/V3/Opening/Words/analyzer.asset.meta": "5c5d9c0e475c84ee8addd5bbfc47b1ac73709cf186808717c0074694851d502d",
+    "Assets/GameData/V3/Opening/Words/apple.asset": "93bb0128db4132b98f46a4d5d310a579427ffc7c0fb11e6c3e42f3d0168e0cbd",
+    "Assets/GameData/V3/Opening/Words/apple.asset.meta": "5976e91915091894311a11a7dc18c03384471798cc8cc282f376653d6cb8fb67",
+    "Assets/GameData/V3/Opening/Words/red.asset": "9c4dbff59080bdb8b0de343bb128b5735db0bbf7495edceaadf5fb6d55b4565c",
+    "Assets/GameData/V3/Opening/Words/red.asset.meta": "c6905eddd8e59dacb04e2cd5e5c0f72d2e977e9bedb7861272e7a77936e29f8b",
+    "Assets/GameData/V3/Opening/Words/round.asset": "86f594e7a2892d53a773361c44811eece7b17f891799eac8d1dcf04fa3cd4fb3",
+    "Assets/GameData/V3/Opening/Words/round.asset.meta": "ad681fe13ee6d0bac39ff73b8148c0801aaedfd7158e8f91c0cf9cf7d75ae953"
+  },
+  "words": [
+    {
+      "id": "i",
+      "displayText": "i",
+      "guid": "324aefa6dfd5e9248892de52690c2638",
+      "senses": [
+        {
+          "meaning": "self",
+          "role": "Reference"
+        },
+        {
+          "meaning": "essence",
+          "role": "Transform"
+        }
+      ],
+      "symbolGuid": "01bbb7030b7e0f5409dc946d5f534588",
+      "path": "Assets/GameData/V3/Cognition/Words/i.asset"
+    },
+    {
+      "id": "mirror",
+      "displayText": "mirror",
+      "guid": "34ec77cf12b3381419126c9f45f75d01",
+      "senses": [
+        {
+          "meaning": "mirror",
+          "role": "Reference"
+        },
+        {
+          "meaning": "reflect",
+          "role": "Transform"
+        }
+      ],
+      "symbolGuid": "004e11ec4d48ac14f855514177b38575",
+      "path": "Assets/GameData/V3/Cognition/Words/mirror.asset"
+    },
+    {
+      "id": "move",
+      "displayText": "move",
+      "guid": "0fa88bc2b94ff2f44ba650ef4e0ed8c2",
+      "senses": [
+        {
+          "meaning": "move",
+          "role": "Predicate"
+        }
+      ],
+      "symbolGuid": "2f556dedfff4b1f48b2a6b1d06df895b",
+      "path": "Assets/GameData/V3/Cognition/Words/move.asset"
+    },
+    {
+      "id": "door",
+      "displayText": "door",
+      "guid": "eb75af1d688d6214687f93a5b0186083",
+      "senses": [
+        {
+          "meaning": "door",
+          "role": "Reference"
+        }
+      ],
+      "symbolGuid": "4919afbf5ea4db84e894d0f91cedbc9e",
+      "path": "Assets/GameData/V3/Cognition/Words/door.asset"
+    },
+    {
+      "id": "positive",
+      "displayText": "positive",
+      "guid": "763acc41636029d428b29f884d02a97e",
+      "senses": [
+        {
+          "meaning": "positive",
+          "role": "Modifier"
+        }
+      ],
+      "symbolGuid": "0ba96e684b81d6c448148486a3f34c3f",
+      "path": "Assets/GameData/V3/Cognition/Words/positive.asset"
+    },
+    {
+      "id": "negative",
+      "displayText": "negative",
+      "guid": "b90fe4a6f756db345b1c0ecd58d7de2b",
+      "senses": [
+        {
+          "meaning": "negative",
+          "role": "Modifier"
+        }
+      ],
+      "symbolGuid": "9313637c941382644a9e45a9d20efa8a",
+      "path": "Assets/GameData/V3/Cognition/Words/negative.asset"
+    },
+    {
+      "id": "equal",
+      "displayText": "equal",
+      "guid": "f1a2bdbf0d36b5b4db6b0740355cac4d",
+      "senses": [
+        {
+          "meaning": "equal",
+          "role": "Relation"
+        },
+        {
+          "meaning": "balance",
+          "role": "Reference"
+        }
+      ],
+      "symbolGuid": "83eaf1a1d78003042b766f92708b588b",
+      "path": "Assets/GameData/V3/Cognition/Words/equal.asset"
+    },
+    {
+      "id": "apple",
+      "displayText": "Apple",
+      "guid": "258b439f6171ff94f9441d00685258a4",
+      "senses": [
+        {
+          "meaning": "apple",
+          "role": "Reference"
+        }
+      ],
+      "symbolGuid": "686b1522b4c59b84884b10f4697bcb75",
+      "path": "Assets/GameData/V3/Opening/Words/apple.asset"
+    },
+    {
+      "id": "analyzer",
+      "displayText": "Analyzer",
+      "guid": "212b6fd283a91ec44ab704c762e841f3",
+      "senses": [
+        {
+          "meaning": "analyzer",
+          "role": "Reference"
+        }
+      ],
+      "symbolGuid": "03fee1a0446e50f4992bb72bc5472902",
+      "path": "Assets/GameData/V3/Opening/Words/analyzer.asset"
+    },
+    {
+      "id": "red",
+      "displayText": "Red",
+      "guid": "661e8add63a21c14e9a1e334bc3548bf",
+      "senses": [
+        {
+          "meaning": "red",
+          "role": "Transform"
+        }
+      ],
+      "symbolGuid": "63a68c36b39ece5499c2b3ee26610e00",
+      "path": "Assets/GameData/V3/Opening/Words/red.asset"
+    },
+    {
+      "id": "round",
+      "displayText": "Round",
+      "guid": "8e01337c287634e4a85c4bee202fc08f",
+      "senses": [
+        {
+          "meaning": "round",
+          "role": "Transform"
+        }
+      ],
+      "symbolGuid": "72ee53bc689934b498a1a6111fa04942",
+      "path": "Assets/GameData/V3/Opening/Words/round.asset"
+    }
+  ],
+  "rules": [
+    {
+      "id": "opening-i-move",
+      "words": [
+        "i",
+        "move"
+      ],
+      "effect": 3,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-move.asset"
+    },
+    {
+      "id": "opening-i-positive-move",
+      "words": [
+        "i",
+        "positive",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-positive-move.asset"
+    },
+    {
+      "id": "opening-i-negative-move",
+      "words": [
+        "i",
+        "negative",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-negative-move.asset"
+    },
+    {
+      "id": "opening-i-move-i",
+      "words": [
+        "i",
+        "move",
+        "i"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-move-i.asset"
+    },
+    {
+      "id": "opening-i-move-mirror",
+      "words": [
+        "i",
+        "move",
+        "mirror"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-move-mirror.asset"
+    },
+    {
+      "id": "opening-i-move-apple",
+      "words": [
+        "i",
+        "move",
+        "apple"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-move-apple.asset"
+    },
+    {
+      "id": "opening-i-move-door",
+      "words": [
+        "i",
+        "move",
+        "door"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-move-door.asset"
+    },
+    {
+      "id": "opening-mirror-i",
+      "words": [
+        "mirror",
+        "i"
+      ],
+      "effect": 17,
+      "trigger": 0,
+      "exclusionKey": "form:i",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-i.asset"
+    },
+    {
+      "id": "opening-i-i",
+      "words": [
+        "i",
+        "i"
+      ],
+      "effect": 18,
+      "trigger": 0,
+      "exclusionKey": "form:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-i.asset"
+    },
+    {
+      "id": "opening-mirror-move",
+      "words": [
+        "mirror",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-move.asset"
+    },
+    {
+      "id": "opening-mirror-positive-move",
+      "words": [
+        "mirror",
+        "positive",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-positive-move.asset"
+    },
+    {
+      "id": "opening-mirror-negative-move",
+      "words": [
+        "mirror",
+        "negative",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-negative-move.asset"
+    },
+    {
+      "id": "opening-mirror-move-i",
+      "words": [
+        "mirror",
+        "move",
+        "i"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-move-i.asset"
+    },
+    {
+      "id": "opening-mirror-move-mirror",
+      "words": [
+        "mirror",
+        "move",
+        "mirror"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-move-mirror.asset"
+    },
+    {
+      "id": "opening-mirror-move-apple",
+      "words": [
+        "mirror",
+        "move",
+        "apple"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-move-apple.asset"
+    },
+    {
+      "id": "opening-mirror-move-door",
+      "words": [
+        "mirror",
+        "move",
+        "door"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-move-door.asset"
+    },
+    {
+      "id": "opening-mirror-mirror",
+      "words": [
+        "mirror",
+        "mirror"
+      ],
+      "effect": 17,
+      "trigger": 0,
+      "exclusionKey": "form:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-mirror.asset"
+    },
+    {
+      "id": "opening-i-mirror",
+      "words": [
+        "i",
+        "mirror"
+      ],
+      "effect": 18,
+      "trigger": 0,
+      "exclusionKey": "form:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/i-mirror.asset"
+    },
+    {
+      "id": "opening-apple-move",
+      "words": [
+        "apple",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move.asset"
+    },
+    {
+      "id": "opening-apple-positive-move",
+      "words": [
+        "apple",
+        "positive",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-positive-move.asset"
+    },
+    {
+      "id": "opening-apple-negative-move",
+      "words": [
+        "apple",
+        "negative",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-negative-move.asset"
+    },
+    {
+      "id": "opening-apple-move-i",
+      "words": [
+        "apple",
+        "move",
+        "i"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move-i.asset"
+    },
+    {
+      "id": "opening-apple-move-mirror",
+      "words": [
+        "apple",
+        "move",
+        "mirror"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move-mirror.asset"
+    },
+    {
+      "id": "opening-apple-move-apple",
+      "words": [
+        "apple",
+        "move",
+        "apple"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move-apple.asset"
+    },
+    {
+      "id": "opening-apple-move-door",
+      "words": [
+        "apple",
+        "move",
+        "door"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move-door.asset"
+    },
+    {
+      "id": "opening-mirror-apple",
+      "words": [
+        "mirror",
+        "apple"
+      ],
+      "effect": 17,
+      "trigger": 0,
+      "exclusionKey": "form:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-apple.asset"
+    },
+    {
+      "id": "opening-i-apple",
+      "words": [
+        "i",
+        "apple"
+      ],
+      "effect": 18,
+      "trigger": 0,
+      "exclusionKey": "form:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/i-apple.asset"
+    },
+    {
+      "id": "opening-door-move",
+      "words": [
+        "door",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-move.asset"
+    },
+    {
+      "id": "opening-door-positive-move",
+      "words": [
+        "door",
+        "positive",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-positive-move.asset"
+    },
+    {
+      "id": "opening-door-negative-move",
+      "words": [
+        "door",
+        "negative",
+        "move"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-negative-move.asset"
+    },
+    {
+      "id": "opening-door-move-i",
+      "words": [
+        "door",
+        "move",
+        "i"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-move-i.asset"
+    },
+    {
+      "id": "opening-door-move-mirror",
+      "words": [
+        "door",
+        "move",
+        "mirror"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-move-mirror.asset"
+    },
+    {
+      "id": "opening-door-move-apple",
+      "words": [
+        "door",
+        "move",
+        "apple"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-move-apple.asset"
+    },
+    {
+      "id": "opening-door-move-door",
+      "words": [
+        "door",
+        "move",
+        "door"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:door",
+      "path": "Assets/GameData/V3/Opening/Rules/door-move-door.asset"
+    },
+    {
+      "id": "opening-mirror-door",
+      "words": [
+        "mirror",
+        "door"
+      ],
+      "effect": 17,
+      "trigger": 0,
+      "exclusionKey": "form:door",
+      "path": "Assets/GameData/V3/Opening/Rules/mirror-door.asset"
+    },
+    {
+      "id": "opening-i-door",
+      "words": [
+        "i",
+        "door"
+      ],
+      "effect": 18,
+      "trigger": 0,
+      "exclusionKey": "form:door",
+      "path": "Assets/GameData/V3/Opening/Rules/i-door.asset"
+    },
+    {
+      "id": "opening-apple-move-equal",
+      "words": [
+        "apple",
+        "move",
+        "equal"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move-equal.asset"
+    },
+    {
+      "id": "opening-i-move-equal",
+      "words": [
+        "i",
+        "move",
+        "equal"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-move-equal.asset"
+    },
+    {
+      "id": "opening-i-equal-apple",
+      "words": [
+        "i",
+        "equal",
+        "apple"
+      ],
+      "effect": 15,
+      "trigger": 0,
+      "exclusionKey": "form:i",
+      "path": "Assets/GameData/V3/Opening/Rules/i-equal-apple.asset"
+    },
+    {
+      "id": "opening-positive-door",
+      "words": [
+        "positive",
+        "door"
+      ],
+      "effect": 7,
+      "trigger": 0,
+      "exclusionKey": "gate",
+      "path": "Assets/GameData/V3/Opening/Rules/positive-door.asset"
+    },
+    {
+      "id": "opening-negative-door",
+      "words": [
+        "negative",
+        "door"
+      ],
+      "effect": 8,
+      "trigger": 0,
+      "exclusionKey": "gate",
+      "path": "Assets/GameData/V3/Opening/Rules/negative-door.asset"
+    },
+    {
+      "id": "opening-apple-move-analyzer",
+      "words": [
+        "apple",
+        "move",
+        "analyzer"
+      ],
+      "effect": 16,
+      "trigger": 0,
+      "exclusionKey": "motion:apple",
+      "path": "Assets/GameData/V3/Opening/Rules/apple-move-analyzer.asset"
+    },
+    {
+      "id": "opening-red-equal",
+      "words": [
+        "red",
+        "equal"
+      ],
+      "effect": 19,
+      "trigger": 0,
+      "exclusionKey": "color:equal",
+      "path": "Assets/GameData/V3/Opening/Rules/red-equal.asset"
+    },
+    {
+      "id": "opening-round-equal",
+      "words": [
+        "round",
+        "equal"
+      ],
+      "effect": 19,
+      "trigger": 0,
+      "exclusionKey": "shape:equal",
+      "path": "Assets/GameData/V3/Opening/Rules/round-equal.asset"
+    },
+    {
+      "id": "opening-i-equal",
+      "words": [
+        "i",
+        "equal"
+      ],
+      "effect": 18,
+      "trigger": 0,
+      "exclusionKey": "form:equal",
+      "path": "Assets/GameData/V3/Opening/Rules/i-equal.asset"
+    },
+    {
+      "id": "opening-red-mirror",
+      "words": [
+        "red",
+        "mirror"
+      ],
+      "effect": 19,
+      "trigger": 0,
+      "exclusionKey": "color:mirror",
+      "path": "Assets/GameData/V3/Opening/Rules/red-mirror.asset"
+    },
+    {
+      "id": "opening-red-analyzer",
+      "words": [
+        "red",
+        "analyzer"
+      ],
+      "effect": 19,
+      "trigger": 0,
+      "exclusionKey": "color:analyzer",
+      "path": "Assets/GameData/V3/Opening/Rules/red-analyzer.asset"
+    },
+    {
+      "id": "opening-i-analyzer",
+      "words": [
+        "i",
+        "analyzer"
+      ],
+      "effect": 18,
+      "trigger": 0,
+      "exclusionKey": "form:analyzer",
+      "path": "Assets/GameData/V3/Opening/Rules/i-analyzer.asset"
+    }
+  ],
+  "conflicts": []
+}

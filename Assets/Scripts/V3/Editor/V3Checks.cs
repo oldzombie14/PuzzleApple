@@ -82,7 +82,7 @@ namespace PuzzleApple.V3.Editor
                 w.State.ReturnToLibrary(essence.Id,0,true);yield return new WaitForSeconds(.7f);Check(w.player.AppleIdentity&&w.player.view.localPosition.y<.6f,"Removing first statement activates equality and low view");
                 w.State.ReturnToLibrary(equality.Id,0,true);yield return new WaitForSeconds(.7f);Check(!w.player.AppleIdentity&&w.player.view.localPosition.y>.9f,"Breaking equality restores identity and view");
                 w.board.Panel.SetOpen(true);yield return new WaitForSeconds(.4f);w.library.Select("i");yield return null;
-                Check(w.library.GetComponentsInChildren<InputField>(true).Length==0,"Notes removed from vocabulary UI");
+                Check(w.library.NoteField && w.library.NoteField.lineType==InputField.LineType.SingleLine,"Compact single-line note field");
                 Check(w.library.SnapshotImage.texture==null,"Self acquisition deliberately has a blank memory");
                 yield break;
             }

@@ -69,6 +69,8 @@ namespace PuzzleApple.V3
             if(!controlsReleased){controlsReleased=true;player.SetPresentationLocked(false);board.Panel.InputBlocked=false;}
             if(player.WalkedDistance>=player.learnMoveDistance&&!State.Knows("move"))Learn("move");
             player.AppleIdentity=State.HasEffect(CognitionSignal.EqualApple);
+            // Preserve the archived prototype's movement policy through the same motor input.
+            player.SentenceForward=State.PlayerMoving&&!player.AppleIdentity;
             presentation.SetSplit(State.HasEffect(CognitionSignal.MirrorSelf));
             UpdateGate();UpdateMotion();UpdateBalance();UpdateInteraction();
             if(Solved)
@@ -266,7 +268,7 @@ namespace PuzzleApple.V3
         {
             var group=kind==ObjectKind.Apple?apples:mirrors;
             foreach(var obj in group.Where(a=>a&&a.copy).ToArray()){group.Remove(obj);obj.gameObject.SetActive(false);Destroy(obj.gameObject);}
-            attempts[kind]=0;presentation.Notify("本质化");
+            attempts[kind]=0;
         }
         void OnDestroy(){if(lampMaterial)Destroy(lampMaterial);}
     }

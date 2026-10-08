@@ -92,7 +92,7 @@ namespace PuzzleApple.V3.Editor
                 Check(Mathf.Abs(w.player.transform.position.z)<.1f&&w.player.transform.position.x<startX,"Sway does not steer route");
                 foreach(var word in w.board.Catalog.Words)w.Learn(word.Id);
                 w.board.Panel.SetOpen(true);yield return new WaitForSeconds(.4f);
-                Check(w.library.GetComponentsInChildren<InputField>(true).Length==0,"No note field");
+                Check(w.library.NoteField && w.library.NoteField.lineType==InputField.LineType.SingleLine,"Compact single-line note field");
                 Check(w.library.Scroll.vertical&&w.library.Scroll.verticalScrollbar,"Permanent scrolling word column");
                 var rect=(RectTransform)w.board.Panel.ContentRoot.parent;var parent=(RectTransform)rect.parent;
                 Check(Mathf.Abs(rect.rect.width/parent.rect.width-1f/3)<.01f,"Panel stays one third wide");

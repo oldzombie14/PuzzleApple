@@ -36,6 +36,7 @@ namespace PuzzleApple.V3.Cognition
         readonly List<Group> groups = new List<Group>();
         readonly Dictionary<string, (string Id, CognitionSignal Effect)> rules = new Dictionary<string, (string, CognitionSignal)>();
         readonly Dictionary<string, WordDefinition> vocabulary;
+        readonly Dictionary<string, string> exclusionKeys;
         readonly (CognitionSignal First, CognitionSignal Second, bool Earliest)[] conflicts;
         readonly HashSet<string> learned = new HashSet<string>();
         long chronology;
@@ -54,6 +55,7 @@ namespace PuzzleApple.V3.Cognition
             if (!catalog) throw new ArgumentNullException(nameof(catalog));
             catalog.ValidateOrThrow();
             vocabulary = catalog.Words.ToDictionary(w => w.Id);
+            exclusionKeys = catalog.Rules.ToDictionary(r => r.Id, r => r.ExclusionKey);
             foreach (var rule in catalog.Rules)
                 rules.Add(string.Join(" ", rule.Words.Select(w => w.Id)), (rule.Id, rule.Effect));
             conflicts = catalog.Conflicts.Select(c => (c.First, c.Second, c.EarliestWins)).ToArray();
@@ -116,6 +118,11 @@ namespace PuzzleApple.V3.Cognition
             }
             Commit(CognitionChange.Split);
         }
+        public void ClearWorkspace()
+        {
+            if(groups.Count==0)return;
+            groups.Clear();Commit(CognitionChange.Split);
+        }
         public Group Owning(int wordId) => groups.Find(g => g.words.Any(w => w.Id == wordId));
 
         // Removing a middle word preserves the two remaining connected runs.
@@ -167,6 +174,12 @@ namespace PuzzleApple.V3.Cognition
             }
             // Resolve against all recognized meanings before publishing any world effects.
             foreach (var conflict in conflicts) ResolveConflict(conflict.First, conflict.Second, conflict.Earliest);
+            foreach (var channel in groups.Where(g => g.Recognized && !string.IsNullOrEmpty(exclusionKeys[g.RuleId]))
+                .GroupBy(g => exclusionKeys[g.RuleId]))
+            {
+                var winner = channel.OrderBy(g => g.Established).First().RuleId;
+                foreach (var group in channel) if (group.RuleId != winner) group.Conflicted = true;
+            }
             Changed?.Invoke(kind);
         }
         void ResolveConflict(CognitionSignal first, CognitionSignal second, bool earliest)

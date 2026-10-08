@@ -29,8 +29,10 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Grain: 0.012
-    - _Saturation: 0.22
+    - _BlackPoint: 0.025
+    - _Grain: 0.003
+    - _Saturation: 0.5
+    - _WhitePoint: 0.85
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

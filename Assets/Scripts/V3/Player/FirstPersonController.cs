@@ -18,7 +18,17 @@ namespace PuzzleApple.V3
         public float WalkingConfidence => Mathf.SmoothStep(0,1,Mathf.InverseLerp(.15f,1,WalkedDistance/learningDistance));
         public bool Carried { get; set; }
         public Vector3 CarryTarget { get; set; }
+        public bool CarrySettled { get; set; }
+        readonly SupportApproach supportApproach=new SupportApproach();
         public bool AppleIdentity { get; set; }
+        public bool AppleCore { get; set; }
+        // Resolved by the world for this physical recipient, including any active aliases.
+        // A player's untargeted movement remains forward walking, regardless of identity.
+        public bool SentenceForward { get; set; }
+        public bool SentenceTravel { get; set; }
+        public Vector3 SentenceTarget { get; set; }
+        // Collection can pause translation while still allowing the player to look around.
+        public bool MovementLocked { get; set; }
         public bool PanelOpen { get; private set; }
         public bool Locked { get; private set; }
         public float WalkedDistance { get; private set; }
@@ -65,23 +75,19 @@ namespace PuzzleApple.V3
             float height = AppleIdentity ? .55f : 1.3f;
             motor.height = height; motor.center = Vector3.up * height * .5f;
             var before = transform.position;
-            if (Carried && !Locked)
+            if (Carried && !Locked && !MovementLocked)
             {
-                vertical = 0;
-                var target = CarryTarget;
-                // Rise clear of the pedestal before moving across it.
-                if (transform.position.y < target.y - .07f && Vector2.Distance(new Vector2(target.x,target.z),new Vector2(before.x,before.z)) > .4f)
-                    target = new Vector3(before.x, target.y, before.z);
-                motor.Move(Vector3.ClampMagnitude(target - before, 2.3f * Time.deltaTime));
+                MoveToSupport(Time.deltaTime);
             }
             else
             {
                 Vector2 input = controls && key != null ? new Vector2((key.dKey.isPressed?1:0)-(key.aKey.isPressed?1:0),(key.wKey.isPressed?1:0)-(key.sKey.isPressed?1:0)) : Vector2.zero;
                 input = Vector2.ClampMagnitude(input,1);
                 bool blocked = cognition && cognition.State.PlayerMovementBlocked;
-                bool forced = cognition && cognition.State.PlayerMoving && !AppleIdentity;
+                bool forced = SentenceForward;
                 Vector3 horizontal = forced ? (PanelOpen ? panelDirection : transform.forward) : transform.right * input.x + transform.forward * input.y;
-                if (Locked || blocked) horizontal = Vector3.zero;
+                if(SentenceTravel)horizontal=Vector3.ClampMagnitude(Vector3.ProjectOnPlane(SentenceTarget-before,Vector3.up),1);
+                if (Locked || MovementLocked || blocked) horizontal = Vector3.zero;
                 if (motor.isGrounded && vertical < 0) vertical = -2;
                 vertical += -20 * Time.deltaTime;
                 bool stepping=horizontal.sqrMagnitude>.001f&&!AppleIdentity;
@@ -105,6 +111,20 @@ namespace PuzzleApple.V3
             view.localPosition=new Vector3(normalView.x,cameraHeight+learningBob,normalView.z);
             if (transform.position.y < -4) Teleport(spawn);
         }
+        public void MoveToSupport(float dt)
+        {
+            if(!Carried||Locked||MovementLocked||CarrySettled)return;
+            motor.height=AppleIdentity?.55f:1.3f;motor.center=Vector3.up*motor.height*.5f;
+            vertical=0;var before=transform.position;var target=CarryTarget;
+            target=supportApproach.Next(this,motor.bounds,target,.35f);
+            motor.Move(Vector3.ClampMagnitude(target-before,2.3f*dt));
+        }
         public void Teleport(Vector3 p) { motor.enabled = false; transform.position = p; motor.enabled = true; vertical = 0; }
+        public void ResetPose(Vector3 position, Quaternion rotation)
+        {
+            Carried=false;AppleIdentity=false;AppleCore=false;SentenceForward=false;SentenceTravel=false;Teleport(position);transform.rotation=rotation;
+            pitch=0;learningYaw=learningBob=0;panelRotation=rotation;panelDirection=rotation*Vector3.forward;
+            view.localPosition=normalView;view.localRotation=Quaternion.identity;
+        }
     }
 }

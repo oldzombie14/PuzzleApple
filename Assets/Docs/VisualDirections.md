@@ -3,6 +3,44 @@
 2026-09-29 起，以下空间资源由三个平级原型复用。V1 为英文流程，V2 为符号替换，V3 为天平解谜；实际场景入口和共享资源修改边界见 [Prototypes.md](Prototypes.md)。本页旧记录中的 V2 指美术空间方案，并非新的符号原型编号。
 
 ## 已确认方向
+
+### 亮房到暗厅的走廊衔接（2026-10-08，当前优先）
+- 用户反馈：上一版降低入口点光源虽消除白斑，但破坏了亮房到暗厅的衔接；走廊本身应承担均匀渐暗的过渡。
+- 走廊墙、顶、底使用独立 `CorridorPlaster`，`CorridorAmbient` Shader 复用 URP Lit，按世界 Z=4→12 逐像素将间接光从 0.75 平滑降至 0.004。原生直射光、阴影和深度仍保留；这是美术控制的间接光近似，并非烘焙 GI，也不是相机曝光切换。点光源单独调参无法控制三面一致的纵向过渡，因此使用局部材质方案。
+- `Corridor light` 位于 (0,1.9,5.5)，强度降至 0.05，仅保留少量局部补光；大厅及开场房间的原始材质、全局曝光不变。MainHallLook 重设时保留走廊独立材质。
+- 已在实际 Play 查看亮端朝向开门后的天平大厅、暗端回望亮房、关门状态，未再出现三块过曝白斑；截图在 `Temp/LightingReview/gradient-final-*.png`。最终过渡观感待用户确认。
+
+### 状态反馈与符号（2026-10-08）
+- `Sprites/V3/vertical.png` 沿用 640×640 透明画布、浅灰 84 像素粗直笔画与平头，作为苹果核解析结果的视觉符号，尚未注册为可收集词。
+- OpeningPrototype/Main route 下的 Insufficient weight feedback 使用独立 2.8 秒 Timeline 和低机位按钮特写，复用黑边、输入锁定和视角恢复组件，未绑定成功事件或按钮按压动画。
+- 玩家相机下的 Completion paper confetti 为原生 ParticleSystem：少量红、米白、浅金和灰绿矩形纸片旋转飘落，成功演出结束后一次播放；替代英文完成提示。粒子和镜头均保留在 Prefab 中可编辑。
+- 大厅 RoomLighting 首次显示后锁存亮起，只在新游戏重新开始时恢复初始暗态。
+
+### V3 苹果核与出口（2026-10-08）
+- 外观反馈修订：果皮连续覆盖上下残留部分的外侧，延伸到啃咬边缘；浅色果肉仅露在向内凹的啃咬面，取消原先像剥皮一样的厚白色外缘。模型几何尺寸与碰撞配置保持。
+- `ArtAssets-3D/V3/AppleCore/AppleCore.fbx` 为新苹果核，Blender 可编辑源及生成脚本在同目录 `Source~/`（Unity 不自动导入该源目录）。上下残留红皮、中间细核、果梗；Unity 使用独立 AppleCoreSkin／Flesh／Stem 材质。
+- 果皮复用原苹果贴图中的红皮区域，避免采到原图集黑底；原法线贴图不适用于新模型，因此不复用。果肉使用浅黄哑光材质。
+- OpeningPrototype 两只苹果的 AppleState 指定完整外形和苹果核；苹果核使用中央 CapsuleCollider 与上下两块凸 MeshCollider，保留细腰空间。`AppleCoreSetup.Apply()` 可维护配置，`Preview()` 生成 Unity 对照图到 Temp。
+- 当前 V3 完成出口移除五块死路通道几何体；后墙和升降门保留。游戏相机使用纯黑清屏，不改全局天空环境光，以免影响已有室内照明。
+
+### V3 门与镜框材质归属（2026-10-07）
+- 两扇周期门共用 `Materials/V3/Opening/Door.mat`；镜框独立使用 `Materials/V3/Opening/MirrorFrame.mat`，镜面继续使用 `Materials/V3/Tutorial/MirrorSurface.mat`。不得再继承墙体 GalleryWall 或让门和镜框互相共用。
+- 此次独立材质保留原有外观参数，后续可分别调整。门属于走廊照明，LocalAmbientProbe 的 Follow Room Lighting 关闭；大厅开关灯不替换任一门扇材质，避免门位于灯光边界时两侧被不同处理。
+
+### V3 大厅美学修订（2026-10-06，当前优先）
+- 用户反馈：前面开场房间的氛围保留；天平大厅回到原 V3 博物馆式空间，周边更暗，避免平亮、卡通和天平过曝的效果。
+- 大厅使用独立 HallPlaster／HallStone／HallBrass 材质：低饱和墙地、受控地面反射、真实金属参数；原 General 材质与旧场景不变。天平模型与玩法不变。
+- 用户追加确认：参考图的无黄色版本，墙地与光均为中性白；周围仍暗，白墙在阴影中呈灰色。HallStone 与 HallPlaster 底色统一为 (0.86, 0.86, 0.86)，不通过黑地面制造对比。
+- 早期大厅与整段走廊共用低亮度环境光，由入口 Point Light 沿走廊衰减；此方式产生入口白斑，降低强度后又导致亮端衔接不足。走廊当前已改为本页上方的逐像素间接光过渡；大厅继续使用 HallPlaster／HallStone。
+- 此次修订原因：此前 LocalAmbientProbe 按 Renderer 的包围盒中心设置整块模型的 SH，走廊与大厅的整块模型各自取得亮／暗值，实际在门槛硬切；不能将它描述为大模型表面逐点的连续照明。现扩大低环境光范围，使走廊和大厅取得相同暗底，再由原生灯光产生逐点渐变。LocalAmbientProbe 仍用于区域基线与移动物体，不承担墙地表面的渐变。
+- 大厅局部曝光 Volume 继续停用，镜头进出不切曝光。此版为用户授权试做的过渡方案，最终观感待确认。
+- 主聚光移到天平正上方，白色顶灯、柔和光斑、弱轮廓光和正面补光集中突出展品；后墙洗光关闭。增加淡淡的局部光束，采用深度遮挡的局部散射 Shader，原生 Light 仍负责表面照明与阴影。这是局部丁达尔近似，不包含完整体积阴影或全屋雾。
+- Gallery reflection 为原生盒投影探针，按当前大厅重新烘焙至 `ArtAssets-3D/V3/Generated/MainHallReflection.exr`；烘焙时暂隐藏光束，避免深度采样散射进入静态反射贴图。
+- 玩家及镜像相机启用后处理，通过独立 `V3 Hall Volumes` 层和 NeutralViewProfile 屏蔽管线默认调色。MainHallProfile 保留为中性参数、Volume 停用；其 BoxCollider 只作为 LocalAmbientProbe 的空间范围引用。HallStone 关闭带来蓝灰偏色的天空反射，使用同一局部环境的中性反射回退；黄铜仍使用本地反射探针。
+- 原生 Light／Volume／Renderer 都在 `OpeningPrototype/Main route` 编辑；画面观感仍待用户确认。用玩家相机同等配置、HDR 离屏目标及正确线性转 sRGB 检查远近视角、光束内部和墙体遮挡；开场同视点前后平均 RGB 差异约 0.009/255、单通道最大 1/255。未开启持续 Play，未测 GPU 性能。
+- 后续实机修正：上述离屏检查遗漏 V3Presentation 实际使用 ARGB32 的显示链路。主／镜像帧缓冲现改为 DefaultHDR，避免高亮在负曝光前截断；已进入 Play 验证开场完成后的大厅 Game 输出和镜像分屏，均正常保留中心照明。此前“相机同等配置”的离屏结果不能代表原 ARGB32 游玩画面。
+
+### 早期空间记录
 - 当前场景为 `Assets/Scenes/V1/TutorialLevel.unity`（原 SacredSpaceV2 改名，仍使用 V2 空间资源）。旧 SampleScene、WhiteRoomStudy、WhiteGalleryStudy、SacredSpaceStudy 及其专用资源已按用户确认删除；当前构建入口为 TutorialLevel。
 - 白色柔和空间、红色地毯，无旧版黑色描边。PC/Mobile 管线只保留 `SacredSpaceV2_Renderer.asset`，默认及相机 renderer index 均为 0，SSAO 关闭。
 - 走廊约 3.2 米宽、4 米高；主房约 18×20 米、高 12 米。出生 X=9.05，朝向主房；台座中心保持 Unity X≈-8/Z=0，尺寸 1.2×2 米、高 1 米，底部 Y=0.04。后方留给未来的门。

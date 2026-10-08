@@ -9,7 +9,7 @@ namespace PuzzleApple.V3.Editor
 {
     public static class V3MemoryPresets
     {
-        public const string Folder="Assets/UI/V3/Memories";
+        public const string Folder="Assets/Textures/V3/Archive/Vocabulary";
         [MenuItem("PuzzleApple/V3/Bake preset memories")]
         public static void Bake()
         {
@@ -24,7 +24,7 @@ namespace PuzzleApple.V3.Editor
             var oldActive=RenderTexture.active;
             var oldLamp=w.indicator.sharedMaterial;
             var lamp=new Material(oldLamp);w.indicator.sharedMaterial=lamp;
-            var presets=new List<WordLibrary.MemoryPreset>();
+            var presets=new List<WordLibrary.VocabularyImage>();
             try
             {
                 Capture(camera,"mirror",new Vector3(9,1.3f,.9f),w.originalMirror.Bounds.center,presets);
@@ -48,7 +48,7 @@ namespace PuzzleApple.V3.Editor
                     importer.wrapMode=TextureWrapMode.Clamp;importer.SaveAndReimport();
                     p.image=AssetDatabase.LoadAssetAtPath<Texture2D>(path);presets[i]=p;
                 }
-                Undo.RecordObject(w.library,"Assign preset memories");w.library.memoryPresets=presets.ToArray();
+                Undo.RecordObject(w.library,"Assign preset memories");w.library.vocabularyImages=presets.ToArray();
                 EditorUtility.SetDirty(w.library);EditorSceneManager.MarkSceneDirty(w.gameObject.scene);
             }
             finally
@@ -58,7 +58,7 @@ namespace PuzzleApple.V3.Editor
                 UnityEngine.Object.DestroyImmediate(target);UnityEngine.Object.DestroyImmediate(go);
             }
         }
-        static void Capture(Camera camera,string id,Vector3 position,Vector3 focus,List<WordLibrary.MemoryPreset> presets)
+        static void Capture(Camera camera,string id,Vector3 position,Vector3 focus,List<WordLibrary.VocabularyImage> presets)
         {
             camera.transform.SetPositionAndRotation(position,Quaternion.LookRotation(focus-position));
             camera.Render();RenderTexture.active=camera.targetTexture;
@@ -67,7 +67,7 @@ namespace PuzzleApple.V3.Editor
             {
                 image.ReadPixels(new Rect(0,0,600,800),0,0);image.Apply();
                 File.WriteAllBytes(Folder+"/"+id+".png",image.EncodeToPNG());
-                presets.Add(new WordLibrary.MemoryPreset{wordId=id});
+                presets.Add(new WordLibrary.VocabularyImage{wordId=id});
             }
             finally{UnityEngine.Object.DestroyImmediate(image);}
         }

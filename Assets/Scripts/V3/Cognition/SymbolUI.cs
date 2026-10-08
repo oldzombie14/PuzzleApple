@@ -13,17 +13,6 @@ namespace PuzzleApple.V3.Cognition
             return Mathf.Max(20, size * Mathf.Clamp(aspect, .35f, 2.5f));
         }
 
-        public static Image Create(string name, Transform parent, WordDefinition word, Color color)
-        {
-            var image = CognitionUI.Rect(name, parent).gameObject.AddComponent<CenteredSymbolImage>();
-            image.color = color;
-            image.raycastTarget = false;
-            image.sprite = word.Symbol;
-            image.type = Image.Type.Simple;
-            image.preserveAspect = true;
-            return image;
-        }
-
         public static Rect InkRect(Image image)
         {
             var rect = image.rectTransform.rect;

@@ -18,3 +18,5 @@ MonoBehaviour:
   senses:
   - meaning: equal
     role: 4
+  - meaning: balance
+    role: 0

@@ -12,7 +12,11 @@ namespace PuzzleApple.V3.Cognition
         [SerializeField] GameplayPanel panel;
         [SerializeField] CognitionCatalog catalog;
         [SerializeField] Font chalkFont;
-        [SerializeField, Min(18)] int wordSize = 38;
+        [Header("UI templates")]
+        [SerializeField] CenteredSymbolImage wordPrefab;
+        [SerializeField] RectTransform groupPrefab;
+        [SerializeField] Image sentenceHandlePrefab;
+        [SerializeField] CognitionChalkStroke strokePrefab;
         [SerializeField, Min(10)] float snapDistance = 38;
         [SerializeField, Min(12)] float wordGap = 18;
         [SerializeField, Range(0, 20)] float wordFloatAmplitude = 8;
@@ -20,7 +24,8 @@ namespace PuzzleApple.V3.Cognition
         public CognitionCatalog Catalog => catalog;
         public GameplayPanel Panel => panel;
         public Font ChalkFont => chalkFont;
-        public RectTransform Surface { get; private set; }
+        [SerializeField] RectTransform surface;
+        public RectTransform Surface => surface;
         public bool IsDragging => drag != null;
         public void RemoveToken(int groupId,int wordId,bool whole=false)
         {
@@ -70,13 +75,16 @@ namespace PuzzleApple.V3.Cognition
         readonly Dictionary<int, View> views = new Dictionary<int, View>();
         Drag drag;
         int snapTargetId = -1;
-        CognitionSnapDot snapHint;
-        Image previewBullet;
-        const float SentenceIndent = 48;
-        const float ConflictAlpha = .4f;
-        static readonly Color ChalkColor = new Color(.92f,.92f,.92f);
+        [SerializeField] CognitionSnapDot snapHint;
+        [SerializeField] Image previewBullet;
+        float SentenceIndent => sentenceHandlePrefab.rectTransform.rect.width;
+        float wordSize => wordPrefab.rectTransform.rect.width;
+        float WordHeight => wordPrefab.rectTransform.rect.height;
+        const float ConflictAlpha = .16f;
+        public void ClearWorkspace(){CancelDrag();State.ClearWorkspace();}
+        Color ChalkColor => wordPrefab.color;
         Vector2 lastSurfaceSize;
-        RectTransform dragLayer;
+        [SerializeField] RectTransform dragLayer;
         bool centerFirstWord;
 
         void Awake()
@@ -87,19 +95,7 @@ namespace PuzzleApple.V3.Cognition
         }
         void Start()
         {
-            Surface = CognitionUI.Rect("Cognition workspace", panel.ContentRoot);
-            Surface.anchorMin = Vector2.zero; Surface.anchorMax = Vector2.one;
-            Surface.offsetMin = new Vector2(214, 40); Surface.offsetMax = new Vector2(-32,-48);
-            Surface.pivot = new Vector2(0, 1);
-            Surface.gameObject.AddComponent<RectMask2D>();
-            dragLayer=CognitionUI.Rect("Cognition drag layer",panel.ContentRoot);
-            dragLayer.anchorMin=Surface.anchorMin;dragLayer.anchorMax=Surface.anchorMax;
-            dragLayer.pivot=Surface.pivot;dragLayer.offsetMin=Surface.offsetMin;dragLayer.offsetMax=Surface.offsetMax;
-            snapHint = CognitionUI.Rect("Snap preview", Surface).gameObject.AddComponent<CognitionSnapDot>();
-            snapHint.color = ChalkColor;
-            snapHint.raycastTarget = false;
             snapHint.gameObject.SetActive(false);
-            previewBullet = CognitionUI.Image("Preview sentence bullet", Surface,new Color(.92f,.92f,.92f));
             previewBullet.gameObject.SetActive(false);
             State.Changed += Refresh;
             panel.OpenChanged.AddListener(OnPanelChanged);
@@ -156,7 +152,7 @@ namespace PuzzleApple.V3.Cognition
                     view.EraseWidth = view.EraseMask.sizeDelta.x;
                     foreach (var handle in view.EraseGhost.GetComponentsInChildren<CognitionDragHandle>()) Destroy(handle);
                     foreach (var text in view.EraseGhost.GetComponentsInChildren<CenteredSymbolImage>()) text.color = ChalkColor;
-                    view.Mask.sizeDelta = new Vector2(0,56);
+                    view.Mask.sizeDelta = new Vector2(0,WordHeight);
                 }
                 next[group.Id] = view;
             }
@@ -181,32 +177,31 @@ namespace PuzzleApple.V3.Cognition
             var v = new View { Group = group, Position = position, DisplayPosition = position,
                 Scratches = scratches, Rewrite = rewrite, AnimationStart = Time.unscaledTime,
                 Recognized = group.Recognized, Conflicted = group.Conflicted, Signature = signature };
-            v.Root = CognitionUI.Rect("Group " + group.Id, Surface);
-            v.Fade = v.Root.gameObject.AddComponent<CanvasGroup>();
+            v.Root = Instantiate(groupPrefab,Surface);v.Root.name="Group "+group.Id;
+            v.Fade = v.Root.GetComponent<CanvasGroup>();
             v.Fade.alpha = group.Conflicted ? ConflictAlpha : 1;
-            v.Mask = CognitionUI.Rect("Chalk reveal", v.Root);
-            v.Mask.gameObject.AddComponent<RectMask2D>();
+            v.Mask = (RectTransform)v.Root.Find("Chalk reveal");
             float textStart = group.Independent ? 0 : SentenceIndent;
             float x = textStart;
             foreach (var word in group.Words)
             {
-                var text = SymbolUI.Create("Word " + word.Id, v.Mask, word.Definition, ChalkColor);
-                text.raycastTarget = true;
+                var text = Instantiate(wordPrefab,v.Mask);text.name="Word "+word.Id;text.sprite=word.Definition.Symbol;
                 float width = SymbolUI.Width(word.Definition, wordSize);
                 v.Words.Add(text); v.Offsets.Add(x); v.Widths.Add(width);
-                CognitionUI.Place(text.rectTransform, x, 0, width, 56);
-                var handle = text.gameObject.AddComponent<CognitionDragHandle>(); handle.Initialize(this, group.Id, word.Id, false);
+                CognitionUI.Place(text.rectTransform, x, 0, width, WordHeight);
+                text.GetComponent<CognitionDragHandle>().Initialize(this, group.Id, word.Id, false);
+                text.GetComponent<WordNoteTarget>().WordId=word.Definition.Id;
                 x += width + wordGap;
             }
             float textEnd = x - wordGap;
             x = textEnd;
             v.FontScale = Mathf.Min(1, (Surface.rect.width - 8) / Mathf.Max(1, x));
-            v.Width = x * v.FontScale; v.Height = 56 * v.FontScale;
+            v.Width = x * v.FontScale; v.Height = WordHeight * v.FontScale;
             v.Mask.localScale = Vector3.one * v.FontScale;
-            v.Mask.sizeDelta = new Vector2(x, 56);
+            v.Mask.sizeDelta = new Vector2(x, WordHeight);
             v.Root.sizeDelta = new Vector2(v.Width, v.Height);
             // All symbols share the same row center; width comes from sprite aspect, not English spelling.
-            float textCenter = 28;
+            float textCenter = WordHeight*.5f;
             v.TextCenterY = textCenter * v.FontScale;
             v.TextStart = textStart * v.FontScale;
             v.TextEnd = textEnd * v.FontScale;
@@ -215,27 +210,23 @@ namespace PuzzleApple.V3.Cognition
             v.TextCenterX = (v.InkStart + v.InkEnd) * .5f;
             if (!group.Independent)
             {
-                var hit = CognitionUI.Image("Sentence handle", v.Mask, Color.clear);
-                hit.raycastTarget = true;
+                var hit = Instantiate(sentenceHandlePrefab,v.Mask);hit.name="Sentence handle";
                 v.LeadingHandle = hit.rectTransform;
-                CognitionUI.Place(hit.rectTransform,0,0,SentenceIndent,56);
-                var square = CognitionUI.Image("Square", hit.transform,ChalkColor);
-                CognitionUI.Place(square.rectTransform,6,textCenter-5,10,10);
-                hit.gameObject.AddComponent<CognitionDragHandle>().Initialize(this,group.Id,-1,true);
+                CognitionUI.Place(hit.rectTransform,0,0,SentenceIndent,WordHeight);
+                hit.GetComponent<CognitionDragHandle>().Initialize(this,group.Id,-1,true);
             }
             for (int i = 0; i < v.Offsets.Count; i++) { v.Offsets[i] *= v.FontScale; v.Widths[i] *= v.FontScale; }
             // Preserve additional scratches; each has a slightly different slope and placement.
             for (int i = 0; i < scratches; i++)
             {
-                var line = CognitionUI.Rect("Scratch " + i, v.Mask).gameObject.AddComponent<CognitionChalkStroke>();
-                line.color = new Color(.92f,.92f,.92f,.88f);
-                line.raycastTarget = false;
+                var line = Instantiate(strokePrefab,v.Mask);line.name="Scratch "+i;
                 line.Seed = group.Id * 19 + i * 31;
                 float offset = i == 0 ? 0 : ((i + 1) / 2 % 3 + 1) * (i % 2 == 0 ? 1 : -1);
                 float angle = i == 0 ? 0 : (i % 2 == 0 ? .6f : -.6f);
                 float strokeWidth = textEnd - textStart - 6;
                 float centerCorrection = Mathf.Sin(angle * Mathf.Deg2Rad) * strokeWidth * .5f;
-                CognitionUI.Place(line.rectTransform, textStart + 1, textCenter + offset - 2 + centerCorrection, strokeWidth, 4);
+                float strokeHeight=strokePrefab.rectTransform.rect.height;
+                CognitionUI.Place(line.rectTransform, textStart + 1, textCenter + offset - strokeHeight*.5f + centerCorrection, strokeWidth, strokeHeight);
                 line.rectTransform.localRotation = Quaternion.Euler(0, 0, angle);
                 if (i == scratches - 1) { v.NewScratch = line.rectTransform; v.ScratchWidth = strokeWidth; }
             }
@@ -264,10 +255,10 @@ namespace PuzzleApple.V3.Cognition
                 if (v.Rewrite)
                 {
                     visible = Mathf.Clamp01((elapsed - .44f) / .55f);
-                    if (v.EraseMask) v.EraseMask.sizeDelta = new Vector2(v.EraseWidth * (1 - Mathf.Clamp01(elapsed/.34f)),56);
+                    if (v.EraseMask) v.EraseMask.sizeDelta = new Vector2(v.EraseWidth * (1 - Mathf.Clamp01(elapsed/.34f)),WordHeight);
                     if (elapsed >= .99f) { v.Rewrite = false; if (v.EraseGhost) Destroy(v.EraseGhost.gameObject); }
                 }
-                v.Mask.sizeDelta = new Vector2(v.Width / v.FontScale * visible, 56);
+                v.Mask.sizeDelta = new Vector2(v.Width / v.FontScale * visible, WordHeight);
             }
             if (drag != null) UpdateDragPreview();
         }
@@ -324,21 +315,22 @@ namespace PuzzleApple.V3.Cognition
                 var fade = ghost.GetComponent<CanvasGroup>(); fade.alpha = v.Conflicted ? ConflictAlpha : 1; fade.blocksRaycasts = false;
                 foreach (var handle in ghost.GetComponentsInChildren<CognitionDragHandle>()) Destroy(handle);
                 var previous = ghost.Find("Previous chalk - erase right to left"); if (previous) previous.gameObject.SetActive(false);
-                ((RectTransform)ghost.GetChild(0)).sizeDelta = new Vector2(v.Width / v.FontScale,56);
+                ((RectTransform)ghost.GetChild(0)).sizeDelta = new Vector2(v.Width / v.FontScale,WordHeight);
             }
             else
             {
-                var text = SymbolUI.Create("Dragging chalk", dragLayer, v.Group.Words[index].Definition, ChalkColor);
+                var text = Instantiate(wordPrefab,dragLayer);text.name="Dragging chalk";text.sprite=v.Group.Words[index].Definition.Symbol;text.raycastTarget=false;
+                Destroy(text.GetComponent<CognitionDragHandle>());Destroy(text.GetComponent<WordNoteTarget>());
                 text.color = new Color(ChalkColor.r, ChalkColor.g, ChalkColor.b, v.Conflicted ? ConflictAlpha : 1);
                 ghost = text.rectTransform;
                 ghost.localScale = Vector3.one * v.FontScale;
-                ghost.sizeDelta = new Vector2(v.Widths[index] / v.FontScale, 56);
+                ghost.sizeDelta = new Vector2(v.Widths[index] / v.FontScale, WordHeight);
             }
             drag = new Drag { GroupId = groupId, WordId = wordId, Whole = whole, WasIndependent = v.Group.Independent,
                 Point = point, GrabOffset = fromLibrary ? new Vector2(v.TextCenterX,v.TextCenterY) : point - origin, Ghost = ghost,
                 GhostHandle = whole ? ghost.Find("Chalk reveal/Sentence handle") : null };
             if (whole || v.Group.Independent) v.Fade.alpha = fromLibrary ? 0 : .2f * (v.Conflicted ? ConflictAlpha : 1);
-            else v.Words[index].color = new Color(.92f,.92f,.92f,.2f);
+            else v.Words[index].color = new Color(ChalkColor.r,ChalkColor.g,ChalkColor.b,ChalkColor.a*.2f);
             MoveDrag(screen);
         }
         public void MoveDrag(Vector2 screen)
@@ -472,7 +464,7 @@ namespace PuzzleApple.V3.Cognition
         {
             if (drag == null) return;
             if (views.TryGetValue(drag.GroupId, out var v))
-            { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = new Color(.92f,.92f,.92f); }
+            { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = ChalkColor; }
             Destroy(drag.Ghost.gameObject); drag = null;
             snapTargetId = -1;
             foreach (var view in views.Values) if (view.LeadingHandle) view.LeadingHandle.gameObject.SetActive(true);

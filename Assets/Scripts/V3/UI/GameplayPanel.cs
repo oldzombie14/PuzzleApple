@@ -13,34 +13,28 @@ namespace PuzzleApple.V3
         [SerializeField] FirstPersonController player;
         [SerializeField] RectTransform panel;
         [SerializeField] RectTransform contentRoot;
-        [SerializeField] Image background;
         [SerializeField] CanvasGroup interaction;
-        [SerializeField] Image worldInputBlocker;
-        [SerializeField] Color backgroundColor = Color.black;
-        [SerializeField, Range(0.1f, 0.8f)] float widthFraction = 1f / 3f;
+        [SerializeField] Button worldInputBlocker;
         [SerializeField, Min(0)] float slideDuration = 0.25f;
         [SerializeField, Min(0)] float stopDuration = 0.2f;
         [SerializeField, Range(0, 20)] float lookAngle = 2.5f;
         [SerializeField, Range(0, 2)] float idlePitchAngle = 0.35f;
         [SerializeField] UnityEvent<bool> openChanged = new UnityEvent<bool>();
         float progress;
+        Vector2 openPosition;
 
         public bool IsOpen { get; private set; }
         public bool InputBlocked { get; set; }
         public RectTransform ContentRoot => contentRoot;
         public UnityEvent<bool> OpenChanged => openChanged;
-        public Color BackgroundColor { get => backgroundColor; set { backgroundColor = value; ApplyVisuals(); } }
 
         void Awake()
         {
             if (!player) player = FindFirstObjectByType<FirstPersonController>();
+            openPosition=panel.anchoredPosition;
             if (worldInputBlocker)
             {
-                var dismiss = worldInputBlocker.GetComponent<Button>();
-                if (!dismiss) dismiss = worldInputBlocker.gameObject.AddComponent<Button>();
-                dismiss.transition = Selectable.Transition.None;
-                dismiss.navigation = new Navigation { mode = Navigation.Mode.None };
-                dismiss.onClick.AddListener(DismissFromWorld);
+                worldInputBlocker.onClick.AddListener(DismissFromWorld);
             }
             ApplyVisuals();
         }
@@ -73,25 +67,21 @@ namespace PuzzleApple.V3
         void ApplyVisuals()
         {
             if (!panel) return;
-            panel.anchorMin = Vector2.zero;
-            panel.anchorMax = new Vector2(widthFraction, 1);
-            panel.sizeDelta = Vector2.zero;
             float eased = Mathf.SmoothStep(0, 1, progress);
-            var parent = panel.parent as RectTransform;
-            panel.anchoredPosition = new Vector2(-(parent ? parent.rect.width : Screen.width) * widthFraction * (1 - eased), 0);
-            if (background) background.color = backgroundColor;
+            panel.anchoredPosition = openPosition+Vector2.left*panel.rect.width*(1-eased);
             if (interaction)
             {
                 interaction.interactable = IsOpen;
                 interaction.blocksRaycasts = IsOpen;
                 interaction.alpha = progress > 0 ? 1 : 0;
             }
-            if (worldInputBlocker) worldInputBlocker.raycastTarget = IsOpen;
+            if (worldInputBlocker) worldInputBlocker.gameObject.SetActive(IsOpen);
         }
 
-        void OnValidate() => ApplyVisuals();
+        void OnDestroy(){if(worldInputBlocker)worldInputBlocker.onClick.RemoveListener(DismissFromWorld);}
         void OnDisable()
         {
+            if(!Application.isPlaying)return;
             if (IsOpen) SetOpen(false);
             progress = 0;
             ApplyVisuals();

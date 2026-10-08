@@ -62,24 +62,16 @@ namespace PuzzleApple.V3.Editor
             void Conflict(CognitionSignal a,CognitionSignal b,bool earliest=false){var c=Asset<CognitionConflict>(Root+"/Conflicts/"+a+"-"+b+".asset");TextField(c,"id",("conflict-"+a+"-"+b).ToLowerInvariant());EnumField(c,"first",(int)a);EnumField(c,"second",(int)b);var so=new SerializedObject(c);so.FindProperty("earliestWins").boolValue=earliest;so.ApplyModifiedPropertiesWithoutUndo();conflicts.Add(c);}
             Conflict(CognitionSignal.EqualApple,CognitionSignal.EssenceSelf,true);Conflict(CognitionSignal.AppleMove,CognitionSignal.AppleStop);Conflict(CognitionSignal.PlayerMove,CognitionSignal.PlayerNoMove);Conflict(CognitionSignal.MirrorMove,CognitionSignal.MirrorStop);Conflict(CognitionSignal.DoorPositive,CognitionSignal.DoorNegative);Conflict(CognitionSignal.MirrorApple,CognitionSignal.EssenceApple);Conflict(CognitionSignal.MirrorMirror,CognitionSignal.EssenceMirror);Conflict(CognitionSignal.MirrorSelf,CognitionSignal.EssenceSelf);
             var catalog=Asset<CognitionCatalog>(Root+"/V3Catalog.asset");ArrayField(catalog,"words",words.Values);ArrayField(catalog,"rules",rules);ArrayField(catalog,"conflicts",conflicts);catalog.ValidateOrThrow();
-            var canvasGO=new GameObject("V3 Runtime",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler),typeof(GraphicRaycaster));var canvas=canvasGO.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;
-            var scaler=canvasGO.GetComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;scaler.referenceResolution=new Vector2(1920,1080);scaler.matchWidthOrHeight=.5f;
-            var panel=canvasGO.AddComponent<GameplayPanel>();var board=canvasGO.AddComponent<CognitionBoard>();Field(board,"panel",panel);Field(board,"catalog",catalog);Field(board,"chalkFont",AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/General/Handodle-rg38A.ttf"));
-            var blocker=CognitionUI.Image("Close board",canvasGO.transform,Color.clear);CognitionUI.Stretch(blocker.rectTransform);blocker.raycastTarget=false;
-            var pr=CognitionUI.Rect("Panel",canvasGO.transform);CognitionUI.Stretch(pr);var bg=pr.gameObject.AddComponent<Image>();bg.color=new Color(.02f,.02f,.024f);var cg=pr.gameObject.AddComponent<CanvasGroup>();
-            var content=CognitionUI.Rect("Content",pr);CognitionUI.Stretch(content);
-            Field(panel,"panel",pr);Field(panel,"contentRoot",content);Field(panel,"background",bg);Field(panel,"interaction",cg);Field(panel,"worldInputBlocker",blocker);
+            var interfaceAsset=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/V3/UI/V3Interface.prefab");
+            if(!interfaceAsset)throw new InvalidOperationException("V3Interface prefab is missing.");
+            var ui=(GameObject)PrefabUtility.InstantiatePrefab(interfaceAsset);
+            var board=ui.GetComponent<CognitionBoard>();Field(board,"catalog",catalog);
+            var panel=ui.GetComponent<GameplayPanel>();var library=ui.GetComponent<WordLibrary>();
+            var presentation=ui.GetComponent<V3Presentation>();
             var pg=GameObject.Find("Player");var basic=pg.GetComponent<PuzzleApple.General.BasicFirstPersonController>();if(basic)UnityEngine.Object.DestroyImmediate(basic);
             var player=Add<FirstPersonController>(pg);player.view=pg.GetComponentInChildren<Camera>().transform;player.cognition=board;Field(panel,"player",player);
-            var library=canvasGO.AddComponent<WordLibrary>();library.board=board;
-            string photoPath="Assets/Materials/V3/MemoryPrint.mat";var photoMaterial=AssetDatabase.LoadAssetAtPath<Material>(photoPath);
-            if(!photoMaterial){photoMaterial=new Material(Shader.Find("PuzzleApple/V3/MemoryPrint"));AssetDatabase.CreateAsset(photoMaterial,photoPath);}library.snapshotMaterial=photoMaterial;
-            library.memoryPresets=new[]{"mirror","move","door","positive","negative","equal","apple"}.Select(id=>new WordLibrary.MemoryPreset{wordId=id,image=AssetDatabase.LoadAssetAtPath<Texture2D>(V3MemoryPresets.Folder+"/"+id+".png")}).ToArray();
-            var presentation=canvasGO.AddComponent<V3Presentation>();presentation.view=player.view.GetComponent<Camera>();presentation.board=board;
-            presentation.blurShader=Shader.Find("PuzzleApple/V3/SoftFocus");
-            string matpath="Assets/Materials/V3/WorldView.mat";var viewmat=AssetDatabase.LoadAssetAtPath<Material>(matpath);if(!viewmat){viewmat=new Material(Shader.Find("PuzzleApple/V3/WorldView"));AssetDatabase.CreateAsset(viewmat,matpath);}presentation.viewMaterial=viewmat;
-            presentation.eyeSprite=AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/General/Icons/viewer.png");presentation.forbiddenSprite=AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/General/Icons/forbidden.png");presentation.reticleMaterial=AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/UI/ReticleContrast.mat");
-            var world=canvasGO.AddComponent<V3World>();world.board=board;world.library=library;world.player=player;world.presentation=presentation;
+            presentation.view=player.view.GetComponent<Camera>();
+            var world=new GameObject("V3 Runtime").AddComponent<V3World>();world.board=board;world.library=library;world.player=player;world.presentation=presentation;
             V3Object Object(GameObject g,ObjectKind kind){var o=Add<V3Object>(g);o.kind=kind;return o;}
             world.originalApple=Object(GameObject.Find("AppleLowPoly"),ObjectKind.Apple);var rb=Add<Rigidbody>(world.originalApple.gameObject);rb.mass=1;rb.isKinematic=false;rb.useGravity=true;rb.collisionDetectionMode=CollisionDetectionMode.ContinuousDynamic;rb.interpolation=RigidbodyInterpolation.Interpolate;rb.constraints=RigidbodyConstraints.FreezeRotation;
             world.originalMirror=Object(GameObject.Find("Mirror"),ObjectKind.Mirror);var mirrorRenderer=world.originalMirror.GetComponentsInChildren<MeshFilter>().First();var collider=Add<BoxCollider>(mirrorRenderer.gameObject);collider.center=mirrorRenderer.sharedMesh.bounds.center;collider.size=mirrorRenderer.sharedMesh.bounds.size;

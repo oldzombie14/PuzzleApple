@@ -76,9 +76,28 @@ namespace PuzzleApple.V4.Editor
             var lightGO=new GameObject("Threshold skylight",typeof(Light));lightGO.transform.SetParent(root.transform,false);lightGO.transform.localPosition=new Vector3(0,5.6f,-.1f);lightGO.transform.localRotation=Quaternion.Euler(87,0,0);
             var light=lightGO.GetComponent<Light>();light.type=LightType.Spot;light.color=Color.white;light.intensity=18;light.range=9;light.spotAngle=49;light.innerSpotAngle=25;light.shadows=LightShadows.Soft;
             root.AddComponent<ThresholdDoor>();
+            ConfigureVisuals(root);
             var target=root.AddComponent<BoxCollider>();target.isTrigger=true;target.center=new Vector3(0,3,0);target.size=new Vector3(4.85f,6.4f,1.15f);
             PrefabUtility.SaveAsPrefabAsset(root,"Assets/Prefabs/V4/FishThreshold.prefab");
             EditorSceneManager.MarkSceneDirty(root.scene);EditorSceneManager.SaveScene(root.scene);AssetDatabase.SaveAssets();Selection.activeGameObject=root;
+        }
+        public static void ConfigureVisuals(GameObject root)
+        {
+            var stone = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V4/ThresholdStone.mat");
+            if (!root.transform.Find("Sill"))
+                Cube(root.transform, "Sill", new Vector3(0,.11f,0), new Vector3(4.85f,.22f,1.15f), stone);
+            var fish = root.GetComponentsInChildren<ThresholdFish>(true);
+            for (int i=0; i<fish.Length; i++)
+                fish[i].transform.localScale = Vector3.one * Mathf.Lerp(.44f, 1.02f, Mathf.Repeat(i*.618034f+.17f, 1));
+            const string path = "Assets/Materials/V4/DoorRipple.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!material)
+            {
+                material = new Material(Shader.Find("PuzzleApple/V4/DoorRipple"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+            root.GetComponent<ThresholdDoor>().rippleMaterial = material;
+            EditorUtility.SetDirty(root);
         }
     }
 }

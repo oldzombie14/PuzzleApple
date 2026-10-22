@@ -9,6 +9,8 @@ namespace PuzzleApple.V4
         public bool Moving { get; private set; }
         Rigidbody body;
         Vector3 direction;
+        public Vector3 Direction => direction;
+        public void RestoreDirection(Vector3 value) { direction = value.normalized; }
         void Awake()
         {
             body = GetComponent<Rigidbody>();

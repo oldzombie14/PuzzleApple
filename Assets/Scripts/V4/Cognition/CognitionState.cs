@@ -28,13 +28,14 @@ namespace PuzzleApple.V4.Cognition
             public bool Conflicted { get; internal set; }
             public bool Effective => Recognized && !Conflicted;
             public CognitionSignal Signal { get; internal set; }
+            public IReadOnlyList<CognitionSignal> Signals { get; internal set; } = Array.Empty<CognitionSignal>();
             public string RuleId { get; internal set; }
             public long Established { get; internal set; }
             internal Group(int id, IEnumerable<Word> source) { Id = id; words = source.ToList(); }
         }
 
         readonly List<Group> groups = new List<Group>();
-        readonly Dictionary<string, (string Id, CognitionSignal Effect)> rules = new Dictionary<string, (string, CognitionSignal)>();
+        readonly Dictionary<string, CognitionRule> rules = new Dictionary<string, CognitionRule>();
         readonly Dictionary<string, WordDefinition> vocabulary;
         readonly Dictionary<string, string> exclusionKeys;
         readonly (CognitionSignal First, CognitionSignal Second, bool Earliest)[] conflicts;
@@ -44,7 +45,7 @@ namespace PuzzleApple.V4.Cognition
         int nextWord, nextGroup;
         public IReadOnlyList<Group> Groups => groups;
         public event Action<CognitionChange> Changed;
-        public bool HasEffect(CognitionSignal signal) => groups.Any(g => g.Effective && g.Signal == signal);
+        public bool HasEffect(CognitionSignal signal) => groups.Any(g => g.Effective && g.Signals.Contains(signal));
         public bool Knows(string id) => learned.Contains(id);
 
         public CognitionState(CognitionCatalog catalog)
@@ -54,7 +55,7 @@ namespace PuzzleApple.V4.Cognition
             vocabulary = catalog.Words.ToDictionary(w => w.Id);
             exclusionKeys = catalog.Rules.ToDictionary(r => r.Id, r => r.ExclusionKey);
             foreach (var rule in catalog.Rules)
-                rules.Add(string.Join(" ", rule.Words.Select(w => w.Id)), (rule.Id, rule.Effect));
+                rules.Add(string.Join(" ", rule.Words.Select(w => w.Id)), rule);
             conflicts = catalog.Conflicts.Select(c => (c.First, c.Second, c.EarliestWins)).ToArray();
         }
 
@@ -165,28 +166,39 @@ namespace PuzzleApple.V4.Cognition
                 string previousRule = group.RuleId;
                 group.Recognized = !group.Independent && rules.ContainsKey(key);
                 group.Signal = group.Recognized ? rules[key].Effect : CognitionSignal.Empty;
+                group.Signals = group.Recognized ? rules[key].Effects.Distinct().ToArray() : Array.Empty<CognitionSignal>();
                 group.RuleId = group.Recognized ? rules[key].Id : null;
                 if (group.RuleId != previousRule) group.Established = group.Recognized ? ++chronology : 0;
                 group.Conflicted = false;
             }
-            // Resolve against all recognized meanings before publishing any world effects.
-            foreach (var conflict in conflicts) ResolveConflict(conflict.First, conflict.Second, conflict.Earliest);
-            foreach (var channel in groups.Where(g => g.Recognized && !string.IsNullOrEmpty(exclusionKeys[g.RuleId]))
-                .GroupBy(g => exclusionKeys[g.RuleId]))
+            // Resolve whole sentences in establishment order. Rejected sentences claim no channels.
+            // Two accepted sentences may share the same effect; different effects in one channel conflict.
+            var accepted = new List<Group>();
+            foreach (var conflict in conflicts.Where(c => !c.Earliest))
             {
-                var winner = channel.OrderBy(g => g.Established).First().RuleId;
-                foreach (var group in channel) if (group.RuleId != winner) group.Conflicted = true;
+                if (!groups.Any(g => g.Recognized && g.Signals.Contains(conflict.First)) ||
+                    !groups.Any(g => g.Recognized && g.Signals.Contains(conflict.Second))) continue;
+                foreach (var g in groups.Where(g => g.Recognized))
+                    if (g.Signals.Contains(conflict.First) || g.Signals.Contains(conflict.Second)) g.Conflicted = true;
+            }
+            foreach (var group in groups.Where(g => g.Recognized && !g.Conflicted).OrderBy(g => g.Established))
+            {
+                group.Conflicted = accepted.Any(other => ConflictsWith(group, other));
+                if (!group.Conflicted) accepted.Add(group);
             }
             Changed?.Invoke(kind);
         }
-        void ResolveConflict(CognitionSignal first, CognitionSignal second, bool earliest)
+        bool ConflictsWith(Group a, Group b)
         {
-            if (!groups.Any(g => g.Recognized && g.Signal == first) ||
-                !groups.Any(g => g.Recognized && g.Signal == second)) return;
-            var winner = earliest ? groups.Where(g => g.Recognized && (g.Signal == first || g.Signal == second))
-                .OrderBy(g => g.Established).First().Signal : CognitionSignal.Empty;
-            foreach (var group in groups)
-                if (group.Recognized && (group.Signal == first || group.Signal == second) && group.Signal != winner) group.Conflicted = true;
+            foreach (var x in a.Signals) foreach (var y in b.Signals)
+            {
+                string channel = CognitionRule.Channel(x);
+                if (x != y && channel != null && channel == CognitionRule.Channel(y)) return true;
+                if (conflicts.Any(c => (c.First == x && c.Second == y) || (c.First == y && c.Second == x))) return true;
+            }
+            string key = exclusionKeys[a.RuleId];
+            return !string.IsNullOrEmpty(key) && key == exclusionKeys[b.RuleId] &&
+                !a.Signals.OrderBy(s => s).SequenceEqual(b.Signals.OrderBy(s => s));
         }
     }
 }

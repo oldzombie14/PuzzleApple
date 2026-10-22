@@ -41,6 +41,13 @@ namespace PuzzleApple.V4
             panelRotation = transform.rotation; idleTime = 0; panelYaw = yaw; panelPitch = idlePitch;
             LockCursor(!open);
         }
+        public void Teleport(Vector3 position, Quaternion rotation)
+        {
+            bool active=motor.enabled; motor.enabled=false;
+            transform.SetPositionAndRotation(position,rotation); motor.enabled=active;
+            spawn=position; spawnRotation=rotation; panelRotation=rotation;
+            vertical=pitch=learningYaw=learningBob=0;
+        }
         void Update()
         {
             var key = Keyboard.current; var mouse = Mouse.current;

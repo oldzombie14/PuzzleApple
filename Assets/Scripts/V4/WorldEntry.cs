@@ -77,6 +77,11 @@ namespace PuzzleApple.V4
         public void ExitGame()
         {
             if (entering) return;
+            QuitApplication();
+        }
+
+        public static void QuitApplication()
+        {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

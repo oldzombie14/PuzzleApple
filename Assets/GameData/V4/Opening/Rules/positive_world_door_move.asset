@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d141441d4bc4ec483e8974eac89232b, type: 3}
+  m_Name: positive_world_door_move
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.CognitionRule
+  id: positive.world.door.move
+  words:
+  - {fileID: 11400000, guid: 6b61624857bd36942b72cb1526ef12c9, type: 2}
+  - {fileID: 11400000, guid: 19f7839e5f80fca4fb50bf5fe80efde7, type: 2}
+  - {fileID: 11400000, guid: 07caf5693a710dc47abb5ddadb282a2d, type: 2}
+  - {fileID: 11400000, guid: c66880d349871894792dbcd4fd74545e, type: 2}
+  effect: 14
+  additionalEffects: 
+  trigger: 0
+  exclusionKey: 

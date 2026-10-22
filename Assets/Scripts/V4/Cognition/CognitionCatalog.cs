@@ -50,8 +50,11 @@ namespace PuzzleApple.V4.Cognition
                 if (rule.Words.Count < 2) errors.Add(rule.name + ": a sentence needs at least two words.");
                 if (rule.Words.Any(w => !w || !words.Contains(w))) errors.Add(rule.name + ": word is missing or outside this catalog.");
                 else if (!patterns.Add(string.Join(" ", rule.Words.Select(w => w.Id)))) errors.Add(rule.name + ": duplicate sentence pattern.");
-                if (!Enum.IsDefined(typeof(CognitionSignal), rule.Effect)) errors.Add(rule.name + ": unknown effect.");
-                effects.Add(rule.Effect);
+                foreach (var signal in rule.Effects)
+                {
+                    if (!Enum.IsDefined(typeof(CognitionSignal), signal)) errors.Add(rule.name + ": unknown effect.");
+                    effects.Add(signal);
+                }
             }
             var pairs = new HashSet<string>();
             foreach (var conflict in conflicts)

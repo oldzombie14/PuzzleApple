@@ -13,6 +13,7 @@ namespace PuzzleApple.V4
         public CognitionBoard board;
         public WordLibrary library;
         public OpeningLight lamp;
+        public OpeningLightField lightField;
         public ThresholdDoor door;
         public Image collectionSymbol, hoverEye;
         public GameObject reticle;
@@ -26,9 +27,10 @@ namespace PuzzleApple.V4
         string collecting;
         Material reticleMaterial;
         Camera worldCamera;
-        string lastLightRule;
+        public SentenceEffectManager effects;
         void Start()
         {
+            if (door) door.gameObject.SetActive(false);
             board.Panel.InputBlocked = true;
             collectionSymbol.gameObject.SetActive(false);
             hoverEye.gameObject.SetActive(false); reticle.SetActive(false);
@@ -36,7 +38,7 @@ namespace PuzzleApple.V4
             reticleMaterial = new Material(hoverEye.material);
             hoverEye.material = reticleMaterial;
             foreach (var image in reticle.GetComponentsInChildren<Image>(true)) image.material = reticleMaterial;
-            board.State.Changed += ApplySentences;
+
         }
         void LateUpdate()
         {
@@ -63,6 +65,15 @@ namespace PuzzleApple.V4
             {
                 bool on = !lamp.IsOn;
                 foreach (var light in FindObjectsByType<OpeningLight>(FindObjectsSortMode.None)) light.SetOn(on);
+            }
+            if (door && !door.Revealed)
+            {
+                bool allOff = lamp && !lamp.IsOn;
+                if (allOff)
+                {
+                    door.Reveal(player.view);
+                    if (effects) effects.DoorRevealed();
+                }
             }
             if (player.WalkedDistance >= player.learnMoveDistance && !board.State.Knows("move") && !Collecting) Learn("move");
             string targetWord = CanInteract ? LookedAtWord() : null;
@@ -114,28 +125,8 @@ namespace PuzzleApple.V4
             board.State.TryAcquireWord("opening." + word.Id, word);
             collecting = null; player.MovementLocked = false;
         }
-        void ApplySentences(CognitionChange change)
-        {
-            if (door) door.SetDescending(board.State.HasEffect(CognitionSignal.DoorWorldMove));
-            bool moving = board.State.HasEffect(CognitionSignal.LightMove);
-            foreach (var light in FindObjectsByType<OpeningLight>(FindObjectsSortMode.None))
-            {
-                var motion = light.GetComponent<LightMotion>();
-                if (!motion) motion = light.gameObject.AddComponent<LightMotion>();
-                motion.SetMoving(moving);
-            }
-            var environment = FindFirstObjectByType<NightEnvironment>();
-            if (environment) environment.WorldMoving = board.State.HasEffect(CognitionSignal.WorldMove);
-            // Explicit opening cases. With no effective state sentence, the lamp returns to its initial on state.
-            string rule = board.State.HasEffect(CognitionSignal.LightOff) ? "off" : board.State.HasEffect(CognitionSignal.LightOn) ? "on" : "default";
-            // X is a temporary preview override, retained until the effective light rule changes.
-            if (rule == lastLightRule) return;
-            lastLightRule = rule;
-            foreach (var light in FindObjectsByType<OpeningLight>(FindObjectsSortMode.None)) light.SetOn(rule != "off");
-        }
         void OnDestroy()
         {
-            if (board && board.State != null) board.State.Changed -= ApplySentences;
             if (reticleMaterial) Destroy(reticleMaterial);
         }
     }

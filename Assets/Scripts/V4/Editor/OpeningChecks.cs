@@ -35,14 +35,17 @@ namespace PuzzleApple.V4.Editor
         static IEnumerator Check(OpeningFlow flow, bool lightFirst)
         {
             var original = InputSystem.settings;
-            var settings = UnityEngine.Object.Instantiate(original);
-            settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-            settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
-            InputSystem.settings = settings;
+            var originalEditorInput = original.editorInputBehaviorInPlayMode;
+            var originalBackground = original.backgroundBehavior;
+            // Keep the Input System's settings object alive across Play mode/domain reloads.
+            // A temporary clone can be destroyed before the package restores its saved state.
+            original.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            original.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             bool background = Application.runInBackground; Application.runInBackground = true;
             try
             {
                 Require(!flow.Ready && !flow.player.enabled && flow.board.Panel.InputBlocked, "entry prevents movement and Tab");
+                Require(!flow.door.Revealed && !flow.door.gameObject.activeSelf, "door hidden before first blackout");
                 UnityEngine.Object.FindFirstObjectByType<WorldEntry>().EnterWorld();
                 float end = Time.unscaledTime + 5;
                 while (!flow.Ready && Time.unscaledTime < end) yield return null;
@@ -89,19 +92,24 @@ namespace PuzzleApple.V4.Editor
                 Require(flow.board.State.Knows("light") && !flow.TryCollectLight(), "light is acquired once");
                 var s = flow.board.State;
                 s.TryAcquireSentence("check.off", "negative light");
+                var spawnForward = Vector3.ProjectOnPlane(flow.player.view.forward, Vector3.up).normalized;
+                var expectedSpawn = flow.player.view.position + spawnForward * flow.door.spawnDistance;
+                expectedSpawn.y = flow.door.groundHeight + flow.door.suspendedHeight;
                 var off = s.Groups.Last();
                 Require(flow.lamp.surface.material.GetColor("_BaseColor").r > .99f, "off command does not snap appearance to black");
                 yield return new WaitForSecondsRealtime(flow.lamp.transitionDuration * .5f);
                 float middle = flow.lamp.surface.material.GetColor("_BaseColor").r;
-                Require(middle > .05f && middle < .95f && flow.lamp.glow.enabled, "cube and light fade through an intermediate state");
+                Require(middle > .05f && middle < .95f && VisibleLamp(flow).glow.enabled, "cube and light fade through an intermediate state");
                 yield return new WaitForSecondsRealtime(flow.lamp.transitionDuration * .5f + .1f);
-                Require(off.Effective && !flow.lamp.IsOn && !flow.lamp.glow.enabled, "off light disables emission and local light");
+                Require(off.Effective && !flow.lamp.IsOn && !VisibleLamp(flow).glow.enabled, "off light disables emission and local light");
+                Require(flow.door.Revealed && Vector3.Distance(flow.door.transform.position, expectedSpawn)<.02f, "blackout reveals door ahead of current player");
                 s.TryAcquireSentence("check.on", "positive light");
                 var on = s.Groups.Last();
                 Require(on.Conflicted && !flow.lamp.IsOn, "earliest opposing state wins");
                 s.ReturnToLibrary(off.Id, off.Words[0].Id, true);
                 yield return new WaitForSecondsRealtime(flow.lamp.transitionDuration + .1f);
-                Require(on.Effective && flow.lamp.IsOn && flow.lamp.glow.enabled, "removing off hands control to on");
+                Require(on.Effective && flow.lamp.IsOn && VisibleLamp(flow).glow.enabled, "removing off hands control to on");
+                Require(flow.door.gameObject.activeSelf && Vector3.Distance(flow.door.transform.position, expectedSpawn)<.02f, "relighting preserves door progress and position");
                 s.TryAcquireSentence("check.invalid", "move world");
                 Require(!s.Groups.Last().Recognized && flow.board.Surface.GetComponentsInChildren<CognitionChalkStroke>(true).Length > 0, "unsupported sentence is struck through");
                 s.ClearWorkspace(); Require(flow.lamp.IsOn, "dismantling returns initial light state");
@@ -112,19 +120,31 @@ namespace PuzzleApple.V4.Editor
                 Require(flow.hoverEye.material.shader == AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/UI/ReticleContrast.mat").shader, "eye retains original contrast shader with V4 world image binding");
                 Require(!flow.gameObject.GetComponentsInChildren<MonoBehaviour>(true).Any(c => c && c.GetType().Namespace.StartsWith("PuzzleApple.V3")), "V4 UI has no V3 behavior components");
                 s.TryAcquireSentence("check.light.move", "light move");
-                var motion = flow.lamp.GetComponent<LightMotion>();
-                var before = flow.lamp.transform.position;
+                var movingLamp = VisibleLamp(flow);
+                var motion = movingLamp.GetComponent<LightMotion>();
+                var before = movingLamp.transform.position;
                 yield return new WaitForSecondsRealtime(.5f);
-                Require(motion.Moving && Vector3.Distance(before, flow.lamp.transform.position) > .1f, "light move travels");
+                Require(motion.Moving && Vector3.Distance(before, movingLamp.transform.position) > .1f, "light move travels");
+                // Panel ownership must never pause a sentence's world effect.
+                foreach (bool open in new[] { false, true, false })
+                {
+                    flow.board.Panel.SetOpen(open);
+                    yield return new WaitForFixedUpdate();
+                    before = movingLamp.transform.position;
+                    yield return new WaitForSecondsRealtime(.5f);
+                    Require(s.HasEffect(CognitionSignal.LightMove) && motion.Moving &&
+                        Vector3.Distance(before, movingLamp.transform.position) > .1f,
+                        "light continues moving with Tab " + (open ? "open" : "closed"));
+                }
                 s.TryAcquireSentence("check.world.move", "world move");
                 var night = UnityEngine.Object.FindFirstObjectByType<NightEnvironment>();
                 Require(night.WorldMoving, "world move active alongside light move");
                 s.TryAcquireSentence("check.move.off", "negative light");
                 Require(!flow.lamp.IsOn && motion.Moving && night.WorldMoving, "off and both moves coexist");
                 s.ClearWorkspace();
-                before = flow.lamp.transform.position;
+                before = movingLamp.transform.position;
                 yield return new WaitForSecondsRealtime(.2f);
-                Require(!motion.Moving && !night.WorldMoving && Vector3.Distance(before, flow.lamp.transform.position) < .01f, "dismantling stops at current position");
+                Require(!motion.Moving && !night.WorldMoving && Vector3.Distance(before, movingLamp.transform.position) < .01f, "dismantling stops at current position");
                 flow.board.Panel.SetOpen(false);
                 AimPoint(flow, flow.door.transform.position + Vector3.up * 3);
                 yield return null;
@@ -132,11 +152,43 @@ namespace PuzzleApple.V4.Editor
                 yield return new WaitForSecondsRealtime(flow.wordDisplayDuration + .2f);
                 Require(s.Knows("door") && !flow.TryCollectDoor(), "door word acquired once");
                 s.ClearWorkspace();
+                s.TryAcquireSentence("check.door.free", "door move");
+                var doorMotion = flow.door.GetComponent<LightMotion>();
+                var doorBody = flow.door.GetComponent<Rigidbody>();
+                var doorStart = flow.door.transform.position;
+                doorBody.position = new Vector3(doorStart.x, flow.door.groundHeight+.15f, doorStart.z);
+                typeof(LightMotion).GetField("direction", System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(doorMotion, Vector3.down);
+                yield return new WaitForSecondsRealtime(.5f);
+                Require(doorBody.linearVelocity.y > 0 && !flow.door.LandingCompleted && !GameObject.Find("Door landing ripple"), "free move bounces off real ground without progress ripple");
+                doorBody.position=doorStart;
+                typeof(LightMotion).GetField("direction", System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(doorMotion, Vector3.right);
+                yield return new WaitForSecondsRealtime(.4f);
+                Require(doorMotion.Moving && Vector3.Distance(doorStart,flow.door.transform.position)>.1f, "door free move carries entire frame");
+                s.TryAcquireSentence("check.door.conflict", "door world move");
+                Require(s.Groups.Last().Conflicted && !flow.door.Descending, "earlier free motion wins over lowering");
+                var freeGroup = s.Groups.First(g=>g.Signal==CognitionSignal.DoorMove);
+                s.ReturnToLibrary(freeGroup.Id,freeGroup.Words[0].Id,true);
+                Require(flow.door.Descending && !doorMotion.Moving && flow.door.GetComponent<Rigidbody>().isKinematic, "lowering takes over safely after free move removed");
+                s.ClearWorkspace();
+                yield return new WaitForSecondsRealtime(.1f);
+                doorStart=flow.door.transform.position;
+                yield return new WaitForSecondsRealtime(.2f);
+                Require(Vector3.Distance(doorStart,flow.door.transform.position)<.01f && !flow.door.LandingCompleted, "free movement stops without landing progress");
                 s.TryAcquireSentence("check.door.old", "door move world");
                 Require(!s.Groups.Last().Recognized && !flow.door.Descending, "old A move B order invalid");
                 s.ClearWorkspace();
                 float doorHeight = flow.door.transform.position.y;
                 s.TryAcquireSentence("check.door.lower", "door world move");
+                var blocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                blocker.name="Check door obstruction";
+                blocker.transform.position=flow.door.transform.position+Vector3.down*.3f;
+                blocker.transform.localScale=new Vector3(8,.2f,8);
+                Physics.SyncTransforms();
+                yield return new WaitForSecondsRealtime(1);
+                float blockedHeight=flow.door.transform.position.y;
+                yield return new WaitForSecondsRealtime(.3f);
+                Require(Mathf.Abs(blockedHeight-flow.door.transform.position.y)<.01f && !flow.door.LandingCompleted, "solid obstruction pauses descent without completing progress");
+                UnityEngine.Object.Destroy(blocker);
                 yield return new WaitForSecondsRealtime(.8f);
                 Require(flow.door.Descending && flow.door.transform.position.y < doorHeight - .1f, "A B move lowers frame");
                 s.ClearWorkspace();
@@ -147,9 +199,17 @@ namespace PuzzleApple.V4.Editor
                 s.TryAcquireSentence("check.door.resume", "door world move");
                 for (float timeout=0; !flow.door.Landed && timeout<8; timeout+=Time.unscaledDeltaTime) yield return null;
                 Require(flow.door.Landed, "rejoining resumes until grounded");
+                yield return new WaitForSecondsRealtime(.1f);
+                Require(flow.door.LandingCompleted && GameObject.Find("Door landing ripple"), "directed landing commits progress and emits ripple");
                 s.ClearWorkspace();
                 yield return new WaitForSecondsRealtime(.2f);
                 Require(flow.door.Landed, "grounded door stays after removing rule");
+                yield return new WaitForSecondsRealtime(flow.door.rippleDuration+.1f);
+                Require(!GameObject.Find("Door landing ripple"), "landing ripple fades and is released");
+                s.TryAcquireSentence("check.door.repeat", "door world move");
+                yield return new WaitForSecondsRealtime(.15f);
+                Require(!GameObject.Find("Door landing ripple"), "completed progress does not emit a second ripple");
+                s.ClearWorkspace();
                 var passage = new Ray(flow.door.transform.position + new Vector3(0,1,-2), Vector3.forward);
                 Require(!Physics.Raycast(passage,4,~0,QueryTriggerInteraction.Ignore), "grounded opening has no solid blocker");
                 s.TryAcquireSentence("check.preview.invalid", "door move world");
@@ -164,14 +224,19 @@ namespace PuzzleApple.V4.Editor
             finally
             {
                 if (Keyboard.current != null) InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState());
-                InputSystem.settings = original; UnityEngine.Object.Destroy(settings); Application.runInBackground = background;
+                original.editorInputBehaviorInPlayMode = originalEditorInput;
+                original.backgroundBehavior = originalBackground;
+                Application.runInBackground = background;
                 Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
             }
         }
         static void Aim(OpeningFlow flow)
         {
-            AimPoint(flow, flow.lamp.transform.position);
+            AimPoint(flow, VisibleLamp(flow).transform.position);
         }
+        static OpeningLight VisibleLamp(OpeningFlow flow) => flow.lightField
+            ? flow.lightField.GetComponentsInChildren<OpeningLight>().OrderBy(l => (l.transform.position - flow.player.transform.position).sqrMagnitude).First()
+            : flow.lamp;
         static void AimPoint(OpeningFlow flow, Vector3 point)
         {
             var direction = point - flow.player.view.position;

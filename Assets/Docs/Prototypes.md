@@ -7,8 +7,9 @@
 | V1 | `Assets/Scenes/V1/P1.unity` | 原英文认知流程，保留对照版本 |
 | V2 | `Assets/Scenes/V2/P2.unity` | 相同流程、句式和效果，词汇以 sprite 呈现 |
 | V3 | `Assets/Scenes/V3/P3.unity` | 密闭开场 → 周期门 → 苹果／天平压力板大厅；隐藏房间含苹果与解析器 |
+| V4 | `Assets/Scenes/V4/P4.unity` | 黑屏进入 → 白天开场；左侧 Tab 组句、初始正／负／世界、行走收 move、点击方块收灯与开关灯 |
 
-三者为平级探索方向，不表示后一个替代前一个。旧模型和 renderer 名称中的 `SpaceStudyV2` / `SacredSpaceV2` 是历史美术方案编号，与本表无关。
+各版本为平级探索方向，不表示后一个替代前一个。旧模型和 renderer 名称中的 `SpaceStudyV2` / `SacredSpaceV2` 是历史美术方案编号，与本表无关。
 
 以表中实际文件为准，直接双击场景打开。旧 `PuzzleApple > Prototypes` 菜单仍写旧场景名，暂不使用；V3 另有 `PuzzleApple > V3 > Open playable scene`。当前 Build Settings 仅收录 P1，本轮未改构建入口；没有运行时选关菜单。
 
@@ -22,6 +23,15 @@
 - V3 玩法使用 `Scripts/V3`、`GameData/V3`、`Sprites/V3` 和 `Shaders/V3` 独立副本／新增资源，命名空间 `PuzzleApple.V3`。专属玩家控制器、面板、词库、场景行为和 Editor 检查不引用 V1/V2 玩法；静态空间、苹果与镜子源模型、通用镜面渲染继续共享只读资源。新门／灯在 `Prefabs/V3`，天平及派生入口墙／分离托盘网格在 `ArtAssets-3D/V3`；钥匙保持隐藏，旧出口门仅在 P3 停用。
 
 共享资源仍会影响所有引用它的场景。移动场景中的模型实例只影响该场景；若要改变某一原型的模型源文件、环境材质、shader 或渲染配置，先在对应版本目录复制该资产，再替换该场景引用。不要直接修改 `General` 来做某个原型的专属实验。
+
+## V4 开场编辑（2026-10-22）
+
+- P4 的 `V4Interface` 引用独立 `Prefabs/V4/UI/V4Interface.prefab` 及动态控件模板；句子和词库组件在 `Scripts/V4`。保留 V3 UI 的实际布局，未修改旧版本行为；共享符号贴图与只读对比材质。
+- 场景 `V4Interface/Opening HUD` 是原生 UI，可调眼睛／普通准星和收词符号；`OpeningFlow` 绑定玩家、面板、灯及收词时长。Player 已换为 V4 独立控制器，行走学习参数可在 Inspector 调整。
+- `GameData/V4/Opening` 目前仅五个词、两条灯规则；LightOn／LightOff 的 `light.state` 通道沿用先成立优先。灯词引用 red 图标，world 引用 Apple。
+- `Glowing Cube/OpeningLight` 引用现有 Renderer 与 Soft light，运行时材质独立；基础材质为纯白。`Night Environment` 根据灯状态渐变天空、环境光、主光及云雾；运行时 X 临时切换，编辑备注时忽略。编辑模式可勾 `Preview Night` 预览环境；夜晚参数与白天基线在该组件集中调整。
+- V4Interface 的 WordLibrary 新增 Empty Snapshot 引用；`Memory print/No snapshot/Corner to corner` 是原生 Image，由 SnapshotPlaceholder 按图片框尺寸更新长度与角度。只在无图时显示，不更改快照裁切与备注。
+- `OpeningChecks.Run(false/true)` 在两次全新 P4 Play 会话中分别验证先走／先点灯；结果读 `OpeningChecks.Result`。搭建脚本只供初次迁移，日常直接编辑现有场景和 Prefab，不重跑以覆盖手调布局。
 
 ## V3 开场编辑（2026-10-06）
 

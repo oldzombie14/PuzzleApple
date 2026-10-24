@@ -14,6 +14,8 @@ namespace PuzzleApple.V4
         [System.Serializable] public struct VocabularyImage { public string wordId; public Texture2D image; }
         [UnityEngine.Serialization.FormerlySerializedAs("memoryPresets")]
         public VocabularyImage[] vocabularyImages=new VocabularyImage[0];
+        public SnapshotSequence moveMemory;
+        float playbackStart;
         [Header("Prefab references — edit appearance on the UI components")]
         [SerializeField] ScrollRect scroll;
         [SerializeField] RectTransform column,details;
@@ -74,13 +76,16 @@ namespace PuzzleApple.V4
         }
         public void Remember(string id)
         {
+            if(photos.ContainsKey(id))return;
             Texture2D photo=null;
-            if(id!="i")foreach(var preset in vocabularyImages)if(preset.wordId==id){photo=preset.image;break;}
+            if(HasPhoto(id))foreach(var preset in vocabularyImages)if(preset.wordId==id){photo=preset.image;break;}
             photos[id]=photo;if(selected==id)UpdatePhoto();
         }
+        static bool HasPhoto(string id)=>id!="positive"&&id!="negative"&&id!="world"&&id!="move";
         public void Remember(string id,RenderTexture frame)
         {
-            if(id=="i"||!frame){Remember(id);return;}
+            if(photos.ContainsKey(id))return;
+            if(!HasPhoto(id)||!frame){Remember(id);return;}
             var previous=RenderTexture.active;
             try
             {
@@ -94,16 +99,22 @@ namespace PuzzleApple.V4
         public void Select(string id)
         {
             if(!board.State.Knows(id))return;
-            selected=id;UpdatePhoto();
+            selected=id;playbackStart=Time.unscaledTime;UpdatePhoto();
             note.SetTextWithoutNotify(drafts.TryGetValue(id,out var draft)?draft:SavedNote(id));
             UpdateSaveButton();Show(true);
         }
         void UpdatePhoto()
         {
+            snapshot.uvRect=new Rect(0,0,1,1);
             snapshot.texture=photos.TryGetValue(selected,out var photo)?photo:null;
+            if(selected=="move"&&moveMemory&&moveMemory.atlas)
+            {
+                snapshot.texture=moveMemory.atlas;
+                snapshot.uvRect=moveMemory.Frame(Time.unscaledTime-playbackStart);
+            }
             snapshot.enabled=snapshot.texture;
             if(emptySnapshot)emptySnapshot.gameObject.SetActive(!snapshot.texture);
-            if(snapshot.texture)snapshotAspect.aspectRatio=(float)snapshot.texture.width/snapshot.texture.height;
+            if(snapshot.texture)snapshotAspect.aspectRatio=selected=="move"&&moveMemory?moveMemory.aspect:(float)snapshot.texture.width/snapshot.texture.height;
         }
         void UpdateSaveButton(){saveNote.interactable=selected!=null&&note.text.Trim()!=SavedNote(selected);}
         public void SaveNote()
@@ -113,7 +124,7 @@ namespace PuzzleApple.V4
             if(value.Length==0)savedNotes.Remove(selected);else savedNotes[selected]=value;
             drafts.Remove(selected);note.SetTextWithoutNotify(value);UpdateSaveButton();
         }
-        void LateUpdate()=>UpdateTooltip();
+        void LateUpdate(){UpdateTooltip();if(IsOpen&&selected=="move")UpdatePhoto();}
         void UpdateTooltip()
         {
             tooltip.gameObject.SetActive(false);
@@ -144,6 +155,7 @@ namespace PuzzleApple.V4
         }
         public void BeginLibraryDrag(WordDefinition word,Vector2 screen)
         {
+            if(board.Panel.InputBlocked)return;
             CancelLibraryDrag();Show(false);var group=board.State.Spawn(word);if(group==null)return;
             draggedGroup=group.Id;board.BeginDrag(group.Id,group.Words[0].Id,false,screen,true);
         }

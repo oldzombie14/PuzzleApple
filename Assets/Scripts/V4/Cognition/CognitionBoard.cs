@@ -27,6 +27,7 @@ namespace PuzzleApple.V4.Cognition
         [SerializeField] RectTransform surface;
         public RectTransform Surface => surface;
         public bool IsDragging => drag != null;
+        public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
         public void RemoveToken(int groupId,int wordId,bool whole=false)
         {
             CancelDrag(); State.ReturnToLibrary(groupId,wordId,whole);
@@ -42,8 +43,6 @@ namespace PuzzleApple.V4.Cognition
         {
             public CognitionState.Group Group;
             public RectTransform Root, Mask;
-            public RectTransform EraseGhost, EraseMask;
-            public float EraseWidth;
             public RectTransform NewScratch;
             public float ScratchWidth;
             public CanvasGroup Fade;
@@ -52,7 +51,6 @@ namespace PuzzleApple.V4.Cognition
             public readonly List<float> Widths = new List<float>();
             public Vector2 Position, DisplayPosition;
             public float Width, Height, AnimationStart;
-            public bool Rewrite;
             public int Scratches;
             public bool Recognized;
             public bool Conflicted;
@@ -139,21 +137,8 @@ namespace PuzzleApple.V4.Cognition
                 bool changed = old == null || old.Signature != signature || old.Recognized != group.Recognized || old.Conflicted != group.Conflicted;
                 if (!changed) { next[group.Id] = old; continue; }
                 Vector2 position = old != null ? old.Position : wordPositions.TryGetValue(group.Words[0].Id, out var p) ? p : NewPosition(next.Count);
-                bool rewrite = group.Recognized && old != null && !old.Recognized && old.Words.Count > 1;
                 int scratches = group.Independent || group.Recognized ? 0 : (old != null ? old.Scratches : 0) + 1;
-                var view = BuildView(group, position, scratches, rewrite, signature);
-                if (rewrite)
-                {
-                    view.EraseGhost = Instantiate(old.Root, view.Root);
-                    view.EraseGhost.name = "Previous chalk - erase right to left";
-                    view.EraseGhost.anchoredPosition = Vector2.zero;
-                    var fade = view.EraseGhost.GetComponent<CanvasGroup>(); fade.alpha = 1; fade.blocksRaycasts = false;
-                    view.EraseMask = (RectTransform)view.EraseGhost.GetChild(0);
-                    view.EraseWidth = view.EraseMask.sizeDelta.x;
-                    foreach (var handle in view.EraseGhost.GetComponentsInChildren<CognitionDragHandle>()) Destroy(handle);
-                    foreach (var text in view.EraseGhost.GetComponentsInChildren<CenteredSymbolImage>()) text.color = ChalkColor;
-                    view.Mask.sizeDelta = new Vector2(0,WordHeight);
-                }
+                var view = BuildView(group, position, scratches, signature);
                 next[group.Id] = view;
             }
             foreach (var old in previous)
@@ -172,10 +157,10 @@ namespace PuzzleApple.V4.Cognition
                 foreach (var v in views.Values) v.Position = FindFree(v, v.Position);
             if (snapHint) snapHint.transform.SetAsLastSibling();
         }
-        View BuildView(CognitionState.Group group, Vector2 position, int scratches, bool rewrite, string signature)
+        View BuildView(CognitionState.Group group, Vector2 position, int scratches, string signature)
         {
             var v = new View { Group = group, Position = position, DisplayPosition = position,
-                Scratches = scratches, Rewrite = rewrite, AnimationStart = Time.unscaledTime,
+                Scratches = scratches, AnimationStart = Time.unscaledTime,
                 Recognized = group.Recognized, Conflicted = group.Conflicted, Signature = signature };
             v.Root = Instantiate(groupPrefab,Surface);v.Root.name="Group "+group.Id;
             v.Fade = v.Root.GetComponent<CanvasGroup>();
@@ -251,14 +236,7 @@ namespace PuzzleApple.V4.Cognition
                 Place(v);
                 float elapsed = Time.unscaledTime - v.AnimationStart;
                 if (v.NewScratch) v.NewScratch.sizeDelta = new Vector2(v.ScratchWidth * Mathf.Clamp01(elapsed/.24f),4);
-                float visible = 1;
-                if (v.Rewrite)
-                {
-                    visible = Mathf.Clamp01((elapsed - .44f) / .55f);
-                    if (v.EraseMask) v.EraseMask.sizeDelta = new Vector2(v.EraseWidth * (1 - Mathf.Clamp01(elapsed/.34f)),WordHeight);
-                    if (elapsed >= .99f) { v.Rewrite = false; if (v.EraseGhost) Destroy(v.EraseGhost.gameObject); }
-                }
-                v.Mask.sizeDelta = new Vector2(v.Width / v.FontScale * visible, WordHeight);
+                v.Mask.sizeDelta = new Vector2(v.Width / v.FontScale, WordHeight);
             }
             if (drag != null) UpdateDragPreview();
         }
@@ -299,7 +277,7 @@ namespace PuzzleApple.V4.Cognition
         }
         public void BeginDrag(int groupId, int wordId, bool whole, Vector2 screen,bool fromLibrary=false)
         {
-            if (!panel.IsOpen || drag != null || !views.TryGetValue(groupId, out var v)) return;
+            if (!panel.IsOpen || panel.InputBlocked || drag != null || !views.TryGetValue(groupId, out var v)) return;
             centerFirstWord = false;
             int index = whole ? 0 : v.Group.Words.ToList().FindIndex(w => w.Id == wordId);
             if (index < 0) return;
@@ -314,7 +292,6 @@ namespace PuzzleApple.V4.Cognition
                 ghost.name = "Dragging chalk";
                 var fade = ghost.GetComponent<CanvasGroup>(); fade.alpha = v.Conflicted ? ConflictAlpha : 1; fade.blocksRaycasts = false;
                 foreach (var handle in ghost.GetComponentsInChildren<CognitionDragHandle>()) Destroy(handle);
-                var previous = ghost.Find("Previous chalk - erase right to left"); if (previous) previous.gameObject.SetActive(false);
                 ((RectTransform)ghost.GetChild(0)).sizeDelta = new Vector2(v.Width / v.FontScale,WordHeight);
             }
             else

@@ -12,6 +12,7 @@ namespace PuzzleApple.V4
         public void OnInitializePotentialDrag(PointerEventData e){e.useDragThreshold=true;library.Scroll.OnInitializePotentialDrag(e);}
         public void OnBeginDrag(PointerEventData e)
         {
+            if(library.board.Panel.InputBlocked)return;
             if(e.button!=PointerEventData.InputButton.Left)return;e.eligibleForClick=false;
             library.Scroll.StopMovement();
             dragging=true;library.BeginLibraryDrag(word,e.position);

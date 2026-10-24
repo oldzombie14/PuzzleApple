@@ -17,6 +17,7 @@ namespace PuzzleApple.V4.Cognition
         public void OnInitializePotentialDrag(PointerEventData e) { e.useDragThreshold = true; }
         public void OnPointerDown(PointerEventData e)
         {
+            if(board.Panel.InputBlocked)return;
             if(e.button==PointerEventData.InputButton.Right)
             {
                 pressed=began=false;board.RemoveToken(groupId,WordId,wholeSentence);e.Use();return;

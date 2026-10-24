@@ -72,7 +72,7 @@ namespace PuzzleApple.V4
             if (interaction)
             {
                 interaction.interactable = IsOpen;
-                interaction.blocksRaycasts = IsOpen;
+                interaction.blocksRaycasts = IsOpen && !InputBlocked;
                 interaction.alpha = progress > 0 ? 1 : 0;
             }
             if (worldInputBlocker) worldInputBlocker.gameObject.SetActive(IsOpen);

@@ -6,7 +6,7 @@
 
 - 场景：`Assets/Scenes/V4/P4.unity`。Build Settings 以 P4 为入口，另含 V4_NextRoom（加法加载的下一关空房间）；旧 P1 条目保留。旧 Prototypes 菜单含过时场景名，不用它定位当前场景。
 - 脚本、Prefab、规则在 `Assets/Scripts/V4/`、`Assets/Prefabs/V4/`、`Assets/GameData/V4/Opening/`；其它资源按类别置于对应 V4 目录。
-- 菜单：`Prefabs/V4/WorldEntry.prefab` 与 WorldEntry 组件。
+- 菜单与游戏内退出：`Prefabs/V4/WorldEntry.prefab` 与场景 World Entry。菜单颜色在 Enter World／Exit 的 Symbol Button / Colors；入场后的颜色由 WorldEntry 的 In-world exit palette 管理，Day Exit Color／Day Exit Highlight 调白天默认与悬停色，Exit Saturation 调整体饱和度，Ground Look Angles 调朝下提亮角度。夜色取 NightEnvironment.nightFogColor，Night Exit Lift／Night Highlight Lift 调正常与悬停亮度。
 - 面板：`Prefabs/V4/UI/V4Interface.prefab` 及同目录控件模板；场景 `V4Interface/Opening HUD` 编辑眼睛、准星与收词符号。OpeningFlow 绑定流程，Player 独立控制器调整行走学习。场景 Sentence Effects 上的 SentenceEffectManager 转发已仲裁的句子效果，LightSentenceEffects／DoorSentenceEffects／WorldSentenceEffects 负责各域行为。
 - 词与规则：`GameData/V4/Opening/OpeningCatalog.asset` 及 Words／Rules。
 - 灯：场景 `Opening Light Field/OpeningLightField` 调整生成；`Lamp State/OpeningLight` 保留全局昼夜与共享外观来源，不显示大测试 cube。运行时小灯复用原生 Renderer、Rigidbody、Collider 和 LightMotion，忽略玩家碰撞，共用一份运行时材质，最近的有限小灯启用无阴影点光。
@@ -15,6 +15,8 @@
 - 画面：WorldPictureStyle 与 `Materials/V4/WorldPicture.mat` 控制世界画面处理；UI 独立。参数以资源为准，不重复记录试调历史。
 - 门：`Prefabs/V4/FishThreshold.prefab`，ThresholdDoor 调降落／落地／交互，ThresholdFish 管鱼群；子节点 Landing mist 的 ThresholdMist 调整雾透明度、流速与淡入，材质为 Materials/V4/ThresholdMist.mat。DoorStateEffects 控制 on/off 发光与鱼暂停，雾读取落地且 on 的通行状态；DoorPassage 检查实际跨门面并加载下一关。
 - 无快照标记：WordLibrary 的 Empty Snapshot 与 `Memory print/No snapshot/Corner to corner` 原生 Image，SnapshotPlaceholder 适配框尺寸。
+- 快照：WordLibrary 首次收灯／门时保存世界相机画面；Move Memory 引用 `GameData/V4/Opening/MoveMemory.asset` 和 `Textures/V4/MoveMemory.png` 帧图集。`MoveMemoryRecorder.Run()` 在全新 P4 Play 中使用实际首次行走逻辑重新录制，不注入输入设备；日常不必重录。
+- 句子表现：Sentence Effects 上的 IntroPresentation 调 Max Correction Angle（小幅转向上限）、过渡和停留时间；镜头不平移，面板至少等待 SentenceFeedback.duration 加 0.2 秒后才收起；Letterbox Height 调电影黑边比例，黑边与 Tab 收回、镜头矫正同步；SentenceFeedback 调方框涟漪，引用 `Prefabs/V4/UI/SentenceSparkle.prefab` 原生 ParticleSystem 和 `Textures/V4/SentenceSparkle.png`。反馈使用第 31 层独立相机与透明渲染目标投到 UI，该层不供世界物体使用。IntroPresentationSetup 仅用于增量绑定，不重建原 UI。
 - 日常编辑原生组件、场景和 Prefab，不重跑初次搭建脚本覆盖手调布局。
 
 ## 旧资源依赖（无需读取旧设计）
@@ -34,4 +36,5 @@
 - OpeningChecks.Run(false/true) 分别覆盖先走与先点灯，读取 OpeningChecks.Result；完整测试状态见进度。
 - LightFieldChecks.Run() 在新的 P4 Play 中检查小灯收词射线、玩家穿过、面板开关时移动、开关与移动共存、拆句、区域回收与返回恢复，读取 LightFieldChecks.Result；不注入键鼠设备，不等同完整人工操作验收。
 - 覆盖本次变化涉及的实际玩家路径、先后顺序、共存、拆句及碰撞；规则成立或测试数量不能代替行为、画面与手感验证。
+- `IntroPresentationChecks.Run()` 在全新 P4 Play 检查入场、首次快照、预录片段、UI 拖词回调、句子反馈、冲突接管、拆句不演出和镜头恢复；通过 Unity EventSystem 调用实际拖拽处理，不代表完整人工鼠标验收。
 - 测试工具异常与产品缺陷分开处理；未复现的用户问题保留未解决状态。

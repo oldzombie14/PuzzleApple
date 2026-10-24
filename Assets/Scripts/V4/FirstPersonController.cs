@@ -16,8 +16,9 @@ namespace PuzzleApple.V4
         public float WalkedDistance { get; private set; }
         public float WalkingConfidence => Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.15f, 1, WalkedDistance / learningDistance));
         public bool MovementLocked { get; set; }
+        public bool CinematicLocked { get; set; }
         public bool PanelOpen { get; private set; }
-        public bool CanInteractWithWorld => isActiveAndEnabled && !PanelOpen && closedFrame != Time.frameCount && Cursor.lockState == CursorLockMode.Locked;
+        public bool CanInteractWithWorld => isActiveAndEnabled && !CinematicLocked && !PanelOpen && closedFrame != Time.frameCount && Cursor.lockState == CursorLockMode.Locked;
         CharacterController motor;
         Vector3 spawn, normalView;
         Quaternion spawnRotation, panelRotation;
@@ -50,6 +51,7 @@ namespace PuzzleApple.V4
         }
         void Update()
         {
+            if (CinematicLocked) return;
             var key = Keyboard.current; var mouse = Mouse.current;
             if (key != null && key.escapeKey.wasPressedThisFrame) LockCursor(false);
             else if (!PanelOpen && mouse != null && mouse.leftButton.wasPressedThisFrame) LockCursor(true);
@@ -65,24 +67,29 @@ namespace PuzzleApple.V4
                 transform.rotation = panelRotation * Quaternion.Euler(0, Mathf.Sin(idleTime * .5f) * panelYaw * Mathf.Clamp01(idleTime * .5f), 0);
             }
             Vector2 input = controls && key != null ? new Vector2((key.dKey.isPressed ? 1 : 0) - (key.aKey.isPressed ? 1 : 0), (key.wKey.isPressed ? 1 : 0) - (key.sKey.isPressed ? 1 : 0)) : Vector2.zero;
+            AdvanceMovement(input, controls, Time.deltaTime);
+        }
+        // Shared by live input and the editor-only first-steps recorder.
+        internal void AdvanceMovement(Vector2 input, bool controls, float deltaTime)
+        {
             input = MovementLocked ? Vector2.zero : Vector2.ClampMagnitude(input, 1);
             var horizontal = transform.right * input.x + transform.forward * input.y;
             if (motor.isGrounded && vertical < 0) vertical = -2;
-            vertical += -20 * Time.deltaTime;
+            vertical += -20 * deltaTime;
             float confidence = WalkingConfidence;
             float envelope = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.25f, .85f, WalkedDistance)) * (1 - confidence);
-            if (input.sqrMagnitude > .001f) { pushTime += Time.deltaTime; stepPhase += Time.deltaTime * Mathf.Lerp(6.4f, 10.5f, confidence); } else pushTime = 0;
+            if (input.sqrMagnitude > .001f) { pushTime += deltaTime; stepPhase += deltaTime * Mathf.Lerp(6.4f, 10.5f, confidence); } else pushTime = 0;
             float footfall = Mathf.Sin(stepPhase) * .5f + .5f;
             float hesitation = 1 - learningHesitation * envelope * footfall * footfall;
             float push = Mathf.Lerp(Mathf.Lerp(.35f, 1, Mathf.SmoothStep(0, 1, pushTime / .28f)), 1, confidence);
             float speed = moveSpeed * Mathf.Lerp(initialSpeedFraction, 1, confidence) * hesitation * push;
             var before = transform.position;
-            motor.Move((horizontal * speed + Vector3.up * vertical) * Time.deltaTime);
+            motor.Move((horizontal * speed + Vector3.up * vertical) * deltaTime);
             float distance = Vector3.ProjectOnPlane(transform.position - before, Vector3.up).magnitude;
             if (controls && !MovementLocked && input.sqrMagnitude > .001f) WalkedDistance += distance;
             float sway = distance > .0001f && !PanelOpen && !MovementLocked ? envelope : 0;
-            learningYaw = Mathf.Lerp(learningYaw, (Mathf.Sin(stepPhase * .5f) * .8f + Mathf.Sin(stepPhase * .83f) * .2f) * learningYawAmplitude * sway, 1 - Mathf.Exp(-5 * Time.deltaTime));
-            learningBob = Mathf.Lerp(learningBob, Mathf.Sin(stepPhase) * learningBobAmplitude * sway, 1 - Mathf.Exp(-10 * Time.deltaTime));
+            learningYaw = Mathf.Lerp(learningYaw, (Mathf.Sin(stepPhase * .5f) * .8f + Mathf.Sin(stepPhase * .83f) * .2f) * learningYawAmplitude * sway, 1 - Mathf.Exp(-5 * deltaTime));
+            learningBob = Mathf.Lerp(learningBob, Mathf.Sin(stepPhase) * learningBobAmplitude * sway, 1 - Mathf.Exp(-10 * deltaTime));
             view.localRotation = Quaternion.Euler(pitch + (PanelOpen ? Mathf.Sin(idleTime * .37f) * panelPitch * Mathf.Clamp01(idleTime * .5f) : 0), learningYaw, 0);
             view.localPosition = normalView + Vector3.up * learningBob;
             if (transform.position.y < -5)

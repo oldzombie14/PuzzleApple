@@ -27,6 +27,7 @@ namespace PuzzleApple.V4
         string collecting;
         Material reticleMaterial;
         Camera worldCamera;
+        readonly RaycastHit[] interactionHits = new RaycastHit[32];
         public SentenceEffectManager effects;
         void Start()
         {
@@ -57,11 +58,12 @@ namespace PuzzleApple.V4
                 board.State.TryAcquireWord("opening." + id, board.Catalog.Word(id));
             }
             Ready = true; board.Panel.InputBlocked = false;
+            board.Panel.SetOpen(true);
         }
         void Update()
         {
             if (!Ready) return;
-            if (Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame && !library.NoteField.isFocused)
+            if (!board.Panel.InputBlocked && Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame && !library.NoteField.isFocused)
             {
                 bool on = !lamp.IsOn;
                 foreach (var light in FindObjectsByType<OpeningLight>(FindObjectsSortMode.None)) light.SetOn(on);
@@ -85,7 +87,18 @@ namespace PuzzleApple.V4
         string LookedAtWord()
         {
             float reach = door ? Mathf.Max(interactionDistance, door.collectionDistance) : interactionDistance;
-            if (!Physics.Raycast(player.view.position, player.view.forward, out var hit, reach, ~0, QueryTriggerInteraction.Collide)) return null;
+            int count = Physics.RaycastNonAlloc(player.view.position, player.view.forward, interactionHits, reach, ~0, QueryTriggerInteraction.Collide);
+            var hits = count == interactionHits.Length
+                ? Physics.RaycastAll(player.view.position, player.view.forward, reach, ~0, QueryTriggerInteraction.Collide) : interactionHits;
+            if (hits != interactionHits) count = hits.Length;
+            RaycastHit hit = default;
+            float closest = float.PositiveInfinity;
+            for (int i = 0; i < count; i++)
+            {
+                if (hits[i].collider.transform.IsChildOf(player.transform) || hits[i].distance >= closest) continue;
+                hit = hits[i]; closest = hit.distance;
+            }
+            if (!hit.collider) return null;
             if (hit.distance <= interactionDistance && hit.collider.GetComponentInParent<OpeningLight>() && !board.State.Knows("light")) return "light";
             if (door && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door && !board.State.Knows("door")) return "door";
             return null;
@@ -104,7 +117,8 @@ namespace PuzzleApple.V4
         {
             collecting = id;
             if (id != "move") player.MovementLocked = true;
-            library.Remember(id);
+            if (id == "light" || id == "door") library.Remember(id, worldCamera.targetTexture);
+            else library.Remember(id);
             StartCoroutine(Collect(board.Catalog.Word(id)));
         }
         IEnumerator Collect(WordDefinition word)

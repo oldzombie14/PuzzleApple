@@ -350,7 +350,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 2147483647
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -7527,6 +7527,8 @@ GameObject:
   - component: {fileID: 1647927361}
   - component: {fileID: 1647927360}
   - component: {fileID: 1647927359}
+  - component: {fileID: 1647927365}
+  - component: {fileID: 1647927364}
   m_Layer: 0
   m_Name: Sentence Effects
   m_TagString: Untagged
@@ -7609,6 +7611,7 @@ MonoBehaviour:
   lights: {fileID: 1647927361}
   door: {fileID: 1647927360}
   world: {fileID: 1647927359}
+  presentation: {fileID: 1647927364}
 --- !u!4 &1647927363
 Transform:
   m_ObjectHideFlags: 0
@@ -7624,6 +7627,42 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1647927364
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1647927358}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f238ebc0c336f524abe7b8316c49e3cb, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.IntroPresentation
+  effects: {fileID: 1647927362}
+  player: {fileID: 1884227022}
+  feedback: {fileID: 1647927365}
+  feedbackLead: 0.3
+  blendDuration: 0.65
+  holdDuration: 3
+  maxCorrectionAngle: 6
+--- !u!114 &1647927365
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1647927358}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d255bc74fdb748c4787a1a5a2b3404f5, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.SentenceFeedback
+  board: {fileID: 2124154388}
+  sparklePrefab: {fileID: 5007774088618566452, guid: abcf287f355dd394aa47352ce99c00d4, type: 3}
+  rippleMaterial: {fileID: 2100000, guid: cf0cfd1b168f5ee4b99c2c7106ac0beb, type: 2}
+  effectLayer: 31
+  duration: 0.85
 --- !u!1 &1657442583
 GameObject:
   m_ObjectHideFlags: 0
@@ -9893,6 +9932,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 146977453559962513, guid: 19f0d491e23f4de4b47a36c03b045de9, type: 3}
+      propertyPath: moveMemory
+      value:
+      objectReference: {fileID: 11400000, guid: b411f141a226bb24585ce6d12f3c8b19, type: 2}
     - target: {fileID: 510415134931336717, guid: 19f0d491e23f4de4b47a36c03b045de9, type: 3}
       propertyPath: m_AnchorMax.y
       value: 1

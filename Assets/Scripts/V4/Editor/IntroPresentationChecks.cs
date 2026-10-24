@@ -76,6 +76,9 @@ namespace PuzzleApple.V4.Editor
         static IEnumerator Check(OpeningFlow flow)
         {
             bool background=Application.runInBackground;Application.runInBackground=true;
+            var hints=flow.effects.inscriptions;
+            string originalKey=hints?hints.progressKey:null;
+            if(hints)hints.progressKey="PuzzleApple.Tests.Presentation."+Guid.NewGuid().ToString("N");
             try
             {
                 var entry=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();entry.enterButton.onClick.Invoke();
@@ -96,6 +99,20 @@ namespace PuzzleApple.V4.Editor
                 Physics.Raycast(flow.player.view.position,flow.player.view.forward,out var aimed,65,~0,QueryTriggerInteraction.Collide);
                 Require(flow.TryCollectLight(),"aimed lamp collection: can="+flow.CanInteract+", pending="+flow.MovementDiscoveryPending+", cursor="+Cursor.lockState+", hit="+(aimed.collider?aimed.collider.name:"none")+", distance="+aimed.distance);
                 yield return new WaitForSecondsRealtime(flow.wordDisplayDuration+.2f);
+                Aim(flow,lamp.transform.position);
+                Require(flow.TryCollectLight(),"known lamp remains interactable");
+                yield return new WaitForSecondsRealtime(.2f);
+                var known=flow.collectionSymbol.transform.parent.Find("Known word feedback").GetComponent<UnityEngine.UI.Image>();
+                Require(!flow.Collecting&&!flow.player.MovementLocked&&known.gameObject.activeSelf,"repeat feedback does not collect or freeze");
+                Require(flow.hoverEye.color.a<.5f&&!flow.hoverEye.gameObject.activeSelf&&known.color.a>.7f,"known symbol readable without eye overlap");
+                Require(known.rectTransform.anchoredPosition==Vector2.zero&&known.rectTransform.localScale.x>flow.knownSymbolScale.x,"known symbol centered and expanding");
+                System.IO.Directory.CreateDirectory("Temp/V4Presentation");
+                ScreenCapture.CaptureScreenshot("Temp/V4Presentation/known-symbol.png");
+                yield return new WaitForEndOfFrame();
+                Aim(flow,lamp.transform.position);
+                Require(flow.TryCollectLight(),"repeat click restarts feedback");
+                yield return new WaitForSecondsRealtime(flow.knownSymbolDuration+.1f);
+                Require(!known.gameObject.activeSelf,"repeat symbol fades out");
                 board.Panel.SetOpen(true);flow.library.Select("light");
                 Require(flow.library.SnapshotImage.texture,"lamp first-acquisition photo");
                 var photo=flow.library.SnapshotImage.texture;flow.library.Remember("light");Require(photo==flow.library.SnapshotImage.texture,"photo not overwritten");
@@ -119,12 +136,12 @@ namespace PuzzleApple.V4.Editor
                 int before=presentation.PlayCount;
                 Sentence(s,"positive light");yield return new WaitForSecondsRealtime(.3f);
                 Require(presentation.PlayCount==before,"already lit has no cinematic");
-                Sentence(s,"negative light move");yield return new WaitForSecondsRealtime(.25f);
-                var suppressed=s.Groups.Last();Require(suppressed.Conflicted,"whole composite conflict");
+                Sentence(s,"negative light");yield return new WaitForSecondsRealtime(.25f);
+                var suppressed=s.Groups.Last();Require(suppressed.Conflicted,"opposite state conflict");
                 Require(board.GroupRect(suppressed.Id).GetComponent<CanvasGroup>().alpha<.3f,"conflict faded");
                 int pulses=feedback.StrongCount+feedback.WeakCount;
                 s.ReturnToLibrary(s.Groups.First().Id,0,true);yield return new WaitForSecondsRealtime(.4f);
-                Require(!flow.lamp.IsOn&&flow.lightField.Moving,"split lets suppressed composite take over");
+                Require(!flow.lamp.IsOn&&!flow.lightField.Moving,"split lets suppressed state take over without enabling movement");
                 Require(presentation.PlayCount==before&&!presentation.Playing,"split takeover never cuts");
                 board.Panel.SetOpen(false);yield return new WaitForSecondsRealtime(.1f);
                 Cursor.lockState=CursorLockMode.Locked;flow.player.view.LookAt(flow.door.transform.position+Vector3.up*3);
@@ -153,9 +170,10 @@ namespace PuzzleApple.V4.Editor
                 Require(presentation.LetterboxProgress>.99f&&!board.Panel.IsOpen&&board.Panel.InputBlocked&&flow.player.CinematicLocked,"cinematic input lock and panel hidden");
                 Require((flow.player.transform.position-position).sqrMagnitude<.0001f,"player frozen");
                 Require((flow.player.view.localPosition-eyePosition).sqrMagnitude<.000001f,"cinematic never translates camera");
-                Require(Quaternion.Angle(eyeRotation,flow.player.view.localRotation)<=presentation.maxCorrectionAngle+.1f,"correction stays subtle");
+                Require(Quaternion.Angle(eyeRotation,flow.player.view.localRotation)<=presentation.shots.First(p=>p.rule.Id=="light.move").maxCorrectionAngle+.1f,"correction stays within shot limit");
                 ScreenCapture.CaptureScreenshot("Temp/V4Presentation/cutscene.png");
-                yield return new WaitForSecondsRealtime(presentation.holdDuration+presentation.blendDuration+.3f);
+                var lightShot=presentation.shots.First(p=>p.rule.Id=="light.move");
+                yield return new WaitForSecondsRealtime(lightShot.holdDuration+lightShot.exitDuration+.3f);
                 Require(presentation.LetterboxProgress==0&&!presentation.Playing&&board.Panel.IsOpen&&!board.Panel.InputBlocked&&!flow.player.CinematicLocked,"camera and controls restored");
                 before=presentation.PlayCount;
                 Sentence(s,"light move");yield return new WaitForSecondsRealtime(.3f);
@@ -168,9 +186,60 @@ namespace PuzzleApple.V4.Editor
                 flow.door.transform.position=new Vector3(0,flow.door.groundHeight,10);Physics.SyncTransforms();
                 Sentence(s,"door world move");yield return new WaitForSecondsRealtime(.3f);
                 Require(presentation.PlayCount==before,"already grounded has no cinematic");
-                Result="PASS: entry, snapshots, pointer drag join, invalid/weak/strong/conflict feedback, duplicate effects, split takeover, freeze and restore, completed motion";
+                s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
+                int visualRules=board.Catalog.Rules.Count(r=>r.Effects.Any()&&!r.Effects.Contains(CognitionSignal.WorldOff));
+                Require(presentation.shots.Length==visualRules&&presentation.shots.All(p=>p&&p.rule)&&presentation.shots.Select(p=>p.rule.Id).Distinct().Count()==visualRules,"only visual complete sentences have independent profiles");
+                foreach(var light in UnityEngine.Object.FindObjectsByType<OpeningLight>(FindObjectsSortMode.None))light.SetOn(false);
+                DragWord(flow,"positive");yield return null;
+                DragWord(flow,"light",board.GroupRect(s.Groups.Single().Id));
+                yield return new WaitForSecondsRealtime(.25f);
+                Require(presentation.Playing&&presentation.LastShotRule=="light.on","state assembled first uses its sentence shot");
+                yield return AwaitShot(presentation);
+                DragWord(flow,"move",board.GroupRect(s.Groups.Single().Id));
+                yield return new WaitForSecondsRealtime(.25f);
+                Require(!presentation.Playing&&!s.Groups.Single().Recognized,"appending move to a state sentence is invalid");
+                s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
+                Sentence(s,"negative light move");yield return new WaitForSecondsRealtime(.25f);
+                Require(!presentation.Playing&&!s.Groups.Single().Recognized,"negative state-modified move is invalid");
+                s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
+                Sentence(s,"positive light");yield return new WaitForSecondsRealtime(.3f);
+                Sentence(s,"light world move");yield return new WaitForSecondsRealtime(.25f);
+                Require(presentation.Playing&&presentation.LastShotRule=="light.world.move","separate directed motion uses its own shot");
+                yield return AwaitShot(presentation);
+                Require(flow.lamp.IsOn&&flow.effects.lights.Motion==CognitionSignal.LightWorldMove,"separate state and directed motion coexist");
+                s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
+                Sentence(s,"world move");yield return new WaitForSecondsRealtime(.25f);
+                Require(presentation.LastShotRule=="world.move","world move has its own shot");
+                yield return AwaitShot(presentation);
+                var raised=flow.effects.lights.Nearest(flow.player.transform.position);
+                var raisedPosition=raised.transform.position+Vector3.up*2;
+                raised.GetComponent<Rigidbody>().position=raisedPosition;raised.transform.position=raisedPosition;Physics.SyncTransforms();
+                var movingWorld=s.Groups.Single();var lightWord=s.Spawn(board.Catalog.Word("light"));
+                s.Join(lightWord.Id,movingWorld.Id,true);yield return new WaitForSecondsRealtime(.25f);
+                Require(presentation.Playing&&presentation.LastShotRule=="light.world.move","prepending light switches to light world move shot");
+                yield return AwaitShot(presentation);
+                Result="PASS: entry, snapshots, repeated interaction, pointer joins, complete-sentence profiles, prepend light to world move, feedback, split takeover, freeze and restore";
             }
-            finally{Application.runInBackground=background;}
+            finally
+            {
+                Application.runInBackground=background;
+                if(hints){hints.Progress.Clear();hints.progressKey=originalKey;}
+            }
+        }
+        static IEnumerator AwaitShot(IntroPresentation presentation)
+        {
+            float deadline=Time.realtimeSinceStartup+12;
+            while(presentation.Playing&&Time.realtimeSinceStartup<deadline)yield return null;
+            Require(!presentation.Playing,"shot finishes within timeout");
+        }
+        static void Aim(OpeningFlow flow,Vector3 target)
+        {
+            var direction=(target-flow.player.view.position).normalized;
+            flow.player.transform.rotation=Quaternion.Euler(0,Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg,0);
+            float pitch=-Mathf.Asin(direction.y)*Mathf.Rad2Deg;
+            typeof(FirstPersonController).GetField("pitch",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(flow.player,pitch);
+            flow.player.view.localRotation=Quaternion.Euler(pitch,0,0);
+            Cursor.lockState=CursorLockMode.Locked;Physics.SyncTransforms();
         }
     }
 }

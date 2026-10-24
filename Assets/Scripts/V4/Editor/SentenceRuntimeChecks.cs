@@ -25,21 +25,25 @@ namespace PuzzleApple.V4.Editor
         static IEnumerator Check(OpeningFlow flow)
         {
             bool background=Application.runInBackground; Application.runInBackground=true;
+            var hints=flow.effects.inscriptions;string key=hints?hints.progressKey:null;
+            if(hints)hints.progressKey="PuzzleApple.Tests.Runtime."+Guid.NewGuid().ToString("N");
             try
             {
                 UnityEngine.Object.FindFirstObjectByType<WorldEntry>().EnterWorld();
                 yield return new WaitForSecondsRealtime(2);
                 flow.player.enabled=false; // Deterministic checks; no synthetic devices or InputSystem mutations.
                 var s=flow.board.State; var effects=flow.effects; var field=flow.lightField;
+                if(effects.presentation)effects.presentation.enabled=false;
                 foreach(var word in flow.board.Catalog.Words) s.TryAcquireWord("runtime.learn."+word.Id,word);
                 Require(effects && effects.lights.Lamps.Count>10,"effect bindings and pooled lights");
-                s.ClearWorkspace(); Sentence(s,"positive light"); Sentence(s,"negative light move");
+                s.ClearWorkspace(); Sentence(s,"positive light"); Sentence(s,"negative light");
                 Require(flow.lamp.IsOn && effects.lights.Motion==CognitionSignal.Empty && s.Groups.Last().Conflicted,"atomic world effects");
                 var group=flow.board.Surface.Find("Group "+s.Groups.Last().Id);
                 Require(group && group.GetComponent<CanvasGroup>().alpha<.3f,"conflicted sentence opacity");
                 s.ReturnToLibrary(s.Groups.First().Id,0,true);
+                Sentence(s,"light move");
                 yield return new WaitForSeconds(.5f);
-                Require(!flow.lamp.IsOn && field.Moving,"composite takeover");
+                Require(!flow.lamp.IsOn && field.Moving,"independent off and motion coexist");
                 var lamp=effects.lights.Lamps.First(l=>(l.transform.position-flow.player.transform.position).sqrMagnitude<200);
                 flow.board.Panel.SetOpen(true); var before=lamp.transform.position;
                 yield return new WaitForSeconds(.4f); Require(Vector3.Distance(before,lamp.transform.position)>.05f,"moving with panel open");
@@ -50,7 +54,7 @@ namespace PuzzleApple.V4.Editor
                 var door=flow.door; if(!door.Revealed) door.Reveal(flow.player.view);
                 var appearance=door.GetComponent<DoorStateEffects>();
                 Sentence(s,"positive door"); Require(!appearance.PassageEnabled,"airborne on does not open passage");
-                s.ClearWorkspace(); Sentence(s,"negative door move");
+                s.ClearWorkspace(); Sentence(s,"negative door");Sentence(s,"door move");
                 var fish=door.GetComponentsInChildren<ThresholdFish>(); var poses=fish.Select(f=>f.transform.localPosition).ToArray();
                 var doorBefore=door.transform.position;
                 yield return new WaitForSeconds(.5f);
@@ -103,7 +107,7 @@ namespace PuzzleApple.V4.Editor
                 flow.player.enabled=true;
                 Result="PASS: atomic effects/UI fade, Tab motion, door states/mist/landing, light descent/gather/cluster, door pursuit, world pause/resume";
             }
-            finally { Application.runInBackground=background; }
+            finally { Application.runInBackground=background;if(hints){hints.Progress.Clear();hints.progressKey=key;} }
         }
     }
 }

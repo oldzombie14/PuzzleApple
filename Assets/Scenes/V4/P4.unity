@@ -5045,8 +5045,8 @@ MonoBehaviour:
   cookieSize: {x: 1600, y: 1600}
   wind: {x: 20, y: 20}
   player: {fileID: 1884227021}
-  directionDelay: 1.4
-  directionSmoothing: 2.5
+  directionDelay: 1
+  directionSmoothing: 1.8
   initialOffset: {x: 80, y: 110}
   fogEnabled: 1
   fogDensity: 0.00255
@@ -7529,6 +7529,7 @@ GameObject:
   - component: {fileID: 1647927359}
   - component: {fileID: 1647927365}
   - component: {fileID: 1647927364}
+  - component: {fileID: 1647927366}
   m_Layer: 0
   m_Name: Sentence Effects
   m_TagString: Untagged
@@ -7612,6 +7613,7 @@ MonoBehaviour:
   door: {fileID: 1647927360}
   world: {fileID: 1647927359}
   presentation: {fileID: 1647927364}
+  inscriptions: {fileID: 1647927366}
 --- !u!4 &1647927363
 Transform:
   m_ObjectHideFlags: 0
@@ -7642,10 +7644,22 @@ MonoBehaviour:
   effects: {fileID: 1647927362}
   player: {fileID: 1884227022}
   feedback: {fileID: 1647927365}
+  shots:
+  - {fileID: 11400000, guid: dbbb2d10264ef1d4294a5fb4fc1ed28f, type: 2}
+  - {fileID: 11400000, guid: 2b29e521a93d7b547abc4255a05a1bea, type: 2}
+  - {fileID: 11400000, guid: 317748eff81379d449caf2101925deb1, type: 2}
+  - {fileID: 11400000, guid: aa1d1b92129f8c24da30cc060abc162d, type: 2}
+  - {fileID: 11400000, guid: fbdc12a30a3d62647a8a6fb3e9de4aae, type: 2}
+  - {fileID: 11400000, guid: 574a8e77146cb5741aad3879cfde6d2c, type: 2}
+  - {fileID: 11400000, guid: f2ce3e0289a7d484bbcff059d541300c, type: 2}
+  - {fileID: 11400000, guid: fd1e167ff846e544eba0c8cc4f9281bf, type: 2}
+  - {fileID: 11400000, guid: ba54e029fa7773448b137ef9d784d654, type: 2}
+  - {fileID: 11400000, guid: 6ccf4982ba012a34abccc0ca53940a47, type: 2}
+  - {fileID: 11400000, guid: f9120b02614534f46a00f8dee356f29c, type: 2}
+  - {fileID: 11400000, guid: c6d2d2461ac9a2542a79a0fc27a6d579, type: 2}
+  - {fileID: 11400000, guid: 64db0246ce3a5734295ac7fabda6e038, type: 2}
+  - {fileID: 11400000, guid: 78b3ee6fabda6f540be5d9758f4802c3, type: 2}
   feedbackLead: 0.3
-  blendDuration: 0.65
-  holdDuration: 3
-  maxCorrectionAngle: 6
 --- !u!114 &1647927365
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9131,6 +9145,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5664c77bc2181944b9399feec80c7d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.NightEnvironment
+  inscriptions: {fileID: 1647927366}
   lamp: {fileID: 1759786241}
   sun: {fileID: 1294273873}
   clouds: {fileID: 935179297}
@@ -10429,3 +10444,28 @@ SceneRoots:
   - {fileID: 1560812438}
   - {fileID: 24299611}
   - {fileID: 1647927363}
+--- !u!114 &1647927366
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1647927358}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cfb69681c0a77b459d8a2beca6472e2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.SkyInscription
+  inkMaterial: {fileID: 2100000, guid: 377275d89e40d4d458b35f4d8a5dba52, type: 2}
+  opening: {fileID: 2124154390}
+  environment: {fileID: 1911569973}
+  revealDistance: 30
+  revealSeconds: 20
+  fadeDuration: 1.6
+  viewingDistance: 90
+  elevation: 14
+  angularWidth: 24
+  opacity: 0.82
+  dayInk: {r: 0.2, g: 0.24, b: 0.2, a: 1}
+  nightInk: {r: 0.74, g: 0.81, b: 0.9, a: 1}
+  progressKey: PuzzleApple.V4.IntroHints.v1

@@ -11,8 +11,9 @@ namespace PuzzleApple.V4
         public Light sun;
         public CloudLightCookie clouds;
         public Material daySky, nightSky;
-        [Header("编辑模式预览（运行时按 X）")]
+        [Header("编辑模式预览")]
         public bool previewNight;
+        public SkyInscription inscriptions;
         public bool WorldMoving { get; set; }
         [Min(1)] public float movingCloudSpeed = 12;
         public float movingStarDegreesPerSecond = 3;
@@ -58,8 +59,10 @@ namespace PuzzleApple.V4
         {
             if (!sun || !daySky || !nightSky || !clouds) return;
             bool night = Application.isPlaying ? lamp && !lamp.IsOn : previewNight;
-            blend = Application.isPlaying && transitionDuration > 0
-                ? Mathf.MoveTowards(blend, night ? 1 : 0, Time.unscaledDeltaTime / transitionDuration) : night ? 1 : 0;
+            bool ready=!Application.isPlaying||!inscriptions||inscriptions.PrepareNightTransition(night);
+            if(ready)
+                blend = Application.isPlaying && transitionDuration > 0
+                    ? Mathf.MoveTowards(blend, night ? 1 : 0, Time.unscaledDeltaTime / transitionDuration) : night ? 1 : 0;
             Apply(blend);
             clouds.cloudsEnabled = blend < .98f;
             clouds.FollowFacing = WorldMoving;

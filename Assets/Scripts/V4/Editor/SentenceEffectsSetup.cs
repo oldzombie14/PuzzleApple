@@ -17,7 +17,7 @@ namespace PuzzleApple.V4.Editor
             if(Application.isPlaying || UnityEngine.SceneManagement.SceneManager.GetActiveScene().path!="Assets/Scenes/V4/P4.unity")
                 throw new InvalidOperationException("Open P4 in Edit mode.");
             var catalog=AssetDatabase.LoadAssetAtPath<CognitionCatalog>(Data+"OpeningCatalog.asset");
-            var rules=catalog.Rules.ToList();
+            var rules=catalog.Rules.Where(r=>r.Words.Count<=2||r.Words[0].Id!="positive"&&r.Words[0].Id!="negative").ToList();
             Action<string,CognitionSignal[]> add=(sentence,effects)=>
             {
                 var tokens=sentence.Split(' ');
@@ -35,7 +35,7 @@ namespace PuzzleApple.V4.Editor
                 so.FindProperty("effect").intValue=(int)(effects.Length>0?effects[0]:CognitionSignal.Empty);
                 var extra=so.FindProperty("additionalEffects"); extra.arraySize=Math.Max(0,effects.Length-1);
                 for(int i=1;i<effects.Length;i++) extra.GetArrayElementAtIndex(i-1).intValue=(int)effects[i];
-                // Built-in per-effect channels allow shared identical effects across composite rules.
+                // State and motion use independent channels across separate sentences.
                 so.FindProperty("exclusionKey").stringValue="";
                 so.ApplyModifiedPropertiesWithoutUndo();
             };
@@ -50,12 +50,7 @@ namespace PuzzleApple.V4.Editor
                 {"world door move",CognitionSignal.WorldDoorMove},{"light light move",CognitionSignal.LightLightMove}
             };
             foreach(var pair in moves)
-            {
                 add(pair.Key,new[]{pair.Value});
-                string subject=pair.Key.Split(' ')[0];
-                add("positive "+pair.Key,subject=="world"?new[]{pair.Value}:new[]{subject=="light"?CognitionSignal.LightOn:CognitionSignal.DoorOn,pair.Value});
-                add("negative "+pair.Key,subject=="world"?new[]{CognitionSignal.WorldOff}:new[]{subject=="light"?CognitionSignal.LightOff:CognitionSignal.DoorOff,pair.Value});
-            }
             var cs=new SerializedObject(catalog); var entries=cs.FindProperty("rules"); entries.arraySize=rules.Count;
             for(int i=0;i<rules.Count;i++) entries.GetArrayElementAtIndex(i).objectReferenceValue=rules[i];
             cs.ApplyModifiedPropertiesWithoutUndo(); catalog.ValidateOrThrow();

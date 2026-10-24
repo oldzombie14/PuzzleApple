@@ -24,21 +24,27 @@ namespace PuzzleApple.V4.Editor
                 var invalid=new CognitionState(catalog); invalid.TryAcquireSentence("test",sentence);
                 Require(!invalid.Groups.Single().Recognized,"Unexpected valid sentence: "+sentence);
             }
+            Require(catalog.Rules.Count==16,"Only six state sentences and ten motion sentences remain");
+            foreach(var rule in catalog.Rules.Where(r=>r.Words.Last().Id=="move"))
+                foreach(var modifier in new[]{"positive","negative"})
+                {
+                    var invalid=new CognitionState(catalog);
+                    invalid.TryAcquireSentence("test",modifier+" "+string.Join(" ",rule.Words.Select(w=>w.Id)));
+                    Require(!invalid.Groups.Single().Recognized,"State-modified motion must be invalid");
+                }
             var s=new CognitionState(catalog);
-            s.TryAcquireSentence("first","positive light"); s.TryAcquireSentence("second","negative light move");
-            Require(s.Groups[1].Recognized && s.Groups[1].Conflicted,"Composite must remain recognized but faded");
-            Require(s.HasEffect(CognitionSignal.LightOn) && !s.HasEffect(CognitionSignal.LightOff) && !s.HasEffect(CognitionSignal.LightMove),"Composite partially applied");
-            s.TryAcquireSentence("third","light door move");
-            Require(s.HasEffect(CognitionSignal.LightDoorMove),"Suppressed composite incorrectly reserves motion");
+            s.TryAcquireSentence("first","positive light");s.TryAcquireSentence("second","light world move");
+            Require(s.Groups.All(g=>g.Effective)&&s.HasEffect(CognitionSignal.LightOn)&&s.HasEffect(CognitionSignal.LightWorldMove),"Separate state and directed motion coexist");
+            s.TryAcquireSentence("third","negative light");Require(s.Groups.Last().Conflicted,"Opposite state remains suppressed");
             s.ReturnToLibrary(s.Groups[0].Id,0,true);
-            Require(s.HasEffect(CognitionSignal.LightOff) && s.HasEffect(CognitionSignal.LightMove) && !s.HasEffect(CognitionSignal.LightDoorMove),"Oldest composite did not take over atomically");
-            s.ClearWorkspace(); s.TryAcquireSentence("fourth","light move"); s.TryAcquireSentence("fifth","positive light move");
+            Require(s.HasEffect(CognitionSignal.LightOff)&&s.HasEffect(CognitionSignal.LightWorldMove),"Removing state winner leaves movement intact");
+            s.ClearWorkspace(); s.TryAcquireSentence("fourth","light move"); s.TryAcquireSentence("fifth","light move");
             Require(s.Groups.All(g=>g.Effective),"Identical motion claims should coexist");
             s.TryAcquireSentence("sixth","light world move"); Require(s.Groups.Last().Conflicted,"Motion priority missing");
             s.ReturnToLibrary(s.Groups[0].Id,0,true); Require(s.HasEffect(CognitionSignal.LightMove),"Duplicate removal prematurely disables effect");
-            s.ClearWorkspace(); s.TryAcquireSentence("seventh","positive world"); s.TryAcquireSentence("eighth","negative world move");
+            s.ClearWorkspace(); s.TryAcquireSentence("seventh","positive world"); s.TryAcquireSentence("eighth","negative world");
             Require(s.HasEffect(CognitionSignal.WorldOff),"World on must not suppress exit");
-            return "PASS: "+catalog.Rules.Count+" registered sentences, strict invalid cases, atomic conflict/chronology, duplicate sharing and exit semantics";
+            return "PASS: 16 sentences, 20 rejected modified motions, independent state/motion, conflict chronology, duplicate sharing and exit";
         }
     }
 }

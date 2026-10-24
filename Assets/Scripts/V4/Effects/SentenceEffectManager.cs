@@ -11,6 +11,7 @@ namespace PuzzleApple.V4
         public DoorSentenceEffects door;
         public WorldSentenceEffects world;
         public IntroPresentation presentation;
+        public SkyInscription inscriptions;
         public bool Suspended { get; private set; }
         void Start()
         {
@@ -27,12 +28,20 @@ namespace PuzzleApple.V4
         }
         void Apply(CognitionChange change)
         {
-            if(board.State.HasEffect(CognitionSignal.WorldOff)) { WorldEntry.QuitApplication(); return; }
+            if(board.State.HasEffect(CognitionSignal.WorldOff))
+            {
+                if(inscriptions)inscriptions.Record(CognitionSignal.WorldOff);
+                WorldEntry.QuitApplication();return;
+            }
             if(Suspended) return;
             if(presentation) presentation.Apply(change,ApplyWorld);
             else ApplyWorld();
         }
-        void ApplyWorld(){lights.Apply(board.State);door.Apply(board.State);world.Apply(board.State);}
+        void ApplyWorld()
+        {
+            lights.Apply(board.State);door.Apply(board.State);world.Apply(board.State);
+            if(inscriptions)inscriptions.RecordApplied(board.State);
+        }
         public void DoorRevealed() { if(!Suspended && door) door.RefreshMotion(); }
         void OnDestroy() { if(board && board.State!=null) board.State.Changed-=Apply; }
     }

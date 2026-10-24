@@ -117,6 +117,8 @@ namespace PuzzleApple.V4
         public void ExitGame()
         {
             if (entering && !entered) return;
+            if(entered&&opening&&opening.effects&&opening.effects.inscriptions)
+                opening.effects.inscriptions.Record(Cognition.CognitionSignal.WorldOff);
             QuitApplication();
         }
 

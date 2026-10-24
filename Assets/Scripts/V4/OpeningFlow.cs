@@ -20,6 +20,13 @@ namespace PuzzleApple.V4
         public RectTransform hud;
         [Min(.1f)] public float interactionDistance = 7;
         public float wordDisplayDuration = 1.6f, wordFadeInDuration = .3f, wordFlyDuration = .6f;
+        [Header("已收集词的重复交互")]
+        [Range(0,1)] public float knownEyeAlpha=.35f, knownSymbolAlpha=.9f;
+        [Min(.1f)] public float knownSymbolDuration=.9f;
+        public Vector2 knownSymbolScale=new Vector2(.8f,1.2f);
+        Image knownSymbol;
+        Coroutine knownFeedback;
+        Color eyeColor;
         public bool Ready { get; private set; }
         public bool Collecting => collecting != null;
         public bool MovementDiscoveryPending => Ready && !board.State.Knows("move") && player.WalkedDistance > .005f;
@@ -38,6 +45,11 @@ namespace PuzzleApple.V4
             worldCamera = player.view.GetComponent<Camera>();
             reticleMaterial = new Material(hoverEye.material);
             hoverEye.material = reticleMaterial;
+            eyeColor=hoverEye.color;
+            knownSymbol=Instantiate(collectionSymbol,collectionSymbol.transform.parent);
+            knownSymbol.name="Known word feedback";knownSymbol.raycastTarget=false;
+            knownSymbol.material=reticleMaterial;
+            knownSymbol.gameObject.SetActive(false);
             foreach (var image in reticle.GetComponentsInChildren<Image>(true)) image.material = reticleMaterial;
 
         }
@@ -63,11 +75,6 @@ namespace PuzzleApple.V4
         void Update()
         {
             if (!Ready) return;
-            if (!board.Panel.InputBlocked && Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame && !library.NoteField.isFocused)
-            {
-                bool on = !lamp.IsOn;
-                foreach (var light in FindObjectsByType<OpeningLight>(FindObjectsSortMode.None)) light.SetOn(on);
-            }
             if (door && !door.Revealed)
             {
                 bool allOff = lamp && !lamp.IsOn;
@@ -80,8 +87,11 @@ namespace PuzzleApple.V4
             if (player.WalkedDistance >= player.learnMoveDistance && !board.State.Knows("move") && !Collecting) Learn("move");
             string targetWord = CanInteract ? LookedAtWord() : null;
             bool target = targetWord != null;
-            hoverEye.gameObject.SetActive(target);
-            reticle.SetActive(player.CanInteractWithWorld && !target && !Collecting);
+            var eye=eyeColor;eye.a*=target&&board.State.Knows(targetWord)?knownEyeAlpha:1;
+            hoverEye.color=eye;
+            bool showingKnown=knownSymbol&&knownSymbol.gameObject.activeSelf;
+            hoverEye.gameObject.SetActive(target&&!showingKnown);
+            reticle.SetActive(player.CanInteractWithWorld && !target && !Collecting&&!showingKnown);
             if (target && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) Learn(targetWord);
         }
         string LookedAtWord()
@@ -99,8 +109,8 @@ namespace PuzzleApple.V4
                 hit = hits[i]; closest = hit.distance;
             }
             if (!hit.collider) return null;
-            if (hit.distance <= interactionDistance && hit.collider.GetComponentInParent<OpeningLight>() && !board.State.Knows("light")) return "light";
-            if (door && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door && !board.State.Knows("door")) return "door";
+            if (hit.distance <= interactionDistance && hit.collider.GetComponentInParent<OpeningLight>()) return "light";
+            if (door && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door) return "door";
             return null;
         }
         public bool TryCollectLight()
@@ -115,11 +125,44 @@ namespace PuzzleApple.V4
         }
         void Learn(string id)
         {
+            if(board.State.Knows(id))
+            {
+                if(knownFeedback!=null)StopCoroutine(knownFeedback);
+                knownFeedback=StartCoroutine(ShowKnownWord(board.Catalog.Word(id)));
+                return;
+            }
+            if(knownFeedback!=null){StopCoroutine(knownFeedback);knownFeedback=null;knownSymbol.gameObject.SetActive(false);}
             collecting = id;
             if (id != "move") player.MovementLocked = true;
             if (id == "light" || id == "door") library.Remember(id, worldCamera.targetTexture);
             else library.Remember(id);
             StartCoroutine(Collect(board.Catalog.Word(id)));
+        }
+        IEnumerator ShowKnownWord(WordDefinition word)
+        {
+            knownSymbol.sprite=word.Symbol;
+            var rect=knownSymbol.rectTransform;
+            rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(.5f,.5f);
+            rect.anchoredPosition=Vector2.zero;
+            rect.localScale=Vector3.one*knownSymbolScale.x;
+            hoverEye.gameObject.SetActive(false);reticle.SetActive(false);
+            knownSymbol.gameObject.SetActive(true);
+            for(float t=0;t<knownSymbolDuration;t+=Time.unscaledDeltaTime)
+            {
+                float progress=t/knownSymbolDuration;
+                rect.localScale=Vector3.one*Mathf.Lerp(knownSymbolScale.x,knownSymbolScale.y,Mathf.SmoothStep(0,1,progress));
+                float reveal=Mathf.SmoothStep(0,1,progress/.08f);
+                float fade=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.3f,1,progress));
+                knownSymbol.color=new Color(1,1,1,knownSymbolAlpha*reveal*fade);
+                yield return null;
+            }
+            knownSymbol.gameObject.SetActive(false);knownFeedback=null;
+        }
+        void OnDisable()
+        {
+            if(knownFeedback!=null)StopCoroutine(knownFeedback);
+            knownFeedback=null;
+            if(knownSymbol)knownSymbol.gameObject.SetActive(false);
         }
         IEnumerator Collect(WordDefinition word)
         {
@@ -142,6 +185,7 @@ namespace PuzzleApple.V4
         void OnDestroy()
         {
             if (reticleMaterial) Destroy(reticleMaterial);
+            if (knownSymbol) Destroy(knownSymbol.gameObject);
         }
     }
 }

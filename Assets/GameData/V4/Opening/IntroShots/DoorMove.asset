@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a2d948cf7f4f384fa4244d8bd24afd5, type: 3}
+  m_Name: DoorMove
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.IntroShotProfile
+  rule: {fileID: 11400000, guid: 9bf44ade9a43eea49ab5d0ed79ada9d9, type: 2}
+  target: 1
+  aim: 0
+  targetOffset: {x: 0, y: 3, z: 0}
+  angleOffset: {x: 0, y: 0}
+  maxCorrectionAngle: 180
+  skyMinimumElevation: 25
+  elevatedGroupHeight: 6
+  lightGroupRadius: 18
+  targetViewportY: 0.5
+  followTarget: 1
+  followResponse: 1.5
+  maxFollowDegreesPerSecond: 12
+  snapAboveAngle: 180
+  enterDuration: 1.35
+  holdDuration: 2.4
+  exitDuration: 0.8
+  letterboxHeight: 0.09

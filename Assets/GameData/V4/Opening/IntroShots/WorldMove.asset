@@ -14,14 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.IntroShotProfile
   rule: {fileID: 11400000, guid: a7e31840039397b409f93d6e143fa86b, type: 2}
   target: 2
-  aim: 0
+  aim: 1
   targetOffset: {x: 0, y: 0, z: 0}
   angleOffset: {x: 0, y: 0}
-  maxCorrectionAngle: 180
-  skyMinimumElevation: 15
+  skyMinimumElevation: 0
   elevatedGroupHeight: 6
   lightGroupRadius: 18
-  targetViewportY: 0.5
+  targetViewportY: 0.3333333
   followTarget: 0
   followResponse: 1.5
   maxFollowDegreesPerSecond: 12

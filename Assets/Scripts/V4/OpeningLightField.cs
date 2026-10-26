@@ -46,6 +46,7 @@ namespace PuzzleApple.V4
             public float scale;
             public OpeningLight lamp;
             public LightMotion motion;
+            public bool hasSpawned;
         }
         readonly HashSet<Vector2Int> generated = new HashSet<Vector2Int>();
         readonly Dictionary<Vector2Int, List<Record>> sleeping = new Dictionary<Vector2Int, List<Record>>();
@@ -157,6 +158,12 @@ namespace PuzzleApple.V4
             {
                 var record = candidates[i];
                 sleeping[Cell(record.position)].Remove(record);
+                if(Moving&&!record.hasSpawned&&TryGround(record.position,out float spawnGround))
+                {
+                    record.position.y=spawnGround+record.scale*VerticalHalfExtent+.025f;
+                    record.direction.y=Mathf.Max(.25f,Mathf.Abs(record.direction.y));record.direction.Normalize();
+                }
+                record.hasSpawned=true;
                 var lamp = pool.Count > 0 ? pool.Pop() : CreateLamp();
                 lamp.transform.SetParent(transform, false);
                 lamp.transform.SetPositionAndRotation(record.position, LampRotation);
@@ -166,7 +173,7 @@ namespace PuzzleApple.V4
                 record.lamp = lamp; record.motion = lamp.GetComponent<LightMotion>();
                 record.motion.speed = moveSpeed;
                 record.motion.SetMoving(Moving); record.motion.RestoreDirection(record.direction);
-                lamp.SetOn(stateSource.IsOn);
+                // Pooled lamps read the source's exact brightness, including a held intermediate value.
                 active.Add(record);
             }
             active.Sort((a, b) => (a.lamp.transform.position - center).sqrMagnitude.CompareTo((b.lamp.transform.position - center).sqrMagnitude));

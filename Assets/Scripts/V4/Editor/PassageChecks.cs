@@ -30,14 +30,34 @@ namespace PuzzleApple.V4.Editor
             try
             {
                 UnityEngine.Object.FindFirstObjectByType<WorldEntry>().EnterWorld(); yield return new WaitForSeconds(2);
+                flow.effects.presentation.enabled=false;
                 flow.player.enabled=false;
                 var d=flow.door; var s=flow.board.State;
                 d.Reveal(flow.player.view);
+                Require(Vector3.Dot(d.transform.up,Vector3.up)>.9999f,"revealed door remains upright");
+                var bearing=Vector3.ProjectOnPlane(d.transform.position-flow.player.view.position,Vector3.up).normalized;
+                Require(Vector3.Dot(d.transform.forward,bearing)>.9999f,"revealed door faces camera horizontally");
+                var body=d.GetComponent<Rigidbody>();
+                var airborne=new Vector3(100,d.groundHeight+.5f,100);
+                body.position=airborne;d.transform.position=airborne;
+                s.TryAcquireSentence("passage.free","door move");
+                d.GetComponent<LightMotion>().RestoreDirection(Vector3.down);
+                Physics.SyncTransforms();
+                yield return new WaitForSeconds(.5f);
+                Require(!d.LandingCompleted&&!GameObject.Find("Door landing ripple")&&d.GetComponent<LightMotion>().Direction.y>0,"free-motion contact bounces without landing");
+                body.position=new Vector3(100,d.groundHeight+.25f,100);d.transform.position=body.position;Physics.SyncTransforms();
+                s.ClearWorkspace();
+                Require(d.LandingCompleted&&Mathf.Abs(body.position.y-d.groundHeight)<.01f,"splitting near ground snaps and commits landing");
+                yield return new WaitForSeconds(.1f);
+                Require(d.LandingCompleted&&!d.GetComponent<LightMotion>().Moving,"dismantling preserves contact progress");
+                yield return new WaitForSeconds(d.rippleDuration+.4f);
+                Require(!GameObject.Find("Door landing ripple"),"first ripple finishes");
                 var location=new Vector3(100,d.groundHeight,100);
                 d.GetComponent<Rigidbody>().position=location; d.transform.SetPositionAndRotation(location,Quaternion.identity);
                 d.GetComponent<Rigidbody>().rotation=Quaternion.identity;
                 d.SetDescending(true); yield return new WaitForFixedUpdate(); d.SetDescending(false);
                 Require(d.LandingCompleted,"test landing");
+                Require(!GameObject.Find("Door landing ripple"),"later directed contact does not repeat ripple");
                 var origin=location+new Vector3(0,1,-2);
                 flow.player.Teleport(origin,Quaternion.identity); Physics.SyncTransforms();
                 s.TryAcquireSentence("passage.off","negative door");

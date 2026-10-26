@@ -3,6 +3,7 @@ using UnityEngine.Events;
 
 namespace PuzzleApple.V4
 {
+    public enum LightLevelState { Off, InBetween, On }
     public sealed class OpeningLight : MonoBehaviour
     {
         public Renderer surface;
@@ -14,10 +15,17 @@ namespace PuzzleApple.V4
         public Color offColor = Color.black;
         [Min(0)] public float transitionDuration = 1.2f;
         public UnityEvent<bool> stateChanged = new UnityEvent<bool>();
-        public bool IsOn { get; private set; } = true;
+        public float Brightness => appearanceSource ? appearanceSource.Brightness : brightness;
+        public bool IsOn => Brightness >= 1;
+        public bool IsOff => Brightness <= 0;
+        public LightLevelState CurrentState => IsOn ? LightLevelState.On : IsOff ? LightLevelState.Off : LightLevelState.InBetween;
+        public bool TargetOn => appearanceSource ? appearanceSource.TargetOn : targetOn;
+        public bool TransitionEnabled => appearanceSource ? appearanceSource.TransitionEnabled : transitionEnabled;
+        bool targetOn = true, transitionEnabled;
         Material runtimeMaterial;
         Color emission, onColor;
         float brightness = 1, onLightIntensity;
+        NightEnvironment environment;
         void Awake()
         {
             if (!surface) surface = GetComponent<Renderer>();
@@ -27,6 +35,7 @@ namespace PuzzleApple.V4
                 return;
             }
             runtimeMaterial = surface.material;
+            environment=FindFirstObjectByType<NightEnvironment>();
             emission = runtimeMaterial.GetColor("_EmissionColor");
             onColor = runtimeMaterial.GetColor("_BaseColor");
             // Explicit specular control lets reflections fade with the lamp as well.
@@ -37,16 +46,18 @@ namespace PuzzleApple.V4
         }
         public void SetOn(bool value)
         {
-            if (IsOn == value) return;
-            IsOn = value;
+            if (appearanceSource) return;
+            if (targetOn == value && transitionEnabled) return;
+            targetOn = value;
+            transitionEnabled = true;
             if (transitionDuration <= 0) { brightness = value ? 1 : 0; ApplyAppearance(); }
             stateChanged.Invoke(value);
         }
+        public void HoldCurrentState() { transitionEnabled = false; }
         void Update()
         {
             if (appearanceSource)
             {
-                IsOn = appearanceSource.IsOn;
                 if (glow)
                 {
                     glow.enabled = illuminate && appearanceSource.brightness > 0;
@@ -54,7 +65,11 @@ namespace PuzzleApple.V4
                 }
                 return;
             }
-            float target = IsOn ? 1 : 0;
+            if (!transitionEnabled) return;
+            // The sky leads both directions; the lamp then overlaps it with a slower fade.
+            if(environment&&environment.lamp==this&&transitionDuration>0&&
+                (targetOn?environment.NightBlend>.8f:environment.NightBlend<.2f))return;
+            float target = targetOn ? 1 : 0;
             if (brightness == target) return;
             brightness = transitionDuration > 0
                 ? Mathf.MoveTowards(brightness, target, Time.unscaledDeltaTime / transitionDuration) : target;

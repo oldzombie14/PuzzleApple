@@ -11,10 +11,13 @@ namespace PuzzleApple.V4
         [Min(.1f)] public float loweringAcceleration = 6;
         [Min(1)] public float collectionDistance = 65;
         public float spawnDistance = 42, suspendedHeight = 18;
+        [Min(0)] public float releaseLandingTolerance = .5f;
         public Material rippleMaterial;
         public float rippleDuration = 2.4f;
         [Min(3)] public float rippleRadius = 12;
         public bool Revealed { get; private set; }
+        public bool Appearing => assembly&&assembly.Playing;
+        DoorAssembly assembly;
         public bool LandingCompleted { get; private set; }
         public bool Descending { get; private set; }
         public bool Landed => body && body.position.y <= groundHeight + .01f;
@@ -22,7 +25,9 @@ namespace PuzzleApple.V4
         LightMotion freeMotion;
         GameObject ripple;
         BoxCollider[] frameColliders;
+        Collider ground;
         float speed;
+        Transform facingPlayer;
         void Awake()
         {
             body = GetComponent<Rigidbody>();
@@ -32,24 +37,37 @@ namespace PuzzleApple.V4
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             freeMotion = GetComponent<LightMotion>();
             if (!freeMotion) freeMotion = gameObject.AddComponent<LightMotion>();
+            var effects = FindFirstObjectByType<WorldSentenceEffects>();
+            if (effects) ground = effects.ground;
         }
         public void Reveal(Transform view)
         {
             if (Revealed) return;
             gameObject.SetActive(true);
+            facingPlayer=view;
             var forward = Vector3.ProjectOnPlane(view.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < .01f) forward = Vector3.ProjectOnPlane(view.up, Vector3.up).normalized;
             var position = view.position + forward * spawnDistance;
             position.y = groundHeight + suspendedHeight;
             body.position = position;
-            body.rotation = Quaternion.LookRotation(forward, Vector3.up);
+            // Aim the frame from the actual camera-to-door bearing, with no pitch or roll.
+            var bearing = Vector3.ProjectOnPlane(position - view.position, Vector3.up).normalized;
+            body.rotation = Quaternion.LookRotation(bearing, Vector3.up);
             transform.SetPositionAndRotation(position, body.rotation);
             Revealed = true;
+            assembly=GetComponent<DoorAssembly>();if(!assembly)assembly=gameObject.AddComponent<DoorAssembly>();
+            assembly.Begin(rippleMaterial);
             Physics.SyncTransforms();
         }
         public void SetMotion(bool freelyMoving, bool descending)
         {
+            bool starting=freelyMoving&&!freeMotion.Moving;
             freeMotion.SetMoving(freelyMoving);
+            if(starting&&Landed)
+            {
+                var direction=freeMotion.Direction;direction.y=Mathf.Max(.25f,Mathf.Abs(direction.y));
+                freeMotion.RestoreDirection(direction);
+            }
             SetDescending(descending && !freelyMoving);
         }
         public void SetDescending(bool value)
@@ -57,8 +75,24 @@ namespace PuzzleApple.V4
             Descending = value;
             if (!value) speed = 0;
         }
+        public void SettleAfterFreeMotion()
+        {
+            if(!Revealed)return;
+            if(ground)groundHeight=ground.bounds.max.y+.02f;
+            if(Mathf.Abs(body.position.y-groundHeight)>releaseLandingTolerance)return;
+            var position=body.position;position.y=groundHeight;
+            body.position=position;transform.position=position;
+            CompleteLanding();Physics.SyncTransforms();
+        }
         void FixedUpdate()
         {
+            if(Revealed&&facingPlayer)
+            {
+                var bearing=Vector3.ProjectOnPlane(body.position-facingPlayer.position,Vector3.up);
+                if(bearing.sqrMagnitude>.0001f)body.MoveRotation(Quaternion.LookRotation(bearing,Vector3.up));
+            }
+            if (ground) groundHeight = ground.bounds.max.y + .02f;
+            if (Revealed && Landed && !freeMotion.Moving) CompleteLanding();
             if (!Descending) return;
             if (Landed) { CompleteLanding(); return; }
             float remaining = body.position.y - groundHeight;
@@ -73,10 +107,22 @@ namespace PuzzleApple.V4
                 var halfSize = Vector3.Scale(frame.size * .5f, new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
                 foreach (var hit in Physics.BoxCastAll(frame.transform.TransformPoint(frame.center), halfSize,
                     Vector3.down, frame.transform.rotation, travel + .01f, ~0, QueryTriggerInteraction.Ignore))
-                    if (hit.rigidbody != body && !hit.collider.transform.IsChildOf(transform))
+                    if (hit.rigidbody != body && !hit.collider.transform.IsChildOf(transform) && !hit.collider.GetComponentInParent<OpeningLight>())
                         travel = Mathf.Min(travel, Mathf.Max(0, hit.distance - .01f));
             }
             body.MovePosition(body.position + Vector3.down * travel);
+        }
+        void OnCollisionEnter(Collision collision) => RecordGroundContact(collision);
+        void OnCollisionStay(Collision collision) => RecordGroundContact(collision);
+        void RecordGroundContact(Collision collision)
+        {
+            if (!Revealed || LandingCompleted || freeMotion.Moving || collision.collider != ground) return;
+            for (int i = 0; i < collision.contactCount; i++)
+                if (Vector3.Dot(collision.GetContact(i).normal, Vector3.up) > .5f)
+                {
+                    CompleteLanding();
+                    return;
+                }
         }
         void CompleteLanding()
         {

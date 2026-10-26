@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace PuzzleApple.V4
 {
-    // Only these four discoveries persist; the running world and vocabulary still start fresh.
+    // Temporary session-only progress while the sky inscription design is being revised.
     public sealed class IntroHintProgress
     {
         public const string DefaultKey="PuzzleApple.V4.IntroHints.v1";
@@ -11,7 +11,7 @@ namespace PuzzleApple.V4
         public int Mask { get; private set; }
         public bool ChecklistComplete=>(Mask&7)==7;
         public bool Finished=>ChecklistComplete&&(Mask&8)!=0;
-        public IntroHintProgress(string key){Key=key;Mask=PlayerPrefs.GetInt(key,0)&15;}
+        public IntroHintProgress(string key){Key=key;Mask=0;}
         static int Bit(CognitionSignal signal)
         {
             switch(signal)
@@ -27,8 +27,8 @@ namespace PuzzleApple.V4
         public void Record(CognitionSignal signal)
         {
             int next=Mask|Bit(signal);if(next==Mask)return;
-            Mask=next;PlayerPrefs.SetInt(Key,Mask);PlayerPrefs.Save();
+            Mask=next;
         }
-        public void Clear(){Mask=0;PlayerPrefs.DeleteKey(Key);PlayerPrefs.Save();}
+        public void Clear(){Mask=0;}
     }
 }

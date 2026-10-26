@@ -22,6 +22,7 @@ namespace PuzzleApple.V4
         [Min(.1f)] public float directionSmoothing = 2.5f;
         public bool FollowFacing { get; set; }
         public Vector3 DriftDirection => driftDirection;
+        public float ActualDriftSpeed => wind.magnitude*smoothedSpeed;
         Vector3 previousPlayerPosition, driftDirection, targetDirection;
         readonly System.Collections.Generic.Queue<Vector4> headings = new System.Collections.Generic.Queue<Vector4>();
         float smoothedSpeed = 1;

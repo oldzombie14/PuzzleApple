@@ -44,10 +44,10 @@ namespace PuzzleApple.V4.Editor
             var moves=new Dictionary<string,CognitionSignal>
             {
                 {"light move",CognitionSignal.LightMove},{"door move",CognitionSignal.DoorMove},
-                {"world move",CognitionSignal.WorldMove},{"door world move",CognitionSignal.DoorWorldMove},
-                {"light world move",CognitionSignal.LightWorldMove},{"light door move",CognitionSignal.LightDoorMove},
-                {"door light move",CognitionSignal.DoorLightMove},{"world light move",CognitionSignal.WorldLightMove},
-                {"world door move",CognitionSignal.WorldDoorMove},{"light light move",CognitionSignal.LightLightMove}
+                {"ground move",CognitionSignal.WorldMove},{"door ground move",CognitionSignal.DoorWorldMove},
+                {"light ground move",CognitionSignal.LightWorldMove},{"light door move",CognitionSignal.LightDoorMove},
+                {"door light move",CognitionSignal.DoorLightMove},{"ground light move",CognitionSignal.WorldLightMove},
+                {"ground door move",CognitionSignal.WorldDoorMove},{"light light move",CognitionSignal.LightLightMove}
             };
             foreach(var pair in moves)
                 add(pair.Key,new[]{pair.Value});

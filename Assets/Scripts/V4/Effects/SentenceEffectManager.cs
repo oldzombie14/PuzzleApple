@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Linq;
 using PuzzleApple.V4.Cognition;
 
 namespace PuzzleApple.V4
@@ -13,6 +14,8 @@ namespace PuzzleApple.V4
         public IntroPresentation presentation;
         public SkyInscription inscriptions;
         public bool Suspended { get; private set; }
+        CognitionChange currentChange;
+        readonly System.Collections.Generic.HashSet<int> exitGroups=new System.Collections.Generic.HashSet<int>();
         void Start()
         {
             board.State.Changed+=Apply;
@@ -22,15 +25,23 @@ namespace PuzzleApple.V4
         {
             Suspended=true;
             if(presentation)presentation.Cancel();
-            // A separate empty snapshot restores defaults and stops motion without discarding learned words.
+            // An empty snapshot stops ongoing effects at their current values without discarding learned words.
             var empty=new CognitionState(board.Catalog);
             lights.Apply(empty); door.Apply(empty); world.Apply(empty);
         }
         void Apply(CognitionChange change)
         {
-            if(board.State.HasEffect(CognitionSignal.WorldOff))
+            currentChange=change;
+            var currentExitGroups=board.State.Groups.Where(g=>g.Effective&&g.Signals.Contains(CognitionSignal.WorldOff)).Select(g=>g.Id).ToArray();
+            bool requestExit=currentExitGroups.Any(id=>!exitGroups.Contains(id));
+            exitGroups.Clear();foreach(int id in currentExitGroups)exitGroups.Add(id);
+            if(requestExit)
             {
-                if(inscriptions)inscriptions.Record(CognitionSignal.WorldOff);
+                var entry=FindFirstObjectByType<WorldEntry>();
+                if(entry&&entry.Exiting)return;
+                if(presentation&&presentation.feedback)
+                    foreach(var group in board.State.Groups)
+                        if(group.Effective&&System.Array.IndexOf(group.Signals.ToArray(),CognitionSignal.WorldOff)>=0)presentation.feedback.Play(group.Id,false);
                 WorldEntry.QuitApplication();return;
             }
             if(Suspended) return;
@@ -39,7 +50,7 @@ namespace PuzzleApple.V4
         }
         void ApplyWorld()
         {
-            lights.Apply(board.State);door.Apply(board.State);world.Apply(board.State);
+            lights.Apply(board.State);door.Apply(board.State,currentChange==CognitionChange.Split);world.Apply(board.State);
             if(inscriptions)inscriptions.RecordApplied(board.State);
         }
         public void DoorRevealed() { if(!Suspended && door) door.RefreshMotion(); }

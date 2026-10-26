@@ -13,11 +13,10 @@ MonoBehaviour:
   m_Name: LightMove
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.IntroShotProfile
   rule: {fileID: 11400000, guid: b872ea54e24d2ff43979be3d26feca37, type: 2}
-  target: 0
-  aim: 1
+  target: 3
+  aim: 3
   targetOffset: {x: 0, y: 0, z: 0}
-  angleOffset: {x: -5, y: 0}
-  maxCorrectionAngle: 10
+  angleOffset: {x: 0, y: 0}
   skyMinimumElevation: 25
   elevatedGroupHeight: 6
   lightGroupRadius: 18
@@ -26,7 +25,7 @@ MonoBehaviour:
   followResponse: 1.5
   maxFollowDegreesPerSecond: 12
   snapAboveAngle: 180
-  enterDuration: 0.65
+  enterDuration: 1.2
   holdDuration: 2.4
   exitDuration: 0.65
   letterboxHeight: 0.09

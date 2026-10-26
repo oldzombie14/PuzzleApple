@@ -17,7 +17,6 @@ MonoBehaviour:
   aim: 0
   targetOffset: {x: 0, y: 0, z: 0}
   angleOffset: {x: 0, y: 0}
-  maxCorrectionAngle: 180
   skyMinimumElevation: 25
   elevatedGroupHeight: 6
   lightGroupRadius: 18

@@ -41,7 +41,7 @@ namespace PuzzleApple.V4.Editor
                 s.ClearWorkspace(); var d=flow.door; d.Reveal(flow.player.view);
                 d.GetComponent<Rigidbody>().position=new Vector3(center.x,5,center.z); d.transform.position=new Vector3(center.x,5,center.z);
                 foreach(var lamp in pair) lamp.gameObject.SetActive(false);
-                s.TryAcquireSentence("gather.world","world door move");
+                s.TryAcquireSentence("gather.world","ground door move");
                 yield return new WaitForSeconds(3);
                 Require(flow.lightField.ground.bounds.max.y>4.5f && flow.effects.world.Waiting,"world follows door and waits");
                 Require(flow.player.transform.position.y>4.5f,"player carried with raised ground");

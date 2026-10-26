@@ -77,7 +77,7 @@ namespace PuzzleApple.V4
             if (!Ready) return;
             if (door && !door.Revealed)
             {
-                bool allOff = lamp && !lamp.IsOn;
+                bool allOff = lamp && lamp.IsOff;
                 if (allOff)
                 {
                     door.Reveal(player.view);
@@ -109,8 +109,9 @@ namespace PuzzleApple.V4
                 hit = hits[i]; closest = hit.distance;
             }
             if (!hit.collider) return null;
+            if (hit.distance <= interactionDistance && effects && effects.world && hit.collider == effects.world.ground) return "ground";
             if (hit.distance <= interactionDistance && hit.collider.GetComponentInParent<OpeningLight>()) return "light";
-            if (door && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door) return "door";
+            if (door && !door.Appearing && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door) return "door";
             return null;
         }
         public bool TryCollectLight()
@@ -123,6 +124,11 @@ namespace PuzzleApple.V4
             if (!CanInteract || LookedAtWord() != "door") return false;
             Learn("door"); return true;
         }
+        public bool TryCollectGround()
+        {
+            if (!CanInteract || LookedAtWord() != "ground") return false;
+            Learn("ground"); return true;
+        }
         void Learn(string id)
         {
             if(board.State.Knows(id))
@@ -134,9 +140,34 @@ namespace PuzzleApple.V4
             if(knownFeedback!=null){StopCoroutine(knownFeedback);knownFeedback=null;knownSymbol.gameObject.SetActive(false);}
             collecting = id;
             if (id != "move") player.MovementLocked = true;
-            if (id == "light" || id == "door") library.Remember(id, worldCamera.targetTexture);
+            if(id=="door")RememberDoor();
+            else if (id == "light" || id == "ground") library.Remember(id, worldCamera.targetTexture);
             else library.Remember(id);
             StartCoroutine(Collect(board.Catalog.Word(id)));
+        }
+        public void RememberDoor()
+        {
+            if(!door||door.Appearing)return;
+            var cameraObject=new GameObject("Door memory camera",typeof(Camera));
+            var camera=cameraObject.GetComponent<Camera>();camera.enabled=false;
+            camera.CopyFrom(worldCamera);camera.enabled=false;camera.orthographic=true;
+            camera.orthographicSize=3.6f;camera.aspect=1;camera.clearFlags=CameraClearFlags.SolidColor;
+            camera.backgroundColor=new Color(.08f,.09f,.09f);camera.nearClipPlane=.1f;camera.farClipPlane=40;
+            camera.cullingMask=1<<30;camera.allowHDR=false;
+            var center=door.transform.TransformPoint(new Vector3(0,3,0));
+            camera.transform.SetPositionAndRotation(center-door.transform.forward*20,door.transform.rotation);
+            var objects=door.GetComponentsInChildren<Transform>(true);var layers=new int[objects.Length];
+            var frame=RenderTexture.GetTemporary(640,640,24,RenderTextureFormat.ARGB32);
+            try
+            {
+                for(int i=0;i<objects.Length;i++){layers[i]=objects[i].gameObject.layer;objects[i].gameObject.layer=30;}
+                camera.targetTexture=frame;camera.Render();library.Remember("door",frame);
+            }
+            finally
+            {
+                for(int i=0;i<objects.Length;i++)objects[i].gameObject.layer=layers[i];
+                camera.targetTexture=null;RenderTexture.ReleaseTemporary(frame);Destroy(cameraObject);
+            }
         }
         IEnumerator ShowKnownWord(WordDefinition word)
         {

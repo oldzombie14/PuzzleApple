@@ -36,6 +36,7 @@ namespace PuzzleApple.V4
         void OnDisable() => LockCursor(false);
         void OnApplicationFocus(bool focus) { if (!focus) LockCursor(false); }
         static void LockCursor(bool locked) { Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None; Cursor.visible = !locked; }
+        public void SuppressInteractionThisFrame() => closedFrame = Time.frameCount;
         public void SetPanelOpen(bool open, float stop = .2f, float yaw = 2.5f, float idlePitch = .35f)
         {
             PanelOpen = open; closedFrame = open ? -1 : Time.frameCount;
@@ -48,6 +49,16 @@ namespace PuzzleApple.V4
             transform.SetPositionAndRotation(position,rotation); motor.enabled=active;
             spawn=position; spawnRotation=rotation; panelRotation=rotation;
             vertical=pitch=learningYaw=learningBob=0;
+        }
+        public void AdoptCurrentView()
+        {
+            var forward=view.forward;
+            float yaw=Mathf.Atan2(forward.x,forward.z)*Mathf.Rad2Deg;
+            pitch=-Mathf.Asin(Mathf.Clamp(forward.y,-1,1))*Mathf.Rad2Deg;
+            transform.rotation=Quaternion.Euler(0,yaw,0);
+            view.localRotation=Quaternion.Euler(pitch,0,0);
+            learningYaw=learningBob=0;
+            panelRotation=transform.rotation;idleTime=0;
         }
         void Update()
         {

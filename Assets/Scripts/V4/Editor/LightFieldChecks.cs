@@ -32,10 +32,15 @@ namespace PuzzleApple.V4.Editor
         {
             bool background = Application.runInBackground;
             Application.runInBackground = true;
+            var hints=flow.effects.inscriptions;string progressKey=hints.progressKey;
+            hints.progressKey="PuzzleApple.Tests.Field."+Guid.NewGuid().ToString("N");
             try
             {
                 UnityEngine.Object.FindFirstObjectByType<WorldEntry>().EnterWorld();
                 yield return new WaitForSecondsRealtime(3);
+                flow.effects.presentation.enabled=false; // This check measures world rules, not cinematic timing.
+                flow.board.Panel.SetOpen(false);
+                yield return new WaitForSecondsRealtime(.3f);
                 var field = flow.lightField;
                 var start = flow.player.transform.position;
                 var lamps = Lamps(field);
@@ -98,11 +103,11 @@ namespace PuzzleApple.V4.Editor
                 state.ClearWorkspace();
                 Teleport(flow.player, start);
                 yield return new WaitForSecondsRealtime(3);
-                Require(flow.lamp.IsOn && !field.Moving && Lamps(field).All(l => !l.GetComponent<LightMotion>().Moving), "return after dismantling stays still and restores on");
+                Require(flow.lamp.IsOff && !field.Moving && Lamps(field).All(l => l.IsOff && !l.GetComponent<LightMotion>().Moving), "return after dismantling stays still and retains off");
                 Result = "PASS: pickup, player passage, initial distribution, shared material/light budgets, panel movement, off/move coexistence, dismantling, streaming restoration and inherited rules.";
                 Debug.Log(Result);
             }
-            finally { Application.runInBackground = background; }
+            finally { hints.Progress.Clear();hints.progressKey=progressKey;Application.runInBackground = background; }
         }
     }
 }

@@ -17,7 +17,6 @@ MonoBehaviour:
   aim: 0
   targetOffset: {x: 0, y: 3, z: 0}
   angleOffset: {x: 0, y: 0}
-  maxCorrectionAngle: 180
   skyMinimumElevation: 25
   elevatedGroupHeight: 6
   lightGroupRadius: 18
@@ -25,7 +24,7 @@ MonoBehaviour:
   followTarget: 1
   followResponse: 1.5
   maxFollowDegreesPerSecond: 12
-  snapAboveAngle: 180
+  snapAboveAngle: 70
   enterDuration: 1.35
   holdDuration: 2.4
   exitDuration: 0.8

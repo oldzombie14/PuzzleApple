@@ -16,7 +16,6 @@ MonoBehaviour:
   target: 1
   targetOffset: {x: 0, y: 3, z: 0}
   angleOffset: {x: 0, y: 0}
-  maxCorrectionAngle: 6
   skyMinimumElevation: 25
   enterDuration: 0.65
   holdDuration: 2.4

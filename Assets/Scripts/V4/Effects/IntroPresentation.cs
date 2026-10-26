@@ -5,6 +5,7 @@ using System.Linq;
 using PuzzleApple.V4.Cognition;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 namespace PuzzleApple.V4
 {
@@ -19,8 +20,21 @@ namespace PuzzleApple.V4
         IntroShotProfile activeShot;
         [Min(0)] public float feedbackLead=.3f;
         public bool Playing { get; private set; }
+        public bool CanInterrupt { get; private set; }
+        void Update()
+        {
+            if(Keyboard.current!=null && Keyboard.current.tabKey.wasPressedThisFrame) InterruptForEditing();
+        }
+        public bool InterruptForEditing()
+        {
+            if(!Playing || !CanInterrupt)return false;
+            restoreOpen=true;
+            Cancel();
+            return true;
+        }
         public int PlayCount { get; private set; }
         public float LetterboxProgress { get; private set; }
+        public float ActiveEnterDuration { get; private set; }
         RectTransform topBar,bottomBar;
         void Start()
         {
@@ -47,6 +61,7 @@ namespace PuzzleApple.V4
             topBar.gameObject.SetActive(progress>0);bottomBar.gameObject.SetActive(progress>0);
         }
         readonly Dictionary<int,string> previous=new Dictionary<int,string>();
+        readonly Dictionary<int,string> previousConflicts=new Dictionary<int,string>();
         readonly HashSet<CognitionSignal> activeSignals=new HashSet<CognitionSignal>();
         int revision;
         Coroutine routine;
@@ -64,7 +79,9 @@ namespace PuzzleApple.V4
             public int id;
             public string rule;
             public CognitionSignal[] signals;
-            public bool lightOn, doorOn, doorOff;
+            public bool lightOn, lightOff, doorOn, doorOff;
+            public float nightBlend, mistVisibility;
+            public bool wakingMotion;
         }
         public void Apply(CognitionChange kind, Action apply)
         {
@@ -72,15 +89,28 @@ namespace PuzzleApple.V4
             int token=++revision;
             var state=effects.board.State;
             var observations=new List<Observation>();
+            foreach(var group in state.Groups.Where(g=>g.Conflicted))
+                if(!previousConflicts.TryGetValue(group.Id,out var oldConflict)||oldConflict!=group.RuleId)
+                    if(feedback&&isActiveAndEnabled)StartCoroutine(ConflictFeedback(group.Id,group.RuleId));
+            previousConflicts.Clear();
+            foreach(var group in state.Groups.Where(g=>g.Conflicted))previousConflicts[group.Id]=group.RuleId;
             foreach(var group in state.Groups.Where(g=>g.Effective))
             {
                 if(previous.TryGetValue(group.Id,out var rule)&&rule==group.RuleId)continue;
                 var o=new Observation {id=group.Id,rule=group.RuleId,
                     signals=group.Signals.Where(s=>!activeSignals.Contains(s)).ToArray(),
                     lightOn=effects.lights.stateSource&&effects.lights.stateSource.IsOn,
+                    lightOff=effects.lights.stateSource&&effects.lights.stateSource.IsOff,
+                    nightBlend=effects.world.environment?effects.world.environment.NightBlend:0,
+                    mistVisibility=effects.door.appearance?effects.door.appearance.MistVisibility:0,
                     doorOn=effects.door.appearance&&effects.door.appearance.IsOn,
                     doorOff=effects.door.appearance&&effects.door.appearance.IsOff};
                 observations.Add(o);
+            }
+            if(!effects.lights.CanOperate&&observations.Any(o=>o.signals.Contains(CognitionSignal.LightOn)))
+            {
+                var waiting=state.Groups.FirstOrDefault(g=>g.Effective&&g.Signals.Contains(CognitionSignal.LightMove)&&previous.ContainsKey(g.Id));
+                if(waiting!=null)observations.Add(new Observation{id=waiting.Id,rule=waiting.RuleId,signals=new[]{CognitionSignal.LightMove},wakingMotion=true});
             }
             previous.Clear(); activeSignals.Clear();
             foreach(var group in state.Groups.Where(g=>g.Effective))
@@ -94,11 +124,31 @@ namespace PuzzleApple.V4
             if(observations.Count>0&&isActiveAndEnabled)StartCoroutine(Observe(observations,kind,token,apply));
             else apply();
         }
+        IEnumerator ConflictFeedback(int id,string rule)
+        {
+            // The board rebuilds the group UI after its state notification.
+            yield return null;
+            var group=effects.board.State.Find(id);
+            if(group!=null&&group.Conflicted&&group.RuleId==rule&&feedback)feedback.Play(id,false);
+        }
         IEnumerator Observe(List<Observation> observations,CognitionChange kind,int token,Action apply)
         {
             // Let the UI finish its commit; do not mutate the world during feedback.
             yield return new WaitForSecondsRealtime(.12f);
             if(token!=revision||effects.Suspended)yield break;
+            var waking=observations.FirstOrDefault(o=>o.wakingMotion);
+            if(waking!=null&&effects.lights.Lamps.Any(l=>l&&l.isActiveAndEnabled)&&kind!=CognitionChange.Split)
+            {
+                var on=observations.First(o=>o.signals.Contains(CognitionSignal.LightOn));
+                if(feedback)feedback.Play(on.id,true);
+                yield return new WaitForSecondsRealtime(feedback?feedback.duration+.1f:feedbackLead);
+                if(token!=revision||effects.Suspended)yield break;
+                var group=effects.board.State.Find(waking.id);
+                if(group==null||!group.Effective)yield break;
+                if(feedback)feedback.Play(waking.id,true);
+                routine=StartCoroutine(Show(waking,apply));
+                yield break;
+            }
             Observation shot=null;
             foreach(var o in observations)
             {
@@ -115,16 +165,17 @@ namespace PuzzleApple.V4
         }
         bool VisibleChange(Observation o,CognitionSignal signal)
         {
+            if(!effects.lights.CanOperate&&(signal==CognitionSignal.LightMove||signal==CognitionSignal.LightWorldMove||signal==CognitionSignal.LightDoorMove||signal==CognitionSignal.LightLightMove||signal==CognitionSignal.DoorLightMove||signal==CognitionSignal.WorldLightMove))return false;
             var door=effects.door.door;
             var lamps=effects.lights.Lamps.Where(l=>l&&l.isActiveAndEnabled).ToArray();
                 switch(signal)
                 {
-                    case CognitionSignal.LightOn: if(!o.lightOn)return true;break;
-                    case CognitionSignal.LightOff: if(o.lightOn)return true;break;
+                    case CognitionSignal.LightOn: if(!o.lightOn||o.nightBlend>0)return true;break;
+                    case CognitionSignal.LightOff: if(!o.lightOff||o.nightBlend<1)return true;break;
                     case CognitionSignal.DoorOn:
-                        if(door&&door.Revealed&&(o.doorOff||door.LandingCompleted&&!o.doorOn))return true;break;
+                        if(door&&door.Revealed&&(o.doorOff||effects.door.appearance.Brightness<1||door.LandingCompleted&&(!o.doorOn||o.mistVisibility<1)))return true;break;
                     case CognitionSignal.DoorOff:
-                        if(door&&door.Revealed&&!o.doorOff)return true;break;
+                        if(door&&door.Revealed&&(!o.doorOff||effects.door.appearance.Brightness>0||o.mistVisibility>0))return true;break;
                     case CognitionSignal.WorldMove:return true;
                     case CognitionSignal.LightMove: if(lamps.Length>0)return true;break;
                     case CognitionSignal.LightWorldMove:
@@ -136,11 +187,10 @@ namespace PuzzleApple.V4
                     case CognitionSignal.DoorMove: if(door&&door.Revealed)return true;break;
                     case CognitionSignal.DoorWorldMove: if(door&&door.Revealed&&!door.Landed)return true;break;
                     case CognitionSignal.DoorLightMove:
-                        if(door&&door.Revealed){var target=effects.lights.Nearest(door.transform.position);if(target&&Vector3.Distance(target.transform.position,door.transform.position)>effects.door.arrivalDistance)return true;}break;
+                        if(door&&door.Revealed){var target=effects.lights.Nearest(door.transform.position);if(effects.door.CanPursue(target))return true;}break;
                     case CognitionSignal.WorldLightMove:
-                        if(effects.world.ground&&lamps.Length>0&&effects.lights.LowestBottom()>effects.world.ground.bounds.max.y+.025f)return true;break;
                     case CognitionSignal.WorldDoorMove:
-                        if(door&&door.Revealed&&effects.world.ground&&door.transform.position.y>effects.world.ground.bounds.max.y+.025f)return true;break;
+                        return effects.world.CanRise(signal);
                 }
             return false;
         }
@@ -154,7 +204,8 @@ namespace PuzzleApple.V4
             float exit=activeShot.exitDuration;
             var panel=effects.board.Panel;
             restoreOpen=panel.IsOpen;restoreBlocked=panel.InputBlocked;restoreLocked=player.CinematicLocked;
-            savedLocalPosition=player.view.localPosition;savedLocalRotation=player.view.localRotation;
+            savedLocalPosition=player.view.localPosition;savedLocalRotation=LevelLocal(player.view.localRotation);
+            player.view.localRotation=savedLocalRotation;
             cameraView=player.view.GetComponent<Camera>();savedFov=cameraView.fieldOfView;
             player.CinematicLocked=true;panel.InputBlocked=true;
             effects.board.CancelDrag();
@@ -169,35 +220,42 @@ namespace PuzzleApple.V4
             TrackingTarget=activeShot.followTarget&&activeShot.aim!=IntroShotAim.PitchOnly&&
                 (activeShot.aim!=IntroShotAim.AdaptiveLightGround||focusElevatedGroup);
             Quaternion corrected=ShotRotation(rotation);
+            if(activeShot.heightBasedPitchSpeed && TryGroupPoint(out var speedCenter))
+            {
+                float height=effects.lights.ground?speedCenter.y-effects.lights.ground.bounds.max.y:speedCenter.y-player.view.position.y;
+                float speed=Mathf.Lerp(activeShot.lowPitchSpeed,activeShot.highPitchSpeed,Mathf.InverseLerp(activeShot.pitchSpeedHeightRange.x,activeShot.pitchSpeedHeightRange.y,height));
+                enter=Mathf.Max(.35f,Quaternion.Angle(rotation,corrected)/Mathf.Max(.1f,speed));
+            }
             bool snap=activeShot.snapAboveAngle<180&&Quaternion.Angle(rotation,corrected)>activeShot.snapAboveAngle;
+            ActiveEnterDuration=enter;
             if(snap){player.view.localRotation=corrected;rotation=corrected;}
             for(float t=0;t<enter;t+=Time.unscaledDeltaTime)
             {
                 if(TrackingTarget)corrected=ShotRotation(savedLocalRotation);
                 SetLetterbox(Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,enter)));
-                player.view.localRotation=Quaternion.Slerp(rotation,corrected,Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,enter)));
+                player.view.localRotation=BlendLevel(rotation,corrected,Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,enter)));
                 yield return null;
             }
             player.view.localRotation=corrected;
             SetLetterbox(1);
             yield return new WaitForEndOfFrame(); // Present a completed black border before the effect begins.
             apply();
+            CanInterrupt=true;
             for(float t=0;t<hold;t+=Time.unscaledDeltaTime)
             {
                 if(TrackingTarget)
                 {
                     var current=player.view.localRotation;
                     var desired=ShotRotation(savedLocalRotation);
-                    var smooth=Quaternion.Slerp(current,desired,1-Mathf.Exp(-activeShot.followResponse*Time.unscaledDeltaTime));
-                    player.view.localRotation=Quaternion.RotateTowards(current,smooth,activeShot.maxFollowDegreesPerSecond*Time.unscaledDeltaTime);
+                    var smooth=BlendLevel(current,desired,1-Mathf.Exp(-activeShot.followResponse*Time.unscaledDeltaTime));
+                    float step=activeShot.maxFollowDegreesPerSecond*Time.unscaledDeltaTime;
+                    player.view.localRotation=BlendLevel(current,smooth,Mathf.Min(1,step/Mathf.Max(.001f,Quaternion.Angle(current,smooth))));
                 }
                 yield return null;
             }
-            corrected=player.view.localRotation;
             for(float t=0;t<exit;t+=Time.unscaledDeltaTime)
             {
                 SetLetterbox(1-Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,exit)));
-                player.view.localRotation=Quaternion.Slerp(corrected,savedLocalRotation,Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,exit)));
                 yield return null;
             }
             Restore();
@@ -207,10 +265,13 @@ namespace PuzzleApple.V4
             Quaternion parent=player.view.parent.rotation;
             Vector3 forward=parent*original*Vector3.forward;
             float elevation=Mathf.Asin(Mathf.Clamp(forward.y,-1,1))*Mathf.Rad2Deg;
+            float framePitch=Mathf.Atan((2*activeShot.targetViewportY-1)*Mathf.Tan(cameraView.fieldOfView*.5f*Mathf.Deg2Rad))*Mathf.Rad2Deg;
+            if(activeShot.target==IntroShotTarget.Horizon)
+                return ElevationRotation(forward,-framePitch);
             if(activeShot.target==IntroShotTarget.Sky)
-                return ElevationRotation(forward,Mathf.Max(elevation,activeShot.skyMinimumElevation));
+                return ElevationRotation(forward,Mathf.Max(elevation,Mathf.Max(activeShot.skyMinimumElevation,-framePitch)));
             if(activeShot.aim==IntroShotAim.PitchOnly||activeShot.aim==IntroShotAim.AdaptiveLightGround&&!focusElevatedGroup)
-                return ElevationRotation(forward,elevation-Mathf.Clamp(activeShot.angleOffset.x,-activeShot.maxCorrectionAngle,activeShot.maxCorrectionAngle));
+                return ElevationRotation(forward,elevation-activeShot.angleOffset.x);
             Vector3 point;
             if(activeShot.target==IntroShotTarget.LightGroup)
             {if(!TryGroupPoint(out point))return original;}
@@ -221,11 +282,25 @@ namespace PuzzleApple.V4
             FocusPoint=point+activeShot.targetOffset;
             Vector3 direction=FocusPoint-player.view.position;
             if(direction.sqrMagnitude<.001f)return original;
-            float framePitch=Mathf.Atan((2*activeShot.targetViewportY-1)*Mathf.Tan(cameraView.fieldOfView*.5f*Mathf.Deg2Rad))*Mathf.Rad2Deg;
+            if(activeShot.aim==IntroShotAim.PitchToTarget)
+                return ElevationRotation(forward,Mathf.Atan2(direction.y,Vector3.ProjectOnPlane(direction,Vector3.up).magnitude)*Mathf.Rad2Deg-framePitch-activeShot.angleOffset.x);
             // A lower-third target needs the camera to look above the target, not below it.
             var desired=Quaternion.Inverse(parent)*Quaternion.LookRotation(direction)*
                 Quaternion.Euler((activeShot.aim==IntroShotAim.AdaptiveLightGround?0:activeShot.angleOffset.x)+framePitch,activeShot.angleOffset.y,0);
-            return Quaternion.RotateTowards(original,desired,activeShot.maxCorrectionAngle);
+            return LevelLocal(desired);
+        }
+        Quaternion LevelLocal(Quaternion local)
+        {
+            var world=player.view.parent.rotation*local;
+            return Quaternion.Inverse(player.view.parent.rotation)*Quaternion.LookRotation(world*Vector3.forward,Vector3.up);
+        }
+        Quaternion BlendLevel(Quaternion from,Quaternion to,float t)
+        {
+            var parent=player.view.parent.rotation;
+            var a=parent*from*Vector3.forward;var b=parent*to*Vector3.forward;
+            float yaw=Mathf.LerpAngle(Mathf.Atan2(a.x,a.z)*Mathf.Rad2Deg,Mathf.Atan2(b.x,b.z)*Mathf.Rad2Deg,t);
+            float pitch=Mathf.Lerp(-Mathf.Asin(Mathf.Clamp(a.y,-1,1))*Mathf.Rad2Deg,-Mathf.Asin(Mathf.Clamp(b.y,-1,1))*Mathf.Rad2Deg,t);
+            return Quaternion.Inverse(parent)*Quaternion.Euler(pitch,yaw,0);
         }
         Quaternion ElevationRotation(Vector3 forward,float degrees)
         {
@@ -262,9 +337,11 @@ namespace PuzzleApple.V4
         }
         void Restore()
         {
+            CanInterrupt=false;
             SetLetterbox(0);
             if(!Playing)return;
-            player.view.localPosition=savedLocalPosition;player.view.localRotation=savedLocalRotation;
+            player.view.localPosition=savedLocalPosition;
+            player.AdoptCurrentView();
             if(cameraView)cameraView.fieldOfView=savedFov;
             player.CinematicLocked=restoreLocked;
             effects.board.Panel.InputBlocked=restoreBlocked;

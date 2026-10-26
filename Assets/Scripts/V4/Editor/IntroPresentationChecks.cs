@@ -143,6 +143,7 @@ namespace PuzzleApple.V4.Editor
                 s.ReturnToLibrary(s.Groups.First().Id,0,true);yield return new WaitForSecondsRealtime(.4f);
                 Require(!flow.lamp.IsOn&&!flow.lightField.Moving,"split lets suppressed state take over without enabling movement");
                 Require(presentation.PlayCount==before&&!presentation.Playing,"split takeover never cuts");
+                yield return new WaitForSecondsRealtime(flow.lamp.transitionDuration);
                 board.Panel.SetOpen(false);yield return new WaitForSecondsRealtime(.1f);
                 Cursor.lockState=CursorLockMode.Locked;flow.player.view.LookAt(flow.door.transform.position+Vector3.up*3);
                 Physics.SyncTransforms();Require(flow.TryCollectDoor(),"aimed revealed door collection");
@@ -170,7 +171,7 @@ namespace PuzzleApple.V4.Editor
                 Require(presentation.LetterboxProgress>.99f&&!board.Panel.IsOpen&&board.Panel.InputBlocked&&flow.player.CinematicLocked,"cinematic input lock and panel hidden");
                 Require((flow.player.transform.position-position).sqrMagnitude<.0001f,"player frozen");
                 Require((flow.player.view.localPosition-eyePosition).sqrMagnitude<.000001f,"cinematic never translates camera");
-                Require(Quaternion.Angle(eyeRotation,flow.player.view.localRotation)<=presentation.shots.First(p=>p.rule.Id=="light.move").maxCorrectionAngle+.1f,"correction stays within shot limit");
+                Require(Mathf.Abs(Quaternion.Angle(eyeRotation,flow.player.view.localRotation)-5f)<.1f,"light move applies its configured five-degree pitch");
                 ScreenCapture.CaptureScreenshot("Temp/V4Presentation/cutscene.png");
                 var lightShot=presentation.shots.First(p=>p.rule.Id=="light.move");
                 yield return new WaitForSecondsRealtime(lightShot.holdDuration+lightShot.exitDuration+.3f);
@@ -184,7 +185,7 @@ namespace PuzzleApple.V4.Editor
                 flow.door.Reveal(flow.player.view);s.TryAcquireWord("check.door",board.Catalog.Word("door"));
                 flow.door.GetComponent<Rigidbody>().position=new Vector3(0,flow.door.groundHeight,10);
                 flow.door.transform.position=new Vector3(0,flow.door.groundHeight,10);Physics.SyncTransforms();
-                Sentence(s,"door world move");yield return new WaitForSecondsRealtime(.3f);
+                Sentence(s,"door ground move");yield return new WaitForSecondsRealtime(.3f);
                 Require(presentation.PlayCount==before,"already grounded has no cinematic");
                 s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
                 int visualRules=board.Catalog.Rules.Count(r=>r.Effects.Any()&&!r.Effects.Contains(CognitionSignal.WorldOff));
@@ -203,22 +204,22 @@ namespace PuzzleApple.V4.Editor
                 Require(!presentation.Playing&&!s.Groups.Single().Recognized,"negative state-modified move is invalid");
                 s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
                 Sentence(s,"positive light");yield return new WaitForSecondsRealtime(.3f);
-                Sentence(s,"light world move");yield return new WaitForSecondsRealtime(.25f);
-                Require(presentation.Playing&&presentation.LastShotRule=="light.world.move","separate directed motion uses its own shot");
+                Sentence(s,"light ground move");yield return new WaitForSecondsRealtime(.25f);
+                Require(presentation.Playing&&presentation.LastShotRule=="light.ground.move","separate directed motion uses its own shot");
                 yield return AwaitShot(presentation);
                 Require(flow.lamp.IsOn&&flow.effects.lights.Motion==CognitionSignal.LightWorldMove,"separate state and directed motion coexist");
                 s.ClearWorkspace();yield return new WaitForSecondsRealtime(.3f);
-                Sentence(s,"world move");yield return new WaitForSecondsRealtime(.25f);
-                Require(presentation.LastShotRule=="world.move","world move has its own shot");
+                Sentence(s,"ground move");yield return new WaitForSecondsRealtime(.25f);
+                Require(presentation.LastShotRule=="ground.move","ground move has its own shot");
                 yield return AwaitShot(presentation);
                 var raised=flow.effects.lights.Nearest(flow.player.transform.position);
                 var raisedPosition=raised.transform.position+Vector3.up*2;
                 raised.GetComponent<Rigidbody>().position=raisedPosition;raised.transform.position=raisedPosition;Physics.SyncTransforms();
                 var movingWorld=s.Groups.Single();var lightWord=s.Spawn(board.Catalog.Word("light"));
                 s.Join(lightWord.Id,movingWorld.Id,true);yield return new WaitForSecondsRealtime(.25f);
-                Require(presentation.Playing&&presentation.LastShotRule=="light.world.move","prepending light switches to light world move shot");
+                Require(presentation.Playing&&presentation.LastShotRule=="light.ground.move","prepending light switches to light ground move shot");
                 yield return AwaitShot(presentation);
-                Result="PASS: entry, snapshots, repeated interaction, pointer joins, complete-sentence profiles, prepend light to world move, feedback, split takeover, freeze and restore";
+                Result="PASS: entry, snapshots, repeated interaction, pointer joins, complete-sentence profiles, prepend light to ground move, feedback, split takeover, freeze and restore";
             }
             finally
             {

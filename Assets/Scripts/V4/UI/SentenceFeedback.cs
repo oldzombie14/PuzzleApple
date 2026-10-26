@@ -80,7 +80,7 @@ namespace PuzzleApple.V4
             for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
             {
                 var group=board.State.Find(groupId);
-                if(!rect||group==null||!group.Effective)break;
+                if(!rect||group==null||!group.Recognized||(strong&&!group.Effective))break;
                 Vector2 screen=RectTransformUtility.WorldToScreenPoint(null,rect.TransformPoint(rect.rect.center));
                 root.transform.localPosition=new Vector3(screen.x-Screen.width*.5f,screen.y-Screen.height*.5f,5);
                 for(int i=0;i<lines.Length;i++)

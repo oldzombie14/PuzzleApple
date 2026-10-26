@@ -62,11 +62,11 @@ namespace PuzzleApple.V4.Editor
                 Require(Vector3.Distance(doorBefore,door.transform.position)>.1f,"off door still moves");
                 Require(door.GetComponentsInChildren<Light>().All(l=>!l.enabled),"off disables door lights");
                 s.ClearWorkspace(); yield return new WaitForSeconds(.3f);
-                Require(!appearance.IsOff && !appearance.IsOn && !appearance.PassageEnabled,"default door state restored");
-                Require(fish.Select((f,i)=>Vector3.Distance(f.transform.localPosition,poses[i])>.0001f).Any(x=>x),"fish resume without time jump");
+                Require(appearance.IsOff && !appearance.IsOn && !appearance.PassageEnabled,"door off persists after split");
+                Require(fish.Select((f,i)=>Vector3.Distance(f.transform.localPosition,poses[i])<.0001f).All(x=>x),"fish remain paused after split");
                 // A nearby, unobstructed actual descent makes this test independent of random lamp locations.
                 door.GetComponent<Rigidbody>().position=new Vector3(20,4,12); door.transform.position=new Vector3(20,4,12);
-                Sentence(s,"door world move");
+                Sentence(s,"door ground move");
                 yield return new WaitForSeconds(4);
                 Require(door.LandingCompleted,"directed door landing");
                 var mist=door.GetComponentInChildren<ThresholdMist>();
@@ -78,7 +78,7 @@ namespace PuzzleApple.V4.Editor
                 s.ClearWorkspace();
                 lamp=effects.lights.Nearest(flow.player.transform.position);
                 lamp.GetComponent<Rigidbody>().position=new Vector3(lamp.transform.position.x,3,lamp.transform.position.z);
-                Sentence(s,"light world move"); yield return new WaitForSeconds(2);
+                Sentence(s,"light ground move"); yield return new WaitForSeconds(2);
                 Require(lamp.GetComponent<Collider>().bounds.min.y<.12f && lamp.GetComponent<Collider>().bounds.min.y>=-.02f,"lights descend without penetrating ground");
                 s.ClearWorkspace(); Sentence(s,"light door move");
                 lamp=effects.lights.Nearest(flow.player.transform.position); before=lamp.transform.position;
@@ -93,7 +93,7 @@ namespace PuzzleApple.V4.Editor
                 s.ClearWorkspace(); field.enabled=false;
                 foreach(var l in effects.lights.Lamps) { var p=l.transform.position;p.y+=3;l.GetComponent<Rigidbody>().position=p;l.transform.position=p; }
                 Physics.SyncTransforms(); float groundBefore=field.ground.bounds.max.y;
-                Sentence(s,"world light move"); yield return new WaitForSeconds(2);
+                Sentence(s,"ground light move"); yield return new WaitForSeconds(2);
                 Require(field.ground.bounds.max.y>groundBefore+.1f,"world rises with player");
                 float stopped=field.ground.bounds.max.y; yield return new WaitForSeconds(.5f);
                 Require(Mathf.Abs(field.ground.bounds.max.y-stopped)<.05f,"world waits at lowest lamp");

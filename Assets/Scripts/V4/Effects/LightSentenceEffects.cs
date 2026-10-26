@@ -13,10 +13,12 @@ namespace PuzzleApple.V4
         public Collider ground;
         [Min(1)] public float influenceRadius = 50;
         [Min(.1f)] public float directedSpeed = 2.5f;
+        [Min(.1f)] public float clusterSpeed = 1.2f;
         public Vector2 gatheringRadius = new Vector2(2.5f, 5);
         [Min(.1f)] public float spacing = 1.1f;
         [Range(.1f, .95f)] public float targetSwitchRatio = .8f;
         public CognitionSignal Motion { get; private set; }
+        public bool CanOperate => !stateSource || !stateSource.IsOff;
         public IReadOnlyList<OpeningLight> Lamps => lamps;
         readonly List<OpeningLight> lamps = new List<OpeningLight>();
         readonly Dictionary<OpeningLight, OpeningLight> neighbours = new Dictionary<OpeningLight, OpeningLight>();
@@ -30,8 +32,16 @@ namespace PuzzleApple.V4
             if (current != lightState)
             {
                 lightState = current;
-                if (stateSource) stateSource.SetOn(current != "off");
-                foreach (var lamp in lamps) if (lamp) lamp.SetOn(current != "off");
+                if (stateSource)
+                {
+                    if (current == "default") stateSource.HoldCurrentState();
+                    else stateSource.SetOn(current == "on");
+                }
+                foreach (var lamp in lamps) if (lamp)
+                {
+                    if (current == "default") lamp.HoldCurrentState();
+                    else lamp.SetOn(current == "on");
+                }
             }
             var motion = state.HasEffect(CognitionSignal.LightMove) ? CognitionSignal.LightMove :
                 state.HasEffect(CognitionSignal.LightWorldMove) ? CognitionSignal.LightWorldMove :
@@ -39,11 +49,12 @@ namespace PuzzleApple.V4
                 state.HasEffect(CognitionSignal.LightLightMove) ? CognitionSignal.LightLightMove : CognitionSignal.Empty;
             if (motion != Motion) neighbours.Clear();
             Motion = motion;
-            if (field) field.SetMoving(Motion == CognitionSignal.LightMove);
+            if (field) field.SetMoving(CanOperate && Motion == CognitionSignal.LightMove);
             RefreshLamps();
         }
         void Update()
         {
+            if(field)field.SetMoving(CanOperate&&Motion==CognitionSignal.LightMove);
             if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + .25f;
             RefreshLamps();
@@ -57,7 +68,7 @@ namespace PuzzleApple.V4
             foreach (var lamp in lamps)
             {
                 var motion = lamp.GetComponent<LightMotion>();
-                if (motion) motion.SetMoving(Motion == CognitionSignal.LightMove);
+                if (motion) motion.SetMoving(CanOperate && Motion == CognitionSignal.LightMove);
                 if (!colliders.ContainsKey(lamp)) colliders.Add(lamp, lamp.GetComponentsInChildren<Collider>());
             }
             var stale = new List<OpeningLight>();
@@ -79,10 +90,20 @@ namespace PuzzleApple.V4
                 distance >= (previous.transform.position-position).sqrMagnitude * targetSwitchRatio * targetSwitchRatio) return previous;
             return best;
         }
-        public float LowestBottom()
+        public float LowestBottom(bool visibleOnly=false)
         {
             float height = float.PositiveInfinity;
-            foreach (var lamp in lamps) if (InRange(lamp)) height = Mathf.Min(height, lamp.GetComponent<Collider>().bounds.min.y);
+            var camera=visibleOnly&&observer?observer.GetComponentInChildren<Camera>():null;
+            foreach (var lamp in lamps) if (InRange(lamp))
+            {
+                var bounds=lamp.GetComponent<Collider>().bounds;
+                if(visibleOnly && camera)
+                {
+                    var point=camera.WorldToViewportPoint(bounds.center);
+                    if(point.z<=0||point.x<0||point.x>1||point.y<0||point.y>1)continue;
+                }
+                height = Mathf.Min(height, bounds.min.y);
+            }
             return height;
         }
         Vector3 GatherOffset(OpeningLight lamp)
@@ -96,7 +117,7 @@ namespace PuzzleApple.V4
         }
         void FixedUpdate()
         {
-            if (Motion == CognitionSignal.Empty || Motion == CognitionSignal.LightMove) return;
+            if (!CanOperate || Motion == CognitionSignal.Empty || Motion == CognitionSignal.LightMove) return;
             foreach (var lamp in lamps)
             {
                 if (!InRange(lamp)) continue;
@@ -142,7 +163,8 @@ namespace PuzzleApple.V4
                     }
                     direction = (direction + separation * 2).normalized;
                 }
-                DirectedMotion.Move(body, colliders[lamp], direction * Mathf.Min(directedSpeed * Time.fixedDeltaTime, distance-stopDistance), true);
+                float speed=Motion==CognitionSignal.LightLightMove?clusterSpeed:directedSpeed;
+                DirectedMotion.Move(body, colliders[lamp], direction * Mathf.Min(speed * Time.fixedDeltaTime, distance-stopDistance), true);
             }
         }
     }

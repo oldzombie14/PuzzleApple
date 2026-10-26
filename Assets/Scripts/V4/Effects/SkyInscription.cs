@@ -1,6 +1,9 @@
 using PuzzleApple.V4.Cognition;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
+using UnityEngine.EventSystems;
+using System.Collections.Generic;
 
 namespace PuzzleApple.V4
 {
@@ -10,8 +13,7 @@ namespace PuzzleApple.V4
         public OpeningFlow opening;
         public NightEnvironment environment;
         public Material inkMaterial;
-        [Header("显现：进入世界后，路程或时间任一满足")]
-        [Min(0)] public float revealDistance=30, revealSeconds=20;
+        [Header("入场时在玩家背后显现")]
         [Min(.1f)] public float fadeDuration=1.6f;
         [Header("固定世界方位，保持视距与大小")]
         [Min(10)] public float viewingDistance=90;
@@ -35,9 +37,8 @@ namespace PuzzleApple.V4
         RectTransform root;
         CanvasGroup group;
         Row[] rows;
-        bool began;
         bool nightRequested;
-        float initialDistance;
+        readonly HashSet<CognitionSignal> appliedSignals=new HashSet<CognitionSignal>();
         sealed class Row
         {
             public CognitionSignal signal;
@@ -61,8 +62,22 @@ namespace PuzzleApple.V4
         int DesiredStage()=>Progress.Finished?2:Progress.ChecklistComplete?1:0;
         public void RecordApplied(CognitionState state)
         {
+            var current=new HashSet<CognitionSignal>();
             foreach(var sentence in state.Groups)
-                if(sentence.Effective)foreach(var signal in sentence.Signals)Progress.Record(signal);
+                if(sentence.Effective)foreach(var signal in sentence.Signals)current.Add(signal);
+            foreach(var signal in current)if(!appliedSignals.Contains(signal))Progress.Record(signal);
+            appliedSignals.Clear();
+            appliedSignals.UnionWith(current);
+        }
+        void Update()=>TryClearFromShortcut(Keyboard.current!=null&&Keyboard.current.xKey.wasPressedThisFrame);
+        public bool TryClearFromShortcut(bool pressed)
+        {
+            if(!pressed)return false;
+            var selected=EventSystem.current?EventSystem.current.currentSelectedGameObject:null;
+            var input=selected?selected.GetComponentInParent<InputField>():null;
+            if(input&&input.isFocused)return false;
+            ClearProgress();
+            return true;
         }
         public void Record(CognitionSignal signal)=>Progress.Record(signal);
         // NightEnvironment asks before changing sky/fog/light. Fade the inscription first.
@@ -76,13 +91,12 @@ namespace PuzzleApple.V4
             if(!root||!opening)return;
             bool active=opening.Ready&&!opening.effects.Suspended;
             if(!active){group.alpha=0;return;}
-            if(!began){began=true;initialDistance=opening.player.WalkedDistance;}
-            if(!opening.effects.presentation||!opening.effects.presentation.Playing)Elapsed+=Time.unscaledDeltaTime;
-            if(!Revealed&&(Elapsed>=revealSeconds||opening.player.WalkedDistance-initialDistance>=revealDistance))
+            Elapsed+=Time.unscaledDeltaTime;
+            if(!Revealed)
             {
                 Revealed=true;
-                Bearing=Vector3.ProjectOnPlane(opening.player.view.forward,Vector3.up).normalized;
-                if(Bearing.sqrMagnitude<.1f)Bearing=Vector3.ProjectOnPlane(opening.player.transform.forward,Vector3.up).normalized;
+                Bearing=-Vector3.ProjectOnPlane(opening.player.view.forward,Vector3.up).normalized;
+                if(Bearing.sqrMagnitude<.1f)Bearing=-Vector3.ProjectOnPlane(opening.player.transform.forward,Vector3.up).normalized;
             }
             int desired=DesiredStage();
             float target=Revealed&&!nightRequested&&DisplayStage!=2&&desired==DisplayStage?opacity:0;
@@ -110,7 +124,7 @@ namespace PuzzleApple.V4
             rows=DisplayStage==0?new[]{
                 CreateRow(CognitionSignal.WorldOff,new[]{"negative","world"},110),
                 CreateRow(CognitionSignal.LightMove,new[]{"light","move"},0),
-                CreateRow(CognitionSignal.LightWorldMove,new[]{"light","world","move"},-110)}:
+                CreateRow(CognitionSignal.LightWorldMove,new[]{"light","ground","move"},-110)}:
                 new[]{CreateRow(CognitionSignal.LightOff,new[]{"negative","light"},0)};
         }
         Row CreateRow(CognitionSignal signal,string[] words,float y)
@@ -135,7 +149,12 @@ namespace PuzzleApple.V4
             var image=go.GetComponent<Image>();image.raycastTarget=false;image.material=inkMaterial;return image;
         }
         [ContextMenu("清除本地天空提示完成记录")]
-        public void ClearProgress(){Progress.Clear();}
+        public void ClearProgress()
+        {
+            Progress.Clear();
+            DisplayStage=0;
+            if(root)BuildRows();
+        }
         void OnDisable(){if(group)group.alpha=0;}
     }
 }

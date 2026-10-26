@@ -26,6 +26,13 @@ namespace PuzzleApple.V4
         [Min(.1f)] public float exitColorResponse=6;
         bool entering;
         bool entered;
+        public bool Exiting { get; private set; }
+        public float ExitProgress { get; private set; }
+        public bool ConfirmingExit => exitDialog;
+        GameObject exitDialog;
+        Coroutine dialogFade;
+        bool savedLocked, savedBlocked, savedCursorVisible;
+        CursorLockMode savedCursorLock;
 
         void Awake()
         {
@@ -38,6 +45,8 @@ namespace PuzzleApple.V4
         void LateUpdate()
         {
             if(!entered||!exitButton||!player)return;
+            bool showExit=opening&&opening.board&&opening.board.Panel.IsOpen;
+            if(exitButton.gameObject.activeSelf!=showExit)exitButton.gameObject.SetActive(showExit);
             float night=environment?environment.NightBlend:0;
             Color hue=environment?environment.nightFogColor:new Color(.18f,.22f,.30f);
             Color normal=Color.Lerp(dayExitColor,Color.Lerp(hue,Color.white,nightExitLift),night);
@@ -67,7 +76,7 @@ namespace PuzzleApple.V4
 
         public void EnterWorld()
         {
-            if (entering) return;
+            if (entering || Exiting || ConfirmingExit) return;
             entering = true;
             Cursor.visible = false;
             var raycaster = GetComponent<GraphicRaycaster>();
@@ -117,12 +126,115 @@ namespace PuzzleApple.V4
         public void ExitGame()
         {
             if (entering && !entered) return;
-            if(entered&&opening&&opening.effects&&opening.effects.inscriptions)
-                opening.effects.inscriptions.Record(Cognition.CognitionSignal.WorldOff);
+            if(entered&&(!opening||!opening.board||!opening.board.Panel.IsOpen))return;
             QuitApplication();
         }
 
         public static void QuitApplication()
+        {
+            var entry=FindFirstObjectByType<WorldEntry>();
+            if(entry)entry.ShowExitConfirmation();
+        }
+        void ShowExitConfirmation()
+        {
+            if(Exiting||ConfirmingExit)return;
+            if(opening&&opening.effects&&opening.effects.presentation)opening.effects.presentation.Cancel();
+            savedLocked=player&&player.CinematicLocked;
+            savedBlocked=opening&&opening.board&&opening.board.Panel.InputBlocked;
+            savedCursorLock=Cursor.lockState;savedCursorVisible=Cursor.visible;
+            if(player)player.CinematicLocked=true;
+            if(opening&&opening.board){opening.board.CancelDrag();opening.board.Panel.InputBlocked=true;}
+            Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
+            if(entered&&opening&&opening.effects&&opening.effects.inscriptions)
+                opening.effects.inscriptions.Record(Cognition.CognitionSignal.WorldOff);
+
+            exitDialog=new GameObject("Exit confirmation",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler),typeof(GraphicRaycaster));
+            exitDialog.transform.SetParent(transform,false);
+            var canvas=exitDialog.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=31000;
+            var scaler=exitDialog.GetComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution=new Vector2(1920,1080);scaler.matchWidthOrHeight=.5f;
+            var blocker=DialogImage("Input blocker",exitDialog.transform,Color.clear);Stretch(blocker.rectTransform,0);
+            var fill=DialogImage("Black panel",blocker.transform,Color.black);
+            fill.rectTransform.sizeDelta=new Vector2(520,260);
+            DialogButton(fill.transform,"ON","positive",-100,ConfirmExit);
+            DialogButton(fill.transform,"OFF","negative",100,CancelExit);
+            var ink=fill.gameObject.AddComponent<CanvasGroup>();ink.alpha=0;ink.interactable=false;
+            dialogFade=StartCoroutine(FadeInDialog(ink));
+            if(UnityEngine.EventSystems.EventSystem.current)UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+        }
+        IEnumerator FadeInDialog(CanvasGroup ink)
+        {
+            const float duration=.25f;
+            for(float elapsed=0;elapsed<duration;elapsed+=Time.unscaledDeltaTime)
+            {
+                ink.alpha=Mathf.SmoothStep(0,1,elapsed/duration);
+                yield return null;
+            }
+            ink.alpha=1;ink.interactable=true;dialogFade=null;
+        }
+        static Image DialogImage(string name,Transform parent,Color color)
+        {
+            var obj=new GameObject(name,typeof(RectTransform),typeof(Image));obj.transform.SetParent(parent,false);
+            var image=obj.GetComponent<Image>();image.color=color;return image;
+        }
+        static void Stretch(RectTransform rect,float inset)
+        {
+            rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;
+            rect.offsetMin=Vector2.one*inset;rect.offsetMax=-Vector2.one*inset;
+        }
+        void DialogButton(Transform parent,string name,string word,float x,UnityEngine.Events.UnityAction action)
+        {
+            var hit=DialogImage(name,parent,Color.clear);hit.rectTransform.sizeDelta=new Vector2(160,140);
+            hit.rectTransform.anchoredPosition=new Vector2(x,0);
+            var symbol=DialogImage("Symbol",hit.transform,Color.white);symbol.rectTransform.sizeDelta=new Vector2(64,64);
+            symbol.sprite=opening.board.Catalog.Word(word).Symbol;symbol.preserveAspect=true;symbol.raycastTarget=false;
+            var button=hit.gameObject.AddComponent<Button>();button.targetGraphic=symbol;
+            var colors=button.colors;colors.highlightedColor=new Color(.65f,.65f,.65f);colors.pressedColor=new Color(.45f,.45f,.45f);button.colors=colors;
+            button.navigation=new Navigation{mode=Navigation.Mode.None};button.onClick.AddListener(action);
+        }
+        public void CancelExit()
+        {
+            if(!ConfirmingExit||Exiting)return;
+            DismissExitDialog();
+            if(player){player.CinematicLocked=savedLocked;player.SuppressInteractionThisFrame();}
+            if(opening&&opening.board)opening.board.Panel.InputBlocked=savedBlocked;
+            Cursor.lockState=savedCursorLock;Cursor.visible=savedCursorVisible;
+        }
+        public void ConfirmExit()
+        {
+            if(!ConfirmingExit||Exiting)return;
+            DismissExitDialog();StartCoroutine(FadeOutAndQuit(0));
+        }
+        void DismissExitDialog()
+        {
+            if(dialogFade!=null){StopCoroutine(dialogFade);dialogFade=null;}
+            exitDialog.SetActive(false);Destroy(exitDialog);exitDialog=null;
+            if(UnityEngine.EventSystems.EventSystem.current)UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+        }
+        IEnumerator FadeOutAndQuit(float delay)
+        {
+            Exiting=true;
+            if(opening&&opening.effects&&opening.effects.presentation)opening.effects.presentation.Cancel();
+            if(player)player.CinematicLocked=true;
+            if(opening&&opening.board)opening.board.Panel.InputBlocked=true;
+            if(enterButton)enterButton.interactable=false;
+            if(exitButton)exitButton.interactable=false;
+            if(delay>0)yield return new WaitForSecondsRealtime(delay);
+            var screen=new GameObject("Exit fade",typeof(RectTransform),typeof(Canvas),typeof(GraphicRaycaster));
+            var canvas=screen.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=32000;
+            var cover=new GameObject("Black",typeof(RectTransform),typeof(Image));cover.transform.SetParent(screen.transform,false);
+            var rect=cover.GetComponent<RectTransform>();rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;
+            var image=cover.GetComponent<Image>();image.color=Color.clear;
+            for(float t=0;t<blackFadeDuration;t+=Time.unscaledDeltaTime)
+            {
+                ExitProgress=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,blackFadeDuration));image.color=new Color(0,0,0,ExitProgress);
+                yield return null;
+            }
+            ExitProgress=1;image.color=Color.black;
+            yield return new WaitForEndOfFrame();
+            CloseApplication();
+        }
+        static void CloseApplication()
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;

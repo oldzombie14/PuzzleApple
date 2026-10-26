@@ -13,12 +13,18 @@ MonoBehaviour:
   m_Name: LightOn
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.IntroShotProfile
   rule: {fileID: 11400000, guid: 6ec45eee34fac2643b16bf14be3e25b0, type: 2}
-  target: 0
+  target: 4
   targetOffset: {x: 0, y: 0, z: 0}
   angleOffset: {x: 0, y: 0}
-  maxCorrectionAngle: 6
   skyMinimumElevation: 25
-  enterDuration: 0.65
+  enterDuration: 1.2
   holdDuration: 2.4
   exitDuration: 0.65
   letterboxHeight: 0.09
+  aim: 1
+  heightBasedPitchSpeed: 0
+  lowPitchSpeed: 12
+  highPitchSpeed: 20
+  pitchSpeedHeightRange: {x: 6, y: 18}
+  followTarget: 0
+  targetViewportY: 0.3333333

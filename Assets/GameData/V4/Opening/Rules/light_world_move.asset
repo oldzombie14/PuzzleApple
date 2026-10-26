@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3d141441d4bc4ec483e8974eac89232b, type: 3}
-  m_Name: light_world_move
+  m_Name: light_ground_move
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.CognitionRule
-  id: light.world.move
+  id: light.ground.move
   words:
   - {fileID: 11400000, guid: 5d66d8e5aa810fd4f8003f47711ddb24, type: 2}
-  - {fileID: 11400000, guid: 19f7839e5f80fca4fb50bf5fe80efde7, type: 2}
+  - {fileID: 11400000, guid: 9c5a71f3c5c6445cae785d65ea982159, type: 2}
   - {fileID: 11400000, guid: c66880d349871894792dbcd4fd74545e, type: 2}
   effect: 10
   additionalEffects: 

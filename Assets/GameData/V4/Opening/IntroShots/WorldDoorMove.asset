@@ -13,12 +13,14 @@ MonoBehaviour:
   m_Name: WorldDoorMove
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.IntroShotProfile
   rule: {fileID: 11400000, guid: 99706c03ca7418b408bf79fb9d13f6fd, type: 2}
-  target: 1
+  target: 4
   targetOffset: {x: 0, y: 3, z: 0}
   angleOffset: {x: 0, y: 0}
-  maxCorrectionAngle: 6
   skyMinimumElevation: 25
-  enterDuration: 0.65
+  enterDuration: 1.2
   holdDuration: 2.4
   exitDuration: 0.65
   letterboxHeight: 0.09
+  aim: 1
+  targetViewportY: 0.3333333
+  followTarget: 0

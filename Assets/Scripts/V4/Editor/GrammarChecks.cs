@@ -19,7 +19,9 @@ namespace PuzzleApple.V4.Editor
                 Require(isolated.Groups.Single().Effective,"Registered rule unrecognized: "+rule.Id);
                 foreach(var signal in rule.Effects) Require(isolated.HasEffect(signal),"Missing composite signal: "+rule.Id);
             }
-            foreach(var sentence in new[]{"door door move","world world move","door move world","light positive","positive negative light","negative negative light","light move move","light door"})
+            Require(catalog.Words.Count==7 && catalog.Word("ground").Symbol, "Seven words include Ground symbol");
+            Require(catalog.Rules.Where(r=>r.Words.Any(w=>w.Id=="world")).All(r=>r.Words.Count==2 && (r.Words[0].Id=="positive"||r.Words[0].Id=="negative")), "World is only valid with positive/negative");
+            foreach(var sentence in new[]{"world move","light world move","door world move","world light move","world door move","positive ground","negative ground","door door move","ground ground move","door move ground","light positive","positive negative light","negative negative light","light move move","light door"})
             {
                 var invalid=new CognitionState(catalog); invalid.TryAcquireSentence("test",sentence);
                 Require(!invalid.Groups.Single().Recognized,"Unexpected valid sentence: "+sentence);
@@ -33,14 +35,14 @@ namespace PuzzleApple.V4.Editor
                     Require(!invalid.Groups.Single().Recognized,"State-modified motion must be invalid");
                 }
             var s=new CognitionState(catalog);
-            s.TryAcquireSentence("first","positive light");s.TryAcquireSentence("second","light world move");
+            s.TryAcquireSentence("first","positive light");s.TryAcquireSentence("second","light ground move");
             Require(s.Groups.All(g=>g.Effective)&&s.HasEffect(CognitionSignal.LightOn)&&s.HasEffect(CognitionSignal.LightWorldMove),"Separate state and directed motion coexist");
             s.TryAcquireSentence("third","negative light");Require(s.Groups.Last().Conflicted,"Opposite state remains suppressed");
             s.ReturnToLibrary(s.Groups[0].Id,0,true);
             Require(s.HasEffect(CognitionSignal.LightOff)&&s.HasEffect(CognitionSignal.LightWorldMove),"Removing state winner leaves movement intact");
             s.ClearWorkspace(); s.TryAcquireSentence("fourth","light move"); s.TryAcquireSentence("fifth","light move");
             Require(s.Groups.All(g=>g.Effective),"Identical motion claims should coexist");
-            s.TryAcquireSentence("sixth","light world move"); Require(s.Groups.Last().Conflicted,"Motion priority missing");
+            s.TryAcquireSentence("sixth","light ground move"); Require(s.Groups.Last().Conflicted,"Motion priority missing");
             s.ReturnToLibrary(s.Groups[0].Id,0,true); Require(s.HasEffect(CognitionSignal.LightMove),"Duplicate removal prematurely disables effect");
             s.ClearWorkspace(); s.TryAcquireSentence("seventh","positive world"); s.TryAcquireSentence("eighth","negative world");
             Require(s.HasEffect(CognitionSignal.WorldOff),"World on must not suppress exit");

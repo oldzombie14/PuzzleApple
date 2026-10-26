@@ -8582,7 +8582,7 @@ MonoBehaviour:
   glow: {fileID: 0}
   appearanceSource: {fileID: 0}
   offColor: {r: 0, g: 0, b: 0, a: 1}
-  transitionDuration: 1.2
+  transitionDuration: 2.4
   stateChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -9153,8 +9153,7 @@ MonoBehaviour:
   nightSky: {fileID: 2100000, guid: 250783d9836f71d44b448886cee55f0d, type: 2}
   previewNight: 0
   movingCloudSpeed: 12
-  movingStarDegreesPerSecond: 3
-  transitionDuration: 1.2
+  transitionDuration: 2
   nightZenith: {r: 0.012, g: 0.022, b: 0.055, a: 1}
   nightHorizon: {r: 0.06, g: 0.09, b: 0.15, a: 1}
   starDensity: 0.0005
@@ -10459,8 +10458,6 @@ MonoBehaviour:
   inkMaterial: {fileID: 2100000, guid: 377275d89e40d4d458b35f4d8a5dba52, type: 2}
   opening: {fileID: 2124154390}
   environment: {fileID: 1911569973}
-  revealDistance: 30
-  revealSeconds: 20
   fadeDuration: 1.6
   viewingDistance: 90
   elevation: 14

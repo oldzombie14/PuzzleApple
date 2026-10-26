@@ -16,7 +16,6 @@ namespace PuzzleApple.V4
         public SkyInscription inscriptions;
         public bool WorldMoving { get; set; }
         [Min(1)] public float movingCloudSpeed = 12;
-        public float movingStarDegreesPerSecond = 3;
         Quaternion starRotation = Quaternion.identity;
         [Min(0)] public float transitionDuration = 1.2f;
         [Header("夜晚天空")]
@@ -58,21 +57,33 @@ namespace PuzzleApple.V4
         void LateUpdate()
         {
             if (!sun || !daySky || !nightSky || !clouds) return;
-            bool night = Application.isPlaying ? lamp && !lamp.IsOn : previewNight;
+            bool night = Application.isPlaying ? lamp && !lamp.TargetOn : previewNight;
             bool ready=!Application.isPlaying||!inscriptions||inscriptions.PrepareNightTransition(night);
-            if(ready)
+            if(ready && (!Application.isPlaying || lamp && lamp.TransitionEnabled))
                 blend = Application.isPlaying && transitionDuration > 0
                     ? Mathf.MoveTowards(blend, night ? 1 : 0, Time.unscaledDeltaTime / transitionDuration) : night ? 1 : 0;
             Apply(blend);
             clouds.cloudsEnabled = blend < .98f;
             clouds.FollowFacing = WorldMoving;
-            clouds.speedMultiplier = WorldMoving && !night ? movingCloudSpeed : 1;
+            clouds.speedMultiplier = WorldMoving ? movingCloudSpeed : 1;
             if (Application.isPlaying && WorldMoving && night)
             {
                 var axis = Vector3.Cross(Vector3.up, clouds.DriftDirection);
-                starRotation = Quaternion.AngleAxis(movingStarDegreesPerSecond * Time.deltaTime, axis) * starRotation;
+                starRotation = Quaternion.AngleAxis(MatchedStarSpeed() * Time.deltaTime, axis) * starRotation;
             }
             skyInstance.SetMatrix("_StarRotation", Matrix4x4.Rotate(Quaternion.Inverse(starRotation)));
+        }
+        public float MatchedStarSpeed()
+        {
+            if(!clouds||!clouds.cloudPlane||!clouds.player)return 0;
+            var camera=clouds.player.GetComponentInChildren<Camera>();if(!camera)return 0;
+            var ray=camera.transform.forward;
+            float height=Mathf.Abs(clouds.cloudPlane.transform.position.y-camera.transform.position.y);
+            float distance=Mathf.Max(1,height)/Mathf.Max(.001f,Mathf.Abs(ray.y));
+            var axis=Vector3.Cross(Vector3.up,clouds.DriftDirection).normalized;
+            float projectedStar=Vector3.Cross(axis,ray).magnitude;
+            float cloudRadians=Vector3.Cross(ray,clouds.DriftDirection*clouds.ActualDriftSpeed).magnitude/distance;
+            return projectedStar>.001f?cloudRadians/projectedStar*Mathf.Rad2Deg:0;
         }
         void Apply(float t)
         {

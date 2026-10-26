@@ -17,6 +17,14 @@ namespace PuzzleApple.V4
         MaterialPropertyBlock properties;
         float elapsed;
         float visibility;
+        public float Visibility => visibility;
+        bool transitionHeld, lastVisible;
+        public void HoldCurrentState()
+        {
+            transitionHeld=true;
+            lastVisible=state && state.PassageEnabled;
+        }
+        public void ResumeStateTransition() { transitionHeld=false; }
 
         void Awake()
         {
@@ -39,7 +47,8 @@ namespace PuzzleApple.V4
         {
             if (!door || !mistMaterial) return;
             bool visible = state && state.PassageEnabled;
-            visibility = Mathf.MoveTowards(visibility, visible ? 1 : 0, Time.deltaTime / Mathf.Max(.1f, fadeDuration));
+            if(visible!=lastVisible){lastVisible=visible;transitionHeld=false;}
+            if(!transitionHeld) visibility = Mathf.MoveTowards(visibility, visible ? 1 : 0, Time.deltaTime / Mathf.Max(.1f, fadeDuration));
             volumeRenderer.enabled = visibility > 0;
             if (!volumeRenderer.enabled) return;
             elapsed += Time.deltaTime;

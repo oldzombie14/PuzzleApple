@@ -9,6 +9,7 @@ namespace PuzzleApple.V4
         public float groundHeight = .02f;
         [Min(.1f)] public float loweringSpeed = 6;
         [Min(.1f)] public float loweringAcceleration = 6;
+        [Tooltip("远处鱼门的收词距离特例；普通实体统一使用 OpeningFlow.interactionDistance。")]
         [Min(1)] public float collectionDistance = 65;
         public float spawnDistance = 42, suspendedHeight = 18;
         [Min(0)] public float releaseLandingTolerance = .5f;

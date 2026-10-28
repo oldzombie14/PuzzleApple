@@ -27,6 +27,7 @@
 - 菜单与游戏内退出：`Prefabs/V4/WorldEntry.prefab` 与场景 World Entry。菜单颜色在 Enter World／Exit 的 Symbol Button / Colors；入场后的颜色由 WorldEntry 的 In-world exit palette 管理，Day Exit Color／Day Exit Highlight 调白天默认与悬停色，Exit Saturation 调整体饱和度，Ground Look Angles 调朝下提亮角度。夜色取 NightEnvironment.nightFogColor，Night Exit Lift／Night Highlight Lift 调正常与悬停亮度。
 - 面板：`Prefabs/V4/UI/V4Interface.prefab` 及同目录控件模板；场景 `V4Interface/Opening HUD` 编辑眼睛、准星与收词符号。OpeningFlow 绑定流程，Player 独立控制器调整行走学习。场景 Sentence Effects 上的 SentenceEffectManager 转发已仲裁的句子效果，LightSentenceEffects／DoorSentenceEffects／WorldSentenceEffects 负责各域行为。
 - 重复交互：OpeningFlow 的 Known Eye Alpha、Known Symbol Alpha、Known Symbol Duration、Known Symbol Scale（起始／结束倍率）调整淡眼睛与居中放大淡出反馈；按同类词是否已收集判断。
+- 收词范围：OpeningFlow.Interaction Distance 是普通实体的统一入口；ThresholdDoor.Collection Distance 为门的显式特例。太阳由 OpeningFlow 读取当前天空材质的 `_SunDirection`、`_Night`，按 DaySky／NightSky 的圆盘外沿点积 `.9995` 识别，共用 light 的收词与重复提示；瞄准太阳时把实体遮挡射线延伸到世界相机远裁剪面。若修改 shader 的太阳圆盘尺寸，需同步此识别阈值。
 - Ground 点击地面由 OpeningFlow 识别 Sentence Effects / WorldSentenceEffects.ground，收词动画结束入库，保存首次静态快照。GroundCollectionChecks.Run() 检查真实射线收词及重复点击。规则与镜头资源保留原 GUID 和历史文件名，运行时词 ID 为 ground；CognitionSignal 的 World 移动枚举保留序列化值。
 - 词与规则：`GameData/V4/Opening/OpeningCatalog.asset` 及 Words／Rules。
 - 灯：场景 `Opening Light Field/OpeningLightField` 调整生成；`Lamp State/OpeningLight` 保留全局昼夜与共享外观来源，不显示大测试 cube。运行时小灯复用原生 Renderer、Rigidbody、Collider 和 LightMotion，忽略玩家碰撞，共用一份运行时材质，最近的有限小灯启用无阴影点光。

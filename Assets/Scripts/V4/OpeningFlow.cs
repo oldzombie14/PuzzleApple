@@ -18,6 +18,8 @@ namespace PuzzleApple.V4
         public Image collectionSymbol, hoverEye;
         public GameObject reticle;
         public RectTransform hud;
+        [Header("统一收词范围")]
+        [Tooltip("普通实体共用的收词距离，从视点到命中表面；首次收集与重复提示使用同一范围。太阳和远处的门为特例。")]
         [Min(.1f)] public float interactionDistance = 7;
         public float wordDisplayDuration = 1.6f, wordFadeInDuration = .3f, wordFlyDuration = .6f;
         [Header("已收集词的重复交互")]
@@ -96,7 +98,11 @@ namespace PuzzleApple.V4
         }
         string LookedAtWord()
         {
+            bool sun = LookingAtSun();
             float reach = door ? Mathf.Max(interactionDistance, door.collectionDistance) : interactionDistance;
+            // The sky has no collider. Check the whole visible ray only when aiming at
+            // its sun, so even geometry beyond the collection range can occlude it.
+            if (sun && worldCamera) reach = Mathf.Max(reach, worldCamera.farClipPlane);
             int count = Physics.RaycastNonAlloc(player.view.position, player.view.forward, interactionHits, reach, ~0, QueryTriggerInteraction.Collide);
             var hits = count == interactionHits.Length
                 ? Physics.RaycastAll(player.view.position, player.view.forward, reach, ~0, QueryTriggerInteraction.Collide) : interactionHits;
@@ -108,11 +114,25 @@ namespace PuzzleApple.V4
                 if (hits[i].collider.transform.IsChildOf(player.transform) || hits[i].distance >= closest) continue;
                 hit = hits[i]; closest = hit.distance;
             }
-            if (!hit.collider) return null;
-            if (hit.distance <= interactionDistance && effects && effects.world && hit.collider == effects.world.ground) return "ground";
-            if (hit.distance <= interactionDistance && hit.collider.GetComponentInParent<OpeningLight>()) return "light";
-            if (door && !door.Appearing && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door) return "door";
-            return null;
+            if (!hit.collider) return sun ? "light" : null;
+            string word = null;
+            if (effects && effects.world && hit.collider == effects.world.ground) word = "ground";
+            else if (hit.collider.GetComponentInParent<OpeningLight>()) word = "light";
+            else if (door && !door.Appearing && hit.collider.GetComponentInParent<ThresholdDoor>() == door) word = "door";
+            float collectionRange = word == "door" ? door.collectionDistance : interactionDistance;
+            return hit.distance <= collectionRange ? word : null;
+        }
+        bool LookingAtSun()
+        {
+            // Read the displayed sky, including retained partial day/night transitions.
+            // .9995 is the outer disc edge in both DaySky and NightSky; exclude the halo.
+            var sky = RenderSettings.skybox;
+            if (!sky || !sky.shader ||
+                (sky.shader.name != "PuzzleApple/V4/DaySky" && sky.shader.name != "PuzzleApple/V4/NightSky")) return false;
+            if (sky.HasProperty("_Night") && sky.GetFloat("_Night") >= .98f) return false;
+            Vector3 direction = sky.GetVector("_SunDirection");
+            return direction.sqrMagnitude > .001f &&
+                Vector3.Dot(player.view.forward, direction.normalized) >= .9995f;
         }
         public bool TryCollectLight()
         {

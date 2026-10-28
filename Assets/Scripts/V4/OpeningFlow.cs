@@ -96,7 +96,10 @@ namespace PuzzleApple.V4
         }
         string LookedAtWord()
         {
+            bool sunTarget = LookingAtSun();
             float reach = door ? Mathf.Max(interactionDistance, door.collectionDistance) : interactionDistance;
+            // A sky target needs an occlusion check, not a longer collection range.
+            if (sunTarget && worldCamera) reach = Mathf.Max(reach, worldCamera.farClipPlane);
             int count = Physics.RaycastNonAlloc(player.view.position, player.view.forward, interactionHits, reach, ~0, QueryTriggerInteraction.Collide);
             var hits = count == interactionHits.Length
                 ? Physics.RaycastAll(player.view.position, player.view.forward, reach, ~0, QueryTriggerInteraction.Collide) : interactionHits;
@@ -108,10 +111,19 @@ namespace PuzzleApple.V4
                 if (hits[i].collider.transform.IsChildOf(player.transform) || hits[i].distance >= closest) continue;
                 hit = hits[i]; closest = hit.distance;
             }
-            if (!hit.collider) return null;
+            if (!hit.collider) return sunTarget ? "light" : null;
             if (hit.distance <= interactionDistance && hit.collider.GetComponentInParent<OpeningLight>()) return "light";
             if (door && hit.distance <= door.collectionDistance && hit.collider.GetComponentInParent<ThresholdDoor>() == door) return "door";
             return null;
+        }
+        bool LookingAtSun()
+        {
+            var sky = RenderSettings.skybox;
+            if (!sky || !sky.HasProperty("_SunDirection")) return false;
+            if (sky.HasProperty("_Night") && sky.GetFloat("_Night") >= .98f) return false;
+            Vector3 direction = sky.GetVector("_SunDirection");
+            // Match the visible disk boundary in DaySky and NightSky, excluding the halo.
+            return Vector3.Dot(player.view.forward, direction.normalized) >= .9995f;
         }
         public bool TryCollectLight()
         {

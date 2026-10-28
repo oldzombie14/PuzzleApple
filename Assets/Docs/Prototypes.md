@@ -9,6 +9,7 @@
 - 菜单与游戏内退出：`Prefabs/V4/WorldEntry.prefab` 与场景 World Entry。菜单颜色在 Enter World／Exit 的 Symbol Button / Colors；入场后的颜色由 WorldEntry 的 In-world exit palette 管理，Day Exit Color／Day Exit Highlight 调白天默认与悬停色，Exit Saturation 调整体饱和度，Ground Look Angles 调朝下提亮角度。夜色取 NightEnvironment.nightFogColor，Night Exit Lift／Night Highlight Lift 调正常与悬停亮度。
 - 面板：`Prefabs/V4/UI/V4Interface.prefab` 及同目录控件模板；场景 `V4Interface/Opening HUD` 编辑眼睛、准星与收词符号。OpeningFlow 绑定流程，Player 独立控制器调整行走学习。场景 Sentence Effects 上的 SentenceEffectManager 转发已仲裁的句子效果，LightSentenceEffects／DoorSentenceEffects／WorldSentenceEffects 负责各域行为。
 - 重复交互：OpeningFlow 的 Known Eye Alpha、Known Symbol Alpha、Known Symbol Duration、Known Symbol Scale（起始／结束倍率）调整淡眼睛与居中放大淡出反馈；按同类词是否已收集判断。
+- 太阳收词：OpeningFlow 读取当前天空材质的太阳方向，以 Shader 圆盘边界判定瞄准，检查前方碰撞遮挡；夜色接近完全时禁用。共用灯词与快照流程；Interaction Distance 和门的 Collection Distance 仍分别限制实体交互。
 - 词与规则：`GameData/V4/Opening/OpeningCatalog.asset` 及 Words／Rules。
 - 灯：场景 `Opening Light Field/OpeningLightField` 调整生成；`Lamp State/OpeningLight` 保留全局昼夜与共享外观来源，不显示大测试 cube。运行时小灯复用原生 Renderer、Rigidbody、Collider 和 LightMotion，忽略玩家碰撞，共用一份运行时材质，最近的有限小灯启用无阴影点光。
 - 分布参数：Seed、Cell Size、Lamps Per Cell、Scale Range（立方体边长）、Clearance Range（底部离地高度）在重新进入 Play 后对全场一致生效；已有记录不会因调参数而洗牌。Spawn Radius、Recycle Buffer、Max Active、Spawn Budget、Refresh Interval、Move Speed 和点光预算支持运行时调整。选中管理器显示加载／回收范围线；默认场景只保存管理器，进入 Play 才生成实体。

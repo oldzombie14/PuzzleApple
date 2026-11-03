@@ -13,14 +13,15 @@ namespace PuzzleApple.V4
         public OpeningFlow opening;
         public NightEnvironment environment;
         public Material inkMaterial;
-        [Header("入场时在玩家背后显现")]
+        [Header("方块灯首次出现后在玩家背后显现")]
         [Min(.1f)] public float fadeDuration=1.6f;
         [Header("固定世界方位，保持视距与大小")]
         [Min(10)] public float viewingDistance=90;
         [Range(5,40)] public float elevation=14;
         [Range(8,45)] public float angularWidth=24;
         [Range(0,1)] public float opacity=.82f;
-        public Color dayInk=new Color(.2f,.24f,.2f), nightInk=new Color(.74f,.81f,.9f);
+        [Range(0,1)] public float nightOpacity=.32f;
+        public Color dayInk=new Color(.2f,.24f,.2f), nightInk=new Color(.22f,.27f,.36f);
         [Header("本地完成记录（不是世界存档）")]
         public string progressKey=IntroHintProgress.DefaultKey;
         IntroHintProgress progress;
@@ -80,11 +81,11 @@ namespace PuzzleApple.V4
             return true;
         }
         public void Record(CognitionSignal signal)=>Progress.Record(signal);
-        // NightEnvironment asks before changing sky/fog/light. Fade the inscription first.
+        // Only the single light-off hint must disappear before the night transition.
         public bool PrepareNightTransition(bool night)
         {
             nightRequested=night;
-            return !night||!isActiveAndEnabled||!group||group.alpha<=.001f;
+            return !night||DisplayStage==0&&DesiredStage()==0||!isActiveAndEnabled||!group||group.alpha<=.001f;
         }
         void LateUpdate()
         {
@@ -94,12 +95,15 @@ namespace PuzzleApple.V4
             Elapsed+=Time.unscaledDeltaTime;
             if(!Revealed)
             {
+                if(!opening.lightField||!opening.lightField.Released||opening.lightField.ActiveCount==0)return;
                 Revealed=true;
                 Bearing=-Vector3.ProjectOnPlane(opening.player.view.forward,Vector3.up).normalized;
                 if(Bearing.sqrMagnitude<.1f)Bearing=-Vector3.ProjectOnPlane(opening.player.transform.forward,Vector3.up).normalized;
             }
             int desired=DesiredStage();
-            float target=Revealed&&!nightRequested&&DisplayStage!=2&&desired==DisplayStage?opacity:0;
+            float night=environment?environment.NightBlend:0;
+            bool hiddenAtNight=DisplayStage==1&&(nightRequested||night>.001f);
+            float target=Revealed&&!hiddenAtNight&&DisplayStage!=2&&desired==DisplayStage?Mathf.Lerp(opacity,nightOpacity,night):0;
             Visibility=Mathf.MoveTowards(Visibility,target,Time.unscaledDeltaTime/Mathf.Max(.1f,fadeDuration));
             if(desired!=DisplayStage&&Visibility<=.001f){DisplayStage=desired;BuildRows();}
             group.alpha=Visibility;

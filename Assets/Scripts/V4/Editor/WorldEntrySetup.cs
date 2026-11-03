@@ -79,7 +79,7 @@ namespace PuzzleApple.V4.Editor
             background.rectTransform.anchorMax = Vector2.one; background.rectTransform.sizeDelta = Vector2.zero;
             var enter = Button("Enter World", root.transform, new Vector2(300,160), Vector2.zero);
             Symbol("Positive", enter.transform, new Vector2(-66,0), 104);
-            Symbol("Apple", enter.transform, new Vector2(66,0), 104);
+            Symbol("World", enter.transform, new Vector2(66,0), 104);
             var exit = Button("Exit", root.transform, new Vector2(100,100), new Vector2(-76,-76));
             var exitRect = (RectTransform)exit.transform; exitRect.anchorMin = exitRect.anchorMax = Vector2.one;
             Symbol("Negative", exit.transform, Vector2.zero, 54);
@@ -121,7 +121,7 @@ namespace PuzzleApple.V4.Editor
         static void Symbol(string name, Transform parent, Vector2 position, float size)
         {
             var image = Image(name,parent,new Vector2(size,size),position);
-            image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/V3/"+name+".png");
+            image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/V4/"+name+".png");
             image.preserveAspect = true; image.raycastTarget = false;
         }
     }

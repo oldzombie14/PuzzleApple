@@ -40,14 +40,14 @@ namespace PuzzleApple.V4.Editor
             if (UnityEngine.Object.FindFirstObjectByType<OpeningFlow>()) throw new InvalidOperationException("Opening already installed; edit its native components directly.");
             Folder(Data + "/Words"); Folder(Data + "/Rules");
             string[] ids = { "positive", "negative", "world", "move", "light" };
-            string[] symbols = { "Positive", "Negative", "Apple", "Move", "red" };
+            string[] symbols = { "Positive", "Negative", "World", "Move", "Light" };
             var words = new WordDefinition[ids.Length];
             for (int i = 0; i < ids.Length; i++)
             {
                 words[i] = Asset<WordDefinition>(Data + "/Words/" + ids[i] + ".asset");
                 var so = new SerializedObject(words[i]);
                 so.FindProperty("id").stringValue = ids[i]; so.FindProperty("displayText").stringValue = ids[i];
-                so.FindProperty("symbol").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/V3/" + symbols[i] + ".png");
+                so.FindProperty("symbol").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/V4/" + symbols[i] + ".png");
                 var senses = so.FindProperty("senses"); senses.arraySize = 1;
                 senses.GetArrayElementAtIndex(0).FindPropertyRelative("meaning").stringValue = ids[i];
                 senses.GetArrayElementAtIndex(0).FindPropertyRelative("role").enumValueIndex = i < 2 || i == 3 ? 1 : 0;

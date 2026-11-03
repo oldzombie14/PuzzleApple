@@ -33,8 +33,11 @@ namespace PuzzleApple.V4.Editor
                 var state=flow.board.State;
                 state.TryAcquireSentence("sky.check.move","light move");
                 Require(hints.Progress.Has(CognitionSignal.LightMove),"actual applied light move saved before reveal");
-                Require(!new IntroHintProgress(hints.progressKey).Has(CognitionSignal.LightMove)&&!PlayerPrefs.HasKey(hints.progressKey),"completion is session-only and is not written to PlayerPrefs");
-                Require(hints.Revealed&&hints.Elapsed<2,"reveals immediately on entry without time or distance threshold");
+                Require(new IntroHintProgress(hints.progressKey).Has(CognitionSignal.LightMove)&&PlayerPrefs.HasKey(hints.progressKey),"completion survives a new progress instance");
+                Require(!hints.Revealed&&hints.Visibility==0,"entry waits for the first cube lamps");
+                flow.lightField.Release();
+                yield return null;yield return null;
+                Require(flow.lightField.ActiveCount>0&&hints.Revealed,"reveals after cube lamps first spawn");
                 Require(Vector3.Dot(hints.Bearing,Vector3.ProjectOnPlane(player.view.forward,Vector3.up).normalized)<-.99f,"appears behind initial view");
                 Require(player.view.GetComponent<Camera>().WorldToViewportPoint(hints.VisualRoot.position).z<0,"initial view cannot see inscription behind player");
                 yield return new WaitForSecondsRealtime(.4f);
@@ -57,18 +60,47 @@ namespace PuzzleApple.V4.Editor
                 player.transform.rotation=Quaternion.LookRotation(bearing);player.view.localRotation=Quaternion.identity;
                 yield return null;yield return null;
                 ScreenCapture.CaptureScreenshot("Temp/V4Presentation/sky-checklist.png");yield return new WaitForEndOfFrame();
-                hints.Record(CognitionSignal.WorldOff);
+                state.ClearWorkspace();state.TryAcquireSentence("sky.check.earlyOff","negative light");
+                yield return new WaitForSecondsRealtime(hints.environment.transitionDuration+hints.fadeDuration+.6f);
+                Require(hints.environment.NightBlend==1&&hints.DisplayStage==0&&hints.Visibility>0,"unfinished checklist remains visible at night");
+                var symbol=hints.VisualRoot.GetChild(0).GetComponent<UnityEngine.UI.Image>();
+                Require(symbol.color.r<.3f&&hints.Visibility<.4f,"night ink and opacity remain subdued");
+                ScreenCapture.CaptureScreenshot("Temp/V4Presentation/sky-night-checklist.png");yield return new WaitForEndOfFrame();
+                Require(hints.TryClearFromShortcut(true)&&hints.Progress.Mask==0&&!PlayerPrefs.HasKey(hints.progressKey),"X clears memory and saved progress immediately at night");
+                Require(state.HasEffect(CognitionSignal.LightOff)&&state.Knows("light"),"reset preserves sentences and vocabulary");
+                state.TryAcquireSentence("sky.check.unrelated","positive world");
+                Require(!hints.Progress.Has(CognitionSignal.LightOff),"unrelated edit does not rerecord a held effect after reset");
+                state.ClearWorkspace();state.TryAcquireSentence("sky.check.day","positive light");
+                yield return new WaitForSecondsRealtime(hints.environment.transitionDuration+hints.fadeDuration+.6f);
+                Require(hints.environment.NightBlend==0&&hints.Visibility>.7f,"reset checklist returns to daytime opacity");
+                state.ClearWorkspace();state.TryAcquireSentence("sky.check.exit","negative world");
+                var entry=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+                Require(entry.ConfirmingExit&&new IntroHintProgress(hints.progressKey).Has(CognitionSignal.WorldOff),"exit sentence persists before either choice");
+                entry.CancelExit();
+                Require(!entry.ConfirmingExit&&new IntroHintProgress(hints.progressKey).Has(CognitionSignal.WorldOff),"OFF retains saved completion");
+                state.TryAcquireSentence("sky.check.unrelated2","positive world");
+                Require(!entry.ConfirmingExit,"unrelated edits do not reopen exit confirmation");
+                state.ClearWorkspace();state.TryAcquireSentence("sky.check.moveAgain","light move");
                 state.ClearWorkspace();state.TryAcquireSentence("sky.check.down","light ground move");
                 yield return new WaitForSecondsRealtime(1);
                 Require(hints.DisplayStage==1&&hints.Visibility>.7f&&hints.VisualRoot.childCount==3,"three completed rows replaced by negative light");
+                // Simulate arriving at night with only light-off left, without recording the operation.
+                hints.environment.lamp.SetOn(false);
+                yield return new WaitForSecondsRealtime(hints.environment.transitionDuration+hints.fadeDuration+.6f);
+                Require(hints.environment.NightBlend==1&&hints.DisplayStage==1&&hints.Visibility==0,"single light-off hint stays hidden at night");
+                hints.environment.lamp.SetOn(true);
+                yield return new WaitForSecondsRealtime(hints.environment.transitionDuration+hints.fadeDuration+.6f);
+                Require(hints.Visibility>.7f&&hints.DisplayStage==1,"single light-off hint returns in daylight");
                 ScreenCapture.CaptureScreenshot("Temp/V4Presentation/sky-answer.png");yield return new WaitForEndOfFrame();
                 state.ClearWorkspace();state.TryAcquireSentence("sky.check.off","negative light");
                 yield return new WaitForSecondsRealtime(.08f);
                 Require(hints.Visibility>0&&hints.environment.NightBlend<.001f,"sky stays light while inscription fades");
                 yield return new WaitForSecondsRealtime(.8f);
-                Require(hints.DisplayStage==2&&hints.Visibility==0&&hints.Progress.Finished&&!new IntroHintProgress(hints.progressKey).Finished,"negative light fades out and retains completion only in this session");
+                Require(hints.DisplayStage==2&&hints.Visibility==0&&hints.Progress.Finished&&new IntroHintProgress(hints.progressKey).Finished,"all completed hints persist and stay hidden");
                 Require(hints.environment.NightBlend>.1f,"night begins after letters disappear");
-                Result="PASS: immediate rear reveal, session-only completion, constant size and world bearing, checklist-to-answer transition, letters fade before night";
+                hints.TryClearFromShortcut(true);
+                Require(hints.DisplayStage==0&&hints.Progress.Mask==0&&!new IntroHintProgress(hints.progressKey).Finished,"finished progress resets immediately");
+                Result="PASS: rear reveal, saved completion, night checklist, day-only final hint, exit cancellation, immediate reset, held-effect deduplication, fixed bearing and scale";
             }
             finally
             {

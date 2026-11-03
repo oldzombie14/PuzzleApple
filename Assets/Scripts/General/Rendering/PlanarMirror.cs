@@ -9,6 +9,7 @@ namespace PuzzleApple
     public sealed class PlanarMirror : MonoBehaviour
     {
         [SerializeField] Camera sourceCamera;
+        public Camera SourceCamera { get => sourceCamera; set => sourceCamera = value; }
         [SerializeField, Range(256, 2048)] int resolution = 1024;
         [SerializeField, Range(1, 3)] int maxReflectionDepth = 2;
         [SerializeField] Vector3 localSurfacePoint = new Vector3(0, 0, .5f);

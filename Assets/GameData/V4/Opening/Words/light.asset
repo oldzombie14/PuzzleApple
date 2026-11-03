@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.WordDefinition
   id: light
   displayText: light
-  symbol: {fileID: 21300000, guid: 63a68c36b39ece5499c2b3ee26610e00, type: 3}
+  symbol: {fileID: 21300000, guid: 3868f9c16c8c21448999d543381f46bd, type: 3}
   senses:
   - meaning: light
     role: 0

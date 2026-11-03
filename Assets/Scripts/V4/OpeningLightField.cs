@@ -27,6 +27,9 @@ namespace PuzzleApple.V4
         [Range(8, 512)] public int maxActive = 192;
         [Range(1, 64)] public int spawnBudget = 16;
         [Min(.05f)] public float refreshInterval = .2f;
+        [Header("加载淡入")]
+        [Min(.01f)] public float revealDuration = 1.2f;
+        [Min(0)] public float revealInterval = .035f;
         [Header("移动与局部照明")]
         [Min(0)] public float moveSpeed = 1.2f;
         [Range(0, 16)] public int maxPointLights = 6;
@@ -53,9 +56,39 @@ namespace PuzzleApple.V4
         readonly List<Record> active = new List<Record>();
         readonly List<Record> candidates = new List<Record>();
         readonly Stack<OpeningLight> pool = new Stack<OpeningLight>();
+        [Header("开场延后生成")]
+        [Min(0)] public float initialClearRadius = 20;
+        public bool Released { get; private set; }
+        Vector3 releaseCenter;
+        public void Release()
+        {
+            if (Released) return;
+            releaseCenter = observer.position;
+            Released = true;
+            RefreshField();
+        }
         Collider playerCollider;
         float nextRefresh, runtimeCellSize;
         Transform poolRoot;
+        Material revealMaterial;
+        float nextReveal;
+        Material RevealMaterial
+        {
+            get
+            {
+                if(revealMaterial)return revealMaterial;
+                revealMaterial=new Material(stateSource.AppearanceMaterial);
+                revealMaterial.SetFloat("_Surface",1);
+                revealMaterial.SetFloat("_SrcBlend",(float)BlendMode.SrcAlpha);
+                revealMaterial.SetFloat("_DstBlend",(float)BlendMode.OneMinusSrcAlpha);
+                revealMaterial.SetFloat("_ZWrite",0);
+                revealMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                revealMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                revealMaterial.SetOverrideTag("RenderType","Transparent");
+                revealMaterial.renderQueue=(int)RenderQueue.Transparent;
+                return revealMaterial;
+            }
+        }
 
         void Start()
         {
@@ -65,14 +98,6 @@ namespace PuzzleApple.V4
             poolRoot = new GameObject("Inactive lamps").transform;
             poolRoot.SetParent(transform, false);
             poolRoot.gameObject.SetActive(false);
-            // Keep an approachable lamp at the previous tutorial landmark.
-            var first = stateSource.transform.position;
-            if (TryGround(first, out float height))
-            {
-                float size = Mathf.Clamp(.3f, scaleRange.x, scaleRange.y);
-                Sleep(new Record { position = new Vector3(first.x, height + size * VerticalHalfExtent + clearanceRange.y, first.z), scale = size, direction = Vector3.up });
-                RecordedCount++;
-            }
             RefreshField();
         }
         void Update()
@@ -100,6 +125,7 @@ namespace PuzzleApple.V4
                 float size = Mathf.Lerp(scaleRange.x, scaleRange.y, (float)random.NextDouble());
                 float clearance = Mathf.Lerp(clearanceRange.x, clearanceRange.y, (float)random.NextDouble());
                 var direction = new Vector3((float)random.NextDouble() * 2 - 1, (float)random.NextDouble() * 2 - 1, (float)random.NextDouble() * 2 - 1).normalized;
+                if (Vector3.ProjectOnPlane(p - releaseCenter, Vector3.up).sqrMagnitude < initialClearRadius * initialClearRadius) continue;
                 if (!TryGround(p, out float height)) continue;
                 p.y = height + clearance + size * VerticalHalfExtent;
                 Sleep(new Record { position = p, scale = size, direction = direction });
@@ -125,7 +151,7 @@ namespace PuzzleApple.V4
         }
         public void RefreshField()
         {
-            if (!poolRoot || !observer) return;
+            if (!Released || !poolRoot || !observer) return;
             Vector3 center = observer.position;
             float radius = Mathf.Max(5, spawnRadius), retire = radius + Mathf.Max(1, recycleBuffer);
             for (int i = active.Count - 1; i >= 0; i--)
@@ -168,6 +194,9 @@ namespace PuzzleApple.V4
                 lamp.transform.SetParent(transform, false);
                 lamp.transform.SetPositionAndRotation(record.position, LampRotation);
                 lamp.transform.localScale = Vector3.one * record.scale;
+                nextReveal=Mathf.Max(Time.unscaledTime,nextReveal);
+                lamp.BeginReveal(RevealMaterial,nextReveal,revealDuration);
+                nextReveal+=revealInterval;
                 lamp.gameObject.SetActive(true);
                 if (playerCollider) Physics.IgnoreCollision(lamp.GetComponent<Collider>(), playerCollider, true);
                 record.lamp = lamp; record.motion = lamp.GetComponent<LightMotion>();
@@ -206,6 +235,7 @@ namespace PuzzleApple.V4
             scaleRange.x = Mathf.Max(.02f, scaleRange.x); scaleRange.y = Mathf.Max(scaleRange.x, scaleRange.y);
             clearanceRange.x = Mathf.Max(0, clearanceRange.x); clearanceRange.y = Mathf.Max(clearanceRange.x, clearanceRange.y);
         }
+        void OnDestroy(){if(revealMaterial)Destroy(revealMaterial);}
         void OnDrawGizmosSelected()
         {
             if (!observer) return;

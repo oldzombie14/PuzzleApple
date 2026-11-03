@@ -45,7 +45,11 @@ namespace PuzzleApple.V4
         readonly List<RaycastResult> hoverHits=new List<RaycastResult>();
         void Start()
         {
+            note.lineType=InputField.LineType.SingleLine;
+            note.caretBlinkRate=.85f;
+            note.caretWidth=2;
             note.onValueChanged.AddListener(EditNote);
+            note.onSubmit.AddListener(SubmitNote);
             saveNote.onClick.AddListener(SaveNote);
             closeMemory.onClick.AddListener(CloseMemory);
             board.State.Changed+=Refresh;
@@ -53,6 +57,7 @@ namespace PuzzleApple.V4
             Refresh(CognitionChange.Add);Show(false);
         }
         void EditNote(string value){if(selected!=null)drafts[selected]=value;UpdateSaveButton();}
+        void SubmitNote(string value){if(IsOpen&&!board.Panel.InputBlocked)SaveNote();}
         void CloseMemory()=>Show(false);
         void OnPanel(bool open){if(!open){CancelLibraryDrag();Show(false);}}
         public void Show(bool value)
@@ -60,9 +65,18 @@ namespace PuzzleApple.V4
             tooltip.gameObject.SetActive(false);
             IsOpen=value;details.gameObject.SetActive(value);
             board.Surface.gameObject.SetActive(!value);
+            if(value)
+            {
+                note.Select();
+                note.ActivateInputField();
+            }
         }
         void Refresh(CognitionChange change)
         {
+            foreach(var id in new List<string>(entries.Keys))
+                if(!board.State.Knows(id))
+                { entries[id].gameObject.SetActive(false); Destroy(entries[id].gameObject); entries.Remove(id); }
+            if(selected!=null&&!board.State.Knows(selected)){selected=null;Show(false);}
             foreach(var word in board.Catalog.Words)
             {
                 if(!board.State.Knows(word.Id)||entries.ContainsKey(word.Id))continue;
@@ -74,6 +88,15 @@ namespace PuzzleApple.V4
                 entries.Add(word.Id,button);
             }
         }
+        public void ForgetMemories(IEnumerable<string> ids)
+        {
+            CancelLibraryDrag();
+            foreach(var id in ids)
+            {
+                if(photos.TryGetValue(id,out var photo)&&photo&&capturedPhotos.Remove(photo))Destroy(photo);
+                photos.Remove(id);savedNotes.Remove(id);drafts.Remove(id);
+            }
+        }
         public void Remember(string id)
         {
             if(photos.ContainsKey(id))return;
@@ -81,7 +104,7 @@ namespace PuzzleApple.V4
             if(HasPhoto(id))foreach(var preset in vocabularyImages)if(preset.wordId==id){photo=preset.image;break;}
             photos[id]=photo;if(selected==id)UpdatePhoto();
         }
-        static bool HasPhoto(string id)=>id!="positive"&&id!="negative"&&id!="world"&&id!="move";
+        static bool HasPhoto(string id)=>id!="move";
         public void Remember(string id,RenderTexture frame)
         {
             if(photos.ContainsKey(id))return;
@@ -105,6 +128,8 @@ namespace PuzzleApple.V4
         }
         void UpdatePhoto()
         {
+            snapshotAspect.aspectMode=selected=="positive"||selected=="negative"||selected=="mirror"
+                ?AspectRatioFitter.AspectMode.FitInParent:AspectRatioFitter.AspectMode.EnvelopeParent;
             snapshot.uvRect=new Rect(0,0,1,1);
             snapshot.texture=photos.TryGetValue(selected,out var photo)?photo:null;
             if(selected=="move"&&moveMemory&&moveMemory.atlas)
@@ -172,6 +197,7 @@ namespace PuzzleApple.V4
             if(board&&board.State!=null)board.State.Changed-=Refresh;
             if(board&&board.Panel)board.Panel.OpenChanged.RemoveListener(OnPanel);
             if(note)note.onValueChanged.RemoveListener(EditNote);
+            if(note)note.onSubmit.RemoveListener(SubmitNote);
             if(saveNote)saveNote.onClick.RemoveListener(SaveNote);
             if(closeMemory)closeMemory.onClick.RemoveListener(CloseMemory);
         }

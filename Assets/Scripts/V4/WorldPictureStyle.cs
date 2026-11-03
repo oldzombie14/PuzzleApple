@@ -13,6 +13,10 @@ namespace PuzzleApple.V4
         GameObject output;
         RawImage image;
         int screenWidth, screenHeight;
+        public void SetSceneMaterial(Material material)
+        {
+            if (image) image.material = material ? material : pictureMaterial;
+        }
 
         void OnEnable()
         {

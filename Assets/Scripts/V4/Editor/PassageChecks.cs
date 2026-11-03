@@ -17,7 +17,7 @@ namespace PuzzleApple.V4.Editor
         {
             if(!Application.isPlaying) throw new InvalidOperationException("Fresh P4 Play required");
             Result="Running";
-            var flow=UnityEngine.Object.FindFirstObjectByType<OpeningFlow>(); flow.StartCoroutine(Check(flow));
+            var flow=UnityEngine.Object.FindFirstObjectByType<OpeningFlow>(); UnityEngine.Object.FindFirstObjectByType<SessionSceneManager>().StartCoroutine(Check(flow));
         }
         static IEnumerator Walk(FirstPersonController player,float direction)
         {
@@ -26,16 +26,17 @@ namespace PuzzleApple.V4.Editor
         }
         static IEnumerator Check(OpeningFlow flow)
         {
+            var player=flow.player; var board=flow.board;
             bool background=Application.runInBackground; Application.runInBackground=true;
             try
             {
                 UnityEngine.Object.FindFirstObjectByType<WorldEntry>().EnterWorld(); yield return new WaitForSeconds(2);
                 flow.effects.presentation.enabled=false;
-                flow.player.enabled=false;
-                var d=flow.door; var s=flow.board.State;
-                d.Reveal(flow.player.view);
+                player.enabled=false;
+                var d=flow.door; var s=board.State;
+                d.Reveal(player.view);
                 Require(Vector3.Dot(d.transform.up,Vector3.up)>.9999f,"revealed door remains upright");
-                var bearing=Vector3.ProjectOnPlane(d.transform.position-flow.player.view.position,Vector3.up).normalized;
+                var bearing=Vector3.ProjectOnPlane(d.transform.position-player.view.position,Vector3.up).normalized;
                 Require(Vector3.Dot(d.transform.forward,bearing)>.9999f,"revealed door faces camera horizontally");
                 var body=d.GetComponent<Rigidbody>();
                 var airborne=new Vector3(100,d.groundHeight+.5f,100);
@@ -59,24 +60,24 @@ namespace PuzzleApple.V4.Editor
                 Require(d.LandingCompleted,"test landing");
                 Require(!GameObject.Find("Door landing ripple"),"later directed contact does not repeat ripple");
                 var origin=location+new Vector3(0,1,-2);
-                flow.player.Teleport(origin,Quaternion.identity); Physics.SyncTransforms();
+                player.Teleport(origin,Quaternion.identity); Physics.SyncTransforms();
                 s.TryAcquireSentence("passage.off","negative door");
-                yield return Walk(flow.player,1);
-                Require(!d.GetComponent<DoorPassage>().Entered && !SceneManager.GetSceneByName("V4_NextRoom").isLoaded,"closed door must not transition");
-                flow.player.Teleport(origin,Quaternion.identity); Physics.SyncTransforms(); yield return new WaitForSeconds(.2f);
+                yield return Walk(player,1);
+                Require(!d.GetComponent<DoorPassage>().Entered && !SceneManager.GetSceneByName("ChapterI").isLoaded,"closed door must not transition");
+                player.Teleport(origin,Quaternion.identity); Physics.SyncTransforms(); yield return new WaitForSeconds(.2f);
                 s.ClearWorkspace(); s.TryAcquireSentence("passage.on","positive door");
                 yield return new WaitForSeconds(.2f);
-                yield return Walk(flow.player,1);
-                yield return new WaitForSeconds(1);
-                Require(SceneManager.GetSceneByName("V4_NextRoom").isLoaded,"walking through open door loads room");
-                Require(flow.effects.Suspended && !flow.lightField.gameObject.activeInHierarchy,"opening behavior isolated after transition");
-                Require(flow.player.transform.position.x>1900 && flow.board.State.Knows("door"),"player/vocabulary preserved");
+                yield return Walk(player,1);
+                while(UnityEngine.Object.FindFirstObjectByType<SessionSceneManager>().Busy)yield return null;
+                Require(SceneManager.GetSceneByName("ChapterI").isLoaded,"walking through open door loads room");
+                Require(!SceneManager.GetSceneByName("P4").isLoaded,"Intro scene unloaded after transition");
+                Require(UnityEngine.Object.FindFirstObjectByType<SessionSceneManager>().Current.gameObject.scene.name == "ChapterI" && board.State.Knows("door"),"player/vocabulary preserved");
                 Require(s.Groups.Any(g=>g.RuleId=="positive.door"),"sentence workspace retained at transition");
-                flow.board.Panel.SetOpen(true); Require(flow.player.PanelOpen,"panel works after transition");
-                flow.board.Panel.SetOpen(false); flow.player.enabled=true;
-                var before=flow.player.transform.position;
-                flow.player.GetComponent<CharacterController>().Move(Vector3.right*.4f);
-                Require(Vector3.Distance(before,flow.player.transform.position)>.2f,"controller can move inside room");
+                board.Panel.SetOpen(true); Require(player.PanelOpen,"panel works after transition");
+                board.Panel.SetOpen(false); player.enabled=true;
+                var before=player.transform.position;
+                player.GetComponent<CharacterController>().Move(Vector3.right*.4f);
+                Require(Vector3.Distance(before,player.transform.position)>.2f,"controller can move inside room");
                 Result="PASS: closed doorway rejects crossing; landed/on crossing loads room, player and vocabulary retained, panel and movement work";
             }
             finally {Application.runInBackground=background;}

@@ -26,12 +26,34 @@ namespace PuzzleApple.V4
         Color emission, onColor;
         float brightness = 1, onLightIntensity;
         NightEnvironment environment;
+        MaterialPropertyBlock revealProperties;
+        float revealStart, revealDuration;
+        bool revealing;
+        public float RevealAmount { get; private set; } = 1;
+        public void BeginReveal(Material material, float start, float duration)
+        {
+            revealStart=start; revealDuration=Mathf.Max(.01f,duration); revealing=true;
+            RevealAmount=0;
+            surface.sharedMaterial=material;
+            if(revealProperties==null)revealProperties=new MaterialPropertyBlock();
+            ApplyReveal();
+            if(glow)glow.enabled=false;
+        }
+        void ApplyReveal()
+        {
+            var source=appearanceSource.AppearanceMaterial;
+            var color=source.GetColor("_BaseColor");color.a=RevealAmount;
+            revealProperties.SetColor("_BaseColor",color);
+            revealProperties.SetColor("_EmissionColor",source.GetColor("_EmissionColor")*RevealAmount);
+            revealProperties.SetColor("_SpecColor",source.GetColor("_SpecColor")*RevealAmount);
+            surface.SetPropertyBlock(revealProperties);
+        }
         void Awake()
         {
             if (!surface) surface = GetComponent<Renderer>();
             if (appearanceSource)
             {
-                surface.sharedMaterial = appearanceSource.AppearanceMaterial;
+                if(!revealing)surface.sharedMaterial = appearanceSource.AppearanceMaterial;
                 return;
             }
             runtimeMaterial = surface.material;
@@ -58,10 +80,20 @@ namespace PuzzleApple.V4
         {
             if (appearanceSource)
             {
+                if(revealing)
+                {
+                    RevealAmount=Mathf.SmoothStep(0,1,Mathf.Clamp01((Time.unscaledTime-revealStart)/revealDuration));
+                    ApplyReveal();
+                    if(RevealAmount>=1)
+                    {
+                        revealing=false;surface.SetPropertyBlock(null);
+                        surface.sharedMaterial=appearanceSource.AppearanceMaterial;
+                    }
+                }
                 if (glow)
                 {
-                    glow.enabled = illuminate && appearanceSource.brightness > 0;
-                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f;
+                    glow.enabled = illuminate && appearanceSource.brightness > 0 && RevealAmount>0;
+                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f * RevealAmount;
                 }
                 return;
             }

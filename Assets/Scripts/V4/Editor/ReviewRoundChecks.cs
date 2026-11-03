@@ -74,8 +74,9 @@ namespace PuzzleApple.V4.Editor
                 s.ClearWorkspace();Require(!environment.WorldMoving,"split stops environment movement rule");
                 string key="PuzzleApple.Tests.Review."+Guid.NewGuid().ToString("N");
                 var progress=new IntroHintProgress(key);progress.Record(CognitionSignal.LightMove);
-                Require(progress.Has(CognitionSignal.LightMove)&&!PlayerPrefs.HasKey(key)&&!new IntroHintProgress(key).Has(CognitionSignal.LightMove),"hint progress stays in this session only");
-                Result="PASS: visible lowest, binary initial door and landing, door/lamp ascent blockers, held height, cluster speed, all motion conflict ripples/dimming/no shots, day ground movement, session-only hints";
+                try { Require(progress.Has(CognitionSignal.LightMove)&&PlayerPrefs.HasKey(key)&&new IntroHintProgress(key).Has(CognitionSignal.LightMove),"hint progress persists"); }
+                finally { progress.Clear(); }
+                Result="PASS: visible lowest, binary initial door and landing, door/lamp ascent blockers, held height, cluster speed, all motion conflict ripples/dimming/no shots, day ground movement, saved hints";
             }
             finally{Application.runInBackground=background;}
         }

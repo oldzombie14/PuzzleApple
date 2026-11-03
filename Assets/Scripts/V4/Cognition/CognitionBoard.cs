@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace PuzzleApple.V4.Cognition
@@ -20,6 +21,7 @@ namespace PuzzleApple.V4.Cognition
         [SerializeField, Min(10)] float snapDistance = 38;
         [SerializeField, Min(12)] float wordGap = 18;
         [SerializeField, Range(0, 20)] float wordFloatAmplitude = 8;
+        [SerializeField, Min(.01f)] float handleFadeDuration = .16f;
         public CognitionState State { get; private set; }
         public CognitionCatalog Catalog => catalog;
         public GameplayPanel Panel => panel;
@@ -61,6 +63,7 @@ namespace PuzzleApple.V4.Cognition
             public float TextStart, TextEnd;
             public float InkStart, InkEnd;
             public RectTransform LeadingHandle;
+            public CanvasGroup HandleFade;
         }
         sealed class Drag
         {
@@ -197,6 +200,8 @@ namespace PuzzleApple.V4.Cognition
             {
                 var hit = Instantiate(sentenceHandlePrefab,v.Mask);hit.name="Sentence handle";
                 v.LeadingHandle = hit.rectTransform;
+                v.HandleFade = hit.gameObject.AddComponent<CanvasGroup>();
+                v.HandleFade.alpha = 0;
                 CognitionUI.Place(hit.rectTransform,0,0,SentenceIndent,WordHeight);
                 hit.GetComponent<CognitionDragHandle>().Initialize(this,group.Id,-1,true);
             }
@@ -239,6 +244,22 @@ namespace PuzzleApple.V4.Cognition
                 v.Mask.sizeDelta = new Vector2(v.Width / v.FontScale, WordHeight);
             }
             if (drag != null) UpdateDragPreview();
+            UpdateHandleVisibility();
+        }
+        void UpdateHandleVisibility()
+        {
+            foreach (var v in views.Values)
+            {
+                if (!v.HandleFade) continue;
+                // Root spans the left handle, the gap, and all words. Never disable its raycast
+                // area when fading: crossing from the words to the handle must remain continuous.
+                bool hovered = panel.IsOpen && !panel.InputBlocked && Surface.gameObject.activeInHierarchy
+                    && Mouse.current != null
+                    && RectTransformUtility.RectangleContainsScreenPoint(v.Root, Mouse.current.position.ReadValue());
+                bool dragging = drag != null && (drag.GroupId == v.Group.Id || snapTargetId == v.Group.Id);
+                v.HandleFade.alpha = Mathf.MoveTowards(v.HandleFade.alpha, hovered || dragging ? 1 : 0,
+                    Time.unscaledDeltaTime / handleFadeDuration);
+            }
         }
         void Place(View v)
         {
@@ -306,6 +327,7 @@ namespace PuzzleApple.V4.Cognition
             drag = new Drag { GroupId = groupId, WordId = wordId, Whole = whole, WasIndependent = v.Group.Independent,
                 Point = point, GrabOffset = fromLibrary ? new Vector2(v.TextCenterX,v.TextCenterY) : point - origin, Ghost = ghost,
                 GhostHandle = whole ? ghost.Find("Chalk reveal/Sentence handle") : null };
+            if (drag.GhostHandle) drag.GhostHandle.GetComponent<CanvasGroup>().alpha = 1;
             if (whole || v.Group.Independent) v.Fade.alpha = fromLibrary ? 0 : .2f * (v.Conflicted ? ConflictAlpha : 1);
             else v.Words[index].color = new Color(ChalkColor.r,ChalkColor.g,ChalkColor.b,ChalkColor.a*.2f);
             MoveDrag(screen);

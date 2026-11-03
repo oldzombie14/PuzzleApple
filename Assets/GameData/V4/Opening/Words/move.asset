@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.WordDefinition
   id: move
   displayText: move
-  symbol: {fileID: 21300000, guid: 2f556dedfff4b1f48b2a6b1d06df895b, type: 3}
+  symbol: {fileID: 21300000, guid: 6c548bca0f5fe7344aef978ab163ab50, type: 3}
   senses:
   - meaning: move
     role: 1

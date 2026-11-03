@@ -31,17 +31,25 @@ namespace PuzzleApple.V4
         Color eyeColor;
         public bool Ready { get; private set; }
         public bool Collecting => collecting != null;
-        public bool MovementDiscoveryPending => Ready && !board.State.Knows("move") && player.WalkedDistance > .005f;
+        public bool MovementDiscoveryPending => !explorationOnly && Ready && !board.State.Knows("move") && player.WalkedDistance > .005f;
         public bool CanInteract => Ready && player.CanInteractWithWorld && !MovementDiscoveryPending && !Collecting;
+        [Min(0)] public float walkAfterFloorDistance = 1.2f;
+        float floorCollectedAt;
+        bool floorCollectedBeforeMove;
         string collecting;
         Material reticleMaterial;
         Camera worldCamera;
         readonly RaycastHit[] interactionHits = new RaycastHit[32];
         public SentenceEffectManager effects;
+        [Tooltip("Collect placed vocabulary without Intro discovery or grammar effects.")]
+        public bool explorationOnly;
+        SessionSceneManager session;
+        bool IsCurrent => !explorationOnly || (session && session.Current && session.Current.gameObject.scene == gameObject.scene);
         void Start()
         {
+            session = FindFirstObjectByType<SessionSceneManager>();
             if (door) door.gameObject.SetActive(false);
-            board.Panel.InputBlocked = true;
+            if (!explorationOnly) board.Panel.InputBlocked = true;
             collectionSymbol.gameObject.SetActive(false);
             hoverEye.gameObject.SetActive(false); reticle.SetActive(false);
             worldCamera = player.view.GetComponent<Camera>();
@@ -53,13 +61,14 @@ namespace PuzzleApple.V4
             knownSymbol.material=reticleMaterial;
             knownSymbol.gameObject.SetActive(false);
             foreach (var image in reticle.GetComponentsInChildren<Image>(true)) image.material = reticleMaterial;
-
+            if (explorationOnly) Ready = true;
         }
         void LateUpdate()
         {
             // V4 presents a render texture through an overlay and a second display camera.
             // Bind its world image locally so later cameras cannot replace the contrast input.
-            if (!reticleMaterial || !worldCamera || !worldCamera.targetTexture) return;
+            if (!IsCurrent || !reticleMaterial || !worldCamera || !worldCamera.targetTexture) return;
+            hoverEye.material = reticleMaterial;
             reticleMaterial.SetTexture("_ReticleSceneColor", worldCamera.targetTexture);
             reticleMaterial.SetVector("_ReticleViewportSize", new Vector4(Screen.width, Screen.height, 0, 0));
         }
@@ -76,7 +85,10 @@ namespace PuzzleApple.V4
         }
         void Update()
         {
-            if (!Ready) return;
+            if (!Ready || !IsCurrent) return;
+            if (lightField && !lightField.Released && board.State.Knows("ground") && board.State.Knows("move") &&
+                (floorCollectedBeforeMove || player.WalkedDistance - floorCollectedAt >= walkAfterFloorDistance))
+                lightField.Release();
             if (door && !door.Revealed)
             {
                 bool allOff = lamp && lamp.IsOff;
@@ -86,7 +98,7 @@ namespace PuzzleApple.V4
                     if (effects) effects.DoorRevealed();
                 }
             }
-            if (player.WalkedDistance >= player.learnMoveDistance && !board.State.Knows("move") && !Collecting) Learn("move");
+            if (!explorationOnly && player.WalkedDistance >= player.learnMoveDistance && !board.State.Knows("move") && !Collecting) Learn("move");
             string targetWord = CanInteract ? LookedAtWord() : null;
             bool target = targetWord != null;
             var eye=eyeColor;eye.a*=target&&board.State.Knows(targetWord)?knownEyeAlpha:1;
@@ -116,7 +128,9 @@ namespace PuzzleApple.V4
             }
             if (!hit.collider) return sun ? "light" : null;
             string word = null;
-            if (effects && effects.world && hit.collider == effects.world.ground) word = "ground";
+            var vocabulary = hit.collider.GetComponentInParent<ChapterVocabulary>();
+            if (explorationOnly && vocabulary) word = vocabulary.wordId;
+            else if (effects && effects.world && hit.collider == effects.world.ground) word = "ground";
             else if (hit.collider.GetComponentInParent<OpeningLight>()) word = "light";
             else if (door && !door.Appearing && hit.collider.GetComponentInParent<ThresholdDoor>() == door) word = "door";
             float collectionRange = word == "door" ? door.collectionDistance : interactionDistance;
@@ -149,6 +163,13 @@ namespace PuzzleApple.V4
             if (!CanInteract || LookedAtWord() != "ground") return false;
             Learn("ground"); return true;
         }
+        public bool TryCollectPlacedWord()
+        {
+            if (!explorationOnly || !IsCurrent || !CanInteract) return false;
+            var id = LookedAtWord();
+            if (id == null) return false;
+            Learn(id); return true;
+        }
         void Learn(string id)
         {
             if(board.State.Knows(id))
@@ -161,9 +182,32 @@ namespace PuzzleApple.V4
             collecting = id;
             if (id != "move") player.MovementLocked = true;
             if(id=="door")RememberDoor();
-            else if (id == "light" || id == "ground") library.Remember(id, worldCamera.targetTexture);
+            else if (id == "ground") RememberGround();
+            else if (id == "mirror") library.Remember(id);
+            else if (id == "light" || explorationOnly) library.Remember(id, worldCamera.targetTexture);
             else library.Remember(id);
             StartCoroutine(Collect(board.Catalog.Word(id)));
+        }
+        public void RememberGround()
+        {
+            var go = new GameObject("Floor memory camera", typeof(Camera));
+            var camera = go.GetComponent<Camera>();
+            camera.CopyFrom(worldCamera); camera.enabled = false;
+            camera.transform.SetPositionAndRotation(player.view.position, Quaternion.Euler(12, player.view.eulerAngles.y, 0));
+            camera.aspect = 1; camera.allowHDR = false;
+            var lamps = FindObjectsByType<OpeningLight>(FindObjectsSortMode.None);
+            var visible = new bool[lamps.Length];
+            var frame = RenderTexture.GetTemporary(640, 640, 24, RenderTextureFormat.ARGB32);
+            try
+            {
+                for (int i=0;i<lamps.Length;i++) if(lamps[i].surface) { visible[i]=lamps[i].surface.enabled; lamps[i].surface.enabled=false; }
+                camera.targetTexture=frame; camera.Render(); library.Remember("ground",frame);
+            }
+            finally
+            {
+                for(int i=0;i<lamps.Length;i++) if(lamps[i].surface) lamps[i].surface.enabled=visible[i];
+                camera.targetTexture=null; RenderTexture.ReleaseTemporary(frame); Destroy(go);
+            }
         }
         public void RememberDoor()
         {
@@ -171,7 +215,7 @@ namespace PuzzleApple.V4
             var cameraObject=new GameObject("Door memory camera",typeof(Camera));
             var camera=cameraObject.GetComponent<Camera>();camera.enabled=false;
             camera.CopyFrom(worldCamera);camera.enabled=false;camera.orthographic=true;
-            camera.orthographicSize=3.6f;camera.aspect=1;camera.clearFlags=CameraClearFlags.SolidColor;
+            camera.orthographicSize=5.2f;camera.aspect=1;camera.clearFlags=CameraClearFlags.SolidColor;
             camera.backgroundColor=new Color(.08f,.09f,.09f);camera.nearClipPlane=.1f;camera.farClipPlane=40;
             camera.cullingMask=1<<30;camera.allowHDR=false;
             var center=door.transform.TransformPoint(new Vector3(0,3,0));
@@ -230,6 +274,11 @@ namespace PuzzleApple.V4
                 yield return null;
             }
             collectionSymbol.gameObject.SetActive(false);
+            if (word.Id == "ground")
+            {
+                floorCollectedAt = player.WalkedDistance;
+                floorCollectedBeforeMove = !board.State.Knows("move");
+            }
             board.State.TryAcquireWord("opening." + word.Id, word);
             collecting = null; player.MovementLocked = false;
         }

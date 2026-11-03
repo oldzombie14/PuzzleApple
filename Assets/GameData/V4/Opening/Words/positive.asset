@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.WordDefinition
   id: positive
   displayText: positive
-  symbol: {fileID: 21300000, guid: 0ba96e684b81d6c448148486a3f34c3f, type: 3}
+  symbol: {fileID: 21300000, guid: decdfe4e4616a674d915461143e507b0, type: 3}
   senses:
   - meaning: positive
     role: 1

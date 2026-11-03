@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.WordDefinition
   id: negative
   displayText: negative
-  symbol: {fileID: 21300000, guid: 9313637c941382644a9e45a9d20efa8a, type: 3}
+  symbol: {fileID: 21300000, guid: 8bea20dba2a4d10469bd722158bf91fb, type: 3}
   senses:
   - meaning: negative
     role: 1

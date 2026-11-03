@@ -21,9 +21,11 @@ namespace PuzzleApple.V4
         public bool CanInteractWithWorld => isActiveAndEnabled && !CinematicLocked && !PanelOpen && closedFrame != Time.frameCount && Cursor.lockState == CursorLockMode.Locked;
         CharacterController motor;
         Vector3 spawn, normalView;
+        Vector3 defaultView, defaultCenter;
+        float defaultHeight, defaultStepOffset;
         Quaternion spawnRotation, panelRotation;
         float vertical, pitch, idleTime, stepPhase, pushTime, learningYaw, learningBob;
-        float panelYaw, panelPitch;
+        float panelSway, panelPitch;
         int closedFrame = -1;
 
         void Awake()
@@ -31,16 +33,27 @@ namespace PuzzleApple.V4
             motor = GetComponent<CharacterController>();
             if (!view) view = GetComponentInChildren<Camera>().transform;
             spawn = transform.position; spawnRotation = transform.rotation; normalView = view.localPosition;
+            defaultView=normalView;defaultCenter=motor.center;defaultHeight=motor.height;defaultStepOffset=motor.stepOffset;
+        }
+        public void SetEyeHeight(float height)
+        {
+            normalView=defaultView;
+            if(height>0)normalView.y=height;
+            view.localPosition=normalView;
+            motor.height=height>0?height+.15f:defaultHeight;
+            motor.center=height>0?new Vector3(defaultCenter.x,motor.height*.5f,defaultCenter.z):defaultCenter;
+            motor.stepOffset=height>0?Mathf.Max(defaultStepOffset,.5f):defaultStepOffset;
         }
         void OnEnable() => LockCursor(true);
         void OnDisable() => LockCursor(false);
         void OnApplicationFocus(bool focus) { if (!focus) LockCursor(false); }
         static void LockCursor(bool locked) { Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None; Cursor.visible = !locked; }
         public void SuppressInteractionThisFrame() => closedFrame = Time.frameCount;
-        public void SetPanelOpen(bool open, float stop = .2f, float yaw = 2.5f, float idlePitch = .35f)
+        public void SetPanelOpen(bool open, float stop = .2f, float swayAngle = 2.5f, float idlePitch = .35f)
         {
+            if (PanelOpen && !open) AdoptCurrentView();
             PanelOpen = open; closedFrame = open ? -1 : Time.frameCount;
-            panelRotation = transform.rotation; idleTime = 0; panelYaw = yaw; panelPitch = idlePitch;
+            panelRotation = transform.rotation; idleTime = 0; panelSway = swayAngle; panelPitch = idlePitch;
             LockCursor(!open);
         }
         public void Teleport(Vector3 position, Quaternion rotation)
@@ -75,7 +88,7 @@ namespace PuzzleApple.V4
             if (PanelOpen)
             {
                 idleTime += Time.deltaTime;
-                transform.rotation = panelRotation * Quaternion.Euler(0, Mathf.Sin(idleTime * .5f) * panelYaw * Mathf.Clamp01(idleTime * .5f), 0);
+                transform.rotation = panelRotation;
             }
             Vector2 input = controls && key != null ? new Vector2((key.dKey.isPressed ? 1 : 0) - (key.aKey.isPressed ? 1 : 0), (key.wKey.isPressed ? 1 : 0) - (key.sKey.isPressed ? 1 : 0)) : Vector2.zero;
             AdvanceMovement(input, controls, Time.deltaTime);
@@ -87,22 +100,13 @@ namespace PuzzleApple.V4
             var horizontal = transform.right * input.x + transform.forward * input.y;
             if (motor.isGrounded && vertical < 0) vertical = -2;
             vertical += -20 * deltaTime;
-            float confidence = WalkingConfidence;
-            float envelope = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.25f, .85f, WalkedDistance)) * (1 - confidence);
-            if (input.sqrMagnitude > .001f) { pushTime += deltaTime; stepPhase += deltaTime * Mathf.Lerp(6.4f, 10.5f, confidence); } else pushTime = 0;
-            float footfall = Mathf.Sin(stepPhase) * .5f + .5f;
-            float hesitation = 1 - learningHesitation * envelope * footfall * footfall;
-            float push = Mathf.Lerp(Mathf.Lerp(.35f, 1, Mathf.SmoothStep(0, 1, pushTime / .28f)), 1, confidence);
-            float speed = moveSpeed * Mathf.Lerp(initialSpeedFraction, 1, confidence) * hesitation * push;
+            float speed = moveSpeed;
             var before = transform.position;
             motor.Move((horizontal * speed + Vector3.up * vertical) * deltaTime);
             float distance = Vector3.ProjectOnPlane(transform.position - before, Vector3.up).magnitude;
             if (controls && !MovementLocked && input.sqrMagnitude > .001f) WalkedDistance += distance;
-            float sway = distance > .0001f && !PanelOpen && !MovementLocked ? envelope : 0;
-            learningYaw = Mathf.Lerp(learningYaw, (Mathf.Sin(stepPhase * .5f) * .8f + Mathf.Sin(stepPhase * .83f) * .2f) * learningYawAmplitude * sway, 1 - Mathf.Exp(-5 * deltaTime));
-            learningBob = Mathf.Lerp(learningBob, Mathf.Sin(stepPhase) * learningBobAmplitude * sway, 1 - Mathf.Exp(-10 * deltaTime));
-            view.localRotation = Quaternion.Euler(pitch + (PanelOpen ? Mathf.Sin(idleTime * .37f) * panelPitch * Mathf.Clamp01(idleTime * .5f) : 0), learningYaw, 0);
-            view.localPosition = normalView + Vector3.up * learningBob;
+            view.localRotation = Quaternion.Euler(pitch + (PanelOpen ? (Mathf.Sin(idleTime * .5f) * panelSway + Mathf.Sin(idleTime * .37f) * panelPitch) * Mathf.Clamp01(idleTime * .5f) : 0), 0, 0);
+            view.localPosition = normalView;
             if (transform.position.y < -5)
             {
                 motor.enabled = false; transform.SetPositionAndRotation(spawn, spawnRotation); motor.enabled = true;

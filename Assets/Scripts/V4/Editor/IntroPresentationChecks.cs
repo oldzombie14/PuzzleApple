@@ -86,7 +86,7 @@ namespace PuzzleApple.V4.Editor
                 var board=flow.board;var s=board.State;var presentation=flow.effects.presentation;var feedback=presentation.feedback;
                 Require(flow.Ready&&board.Panel.IsOpen&&entry.exitButton.isActiveAndEnabled,"entry opens Tab and retains exit");
                 foreach(var id in new[]{"positive","negative","world"})
-                {Require(s.Knows(id),"entry vocabulary "+id);flow.library.Select(id);Require(!flow.library.SnapshotImage.enabled,"no image for "+id);}
+                {Require(s.Knows(id),"entry vocabulary "+id);flow.library.Select(id);Require(flow.library.SnapshotImage.enabled,"entry image for "+id);}
                 flow.library.Show(false);board.Panel.SetOpen(false);
                 yield return new WaitForSecondsRealtime(.1f);
                 var lamp=flow.effects.lights.Nearest(flow.player.transform.position);

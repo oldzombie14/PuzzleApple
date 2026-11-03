@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.Cognition.WordDefinition
   id: world
   displayText: world
-  symbol: {fileID: 21300000, guid: 03fee1a0446e50f4992bb72bc5472902, type: 3}
+  symbol: {fileID: 21300000, guid: 5c3e2c779cb07b04090b315afde15fb0, type: 3}
   senses:
   - meaning: world
     role: 0

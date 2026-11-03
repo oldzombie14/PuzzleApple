@@ -32,18 +32,6 @@ namespace PuzzleApple.V4
         void Apply(CognitionChange change)
         {
             currentChange=change;
-            var currentExitGroups=board.State.Groups.Where(g=>g.Effective&&g.Signals.Contains(CognitionSignal.WorldOff)).Select(g=>g.Id).ToArray();
-            bool requestExit=currentExitGroups.Any(id=>!exitGroups.Contains(id));
-            exitGroups.Clear();foreach(int id in currentExitGroups)exitGroups.Add(id);
-            if(requestExit)
-            {
-                var entry=FindFirstObjectByType<WorldEntry>();
-                if(entry&&entry.Exiting)return;
-                if(presentation&&presentation.feedback)
-                    foreach(var group in board.State.Groups)
-                        if(group.Effective&&System.Array.IndexOf(group.Signals.ToArray(),CognitionSignal.WorldOff)>=0)presentation.feedback.Play(group.Id,false);
-                WorldEntry.QuitApplication();return;
-            }
             if(Suspended) return;
             if(presentation) presentation.Apply(change,ApplyWorld);
             else ApplyWorld();

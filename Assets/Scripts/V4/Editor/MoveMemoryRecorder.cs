@@ -22,6 +22,11 @@ namespace PuzzleApple.V4.Editor
             yield return new WaitForSecondsRealtime(1.5f);
             flow.board.Panel.SetOpen(false);
             var player=flow.player;player.enabled=false;flow.enabled=false;
+            // Recording-only scenery provides depth cues on the otherwise uniform floor.
+            flow.lightField.initialClearRadius=0;flow.lightField.Release();
+            for(int i=0;i<16;i++)flow.lightField.RefreshField();
+            player.Teleport(new Vector3(0,1,0),Quaternion.identity);
+            yield return null;
             var camera=player.view.GetComponent<Camera>();
             var advance=typeof(FirstPersonController).GetMethod("AdvanceMovement",BindingFlags.Instance|BindingFlags.NonPublic);
             const int width=320,height=180,columns=8,rows=8,frames=64;
@@ -40,7 +45,7 @@ namespace PuzzleApple.V4.Editor
                     RenderTexture.active=target;frame.ReadPixels(new Rect(0,0,width,height),0,0);frame.Apply();RenderTexture.active=previous;
                     atlas.SetPixels(i%columns*width,(rows-1-i/columns)*height,width,height,frame.GetPixels());
                     recorded=i+1;
-                    if(player.WalkedDistance>=player.learnMoveDistance)break;
+
                     yield return new WaitForSecondsRealtime(1f/12);
                 }
                 atlas.Apply();
@@ -49,7 +54,7 @@ namespace PuzzleApple.V4.Editor
                 var importer=(TextureImporter)AssetImporter.GetAtPath(path);importer.mipmapEnabled=false;importer.maxTextureSize=4096;
                 importer.textureCompression=TextureImporterCompression.Uncompressed;importer.filterMode=FilterMode.Bilinear;importer.SaveAndReimport();
                 var clip=IntroPresentationSetup.Sequence();clip.atlas=AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-                clip.columns=columns;clip.rows=rows;clip.frames=recorded;clip.framesPerSecond=12;clip.aspect=(float)width/height;
+                clip.columns=columns;clip.rows=rows;clip.frames=recorded;clip.framesPerSecond=24;clip.aspect=(float)width/height;
                 EditorUtility.SetDirty(clip);AssetDatabase.SaveAssets();
                 Result="PASS: recorded actual first-person learning walk, "+player.WalkedDistance.ToString("F2")+" m";
             }

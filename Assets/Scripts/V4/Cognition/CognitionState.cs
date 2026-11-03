@@ -42,6 +42,7 @@ namespace PuzzleApple.V4.Cognition
         readonly HashSet<string> learned = new HashSet<string>();
         long chronology;
         readonly HashSet<string> acquisitions = new HashSet<string>();
+        readonly Dictionary<string, string[]> acquisitionWords = new Dictionary<string, string[]>();
         int nextWord, nextGroup;
         public IReadOnlyList<Group> Groups => groups;
         public event Action<CognitionChange> Changed;
@@ -69,6 +70,7 @@ namespace PuzzleApple.V4.Cognition
             if (!vocabulary.TryGetValue(definition.Id, out var registered) || registered != definition)
                 throw new ArgumentException("Word is not registered in this cognition catalog: " + definition.Id);
             if (!acquisitions.Add(sourceId)) return false;
+            acquisitionWords[sourceId] = new[] { definition.Id };
             if (!learned.Add(definition.Id)) return false;
             // Acquisitions enter the permanent left-hand vocabulary; tokens are
             // created only when the player drags a word into the workspace.
@@ -84,6 +86,7 @@ namespace PuzzleApple.V4.Cognition
             var definitions = tokens.Select(t => vocabulary.TryGetValue(t.ToLowerInvariant(), out var word) ? word
                 : throw new ArgumentException("Unknown cognition word ID: " + t)).ToArray();
             acquisitions.Add(sourceId);
+            acquisitionWords[sourceId] = definitions.Select(d => d.Id).ToArray();
             foreach (var d in definitions) learned.Add(d.Id);
             NewGroup(definitions.Select(d => new Word(++nextWord, d)));
             Commit(CognitionChange.Add);
@@ -120,6 +123,19 @@ namespace PuzzleApple.V4.Cognition
         {
             if(groups.Count==0)return;
             groups.Clear();Commit(CognitionChange.Split);
+        }
+        // Remove affected sentences as a whole: never accidentally form a new rule
+        // by concatenating the words on either side of an expired word.
+        public void ForgetWords(IEnumerable<string> ids)
+        {
+            var expired = new HashSet<string>(ids ?? Array.Empty<string>());
+            if (expired.Count == 0) return;
+            groups.RemoveAll(g => g.words.Any(w => expired.Contains(w.Meaning)));
+            learned.ExceptWith(expired);
+            // Acquisition IDs are tracked per word so revisiting a scene can collect it again.
+            foreach (var source in acquisitionWords.Where(p => p.Value.Any(expired.Contains)).Select(p => p.Key).ToArray())
+            { acquisitions.Remove(source); acquisitionWords.Remove(source); }
+            Commit(CognitionChange.Split);
         }
         public Group Owning(int wordId) => groups.Find(g => g.words.Any(w => w.Id == wordId));
 

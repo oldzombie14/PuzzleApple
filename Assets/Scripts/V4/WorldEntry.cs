@@ -9,6 +9,8 @@ namespace PuzzleApple.V4
     {
         public FirstPersonController player;
         public OpeningFlow opening;
+        public Cognition.CognitionBoard board;
+        readonly System.Collections.Generic.HashSet<int> exitGroups = new System.Collections.Generic.HashSet<int>();
         public Button enterButton;
         public Button exitButton;
         public Image blackBackground;
@@ -45,7 +47,7 @@ namespace PuzzleApple.V4
         void LateUpdate()
         {
             if(!entered||!exitButton||!player)return;
-            bool showExit=opening&&opening.board&&opening.board.Panel.IsOpen;
+            bool showExit=board&&board.Panel.IsOpen;
             if(exitButton.gameObject.activeSelf!=showExit)exitButton.gameObject.SetActive(showExit);
             float night=environment?environment.NightBlend:0;
             Color hue=environment?environment.nightFogColor:new Color(.18f,.22f,.30f);
@@ -69,11 +71,35 @@ namespace PuzzleApple.V4
 
         void Start()
         {
+            board.State.Changed += OnSentences;
             if (player) player.enabled = false;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
 
+        void OnDestroy(){if(board && board.State!=null)board.State.Changed-=OnSentences;}
+        void OnSentences(Cognition.CognitionChange change)
+        {
+            var current = new System.Collections.Generic.HashSet<int>();
+            foreach(var g in board.State.Groups)
+                if(g.Effective && System.Linq.Enumerable.Contains(g.Signals,Cognition.CognitionSignal.WorldOff))current.Add(g.Id);
+            bool request=false;foreach(var id in current)if(!exitGroups.Contains(id))request=true;
+            exitGroups.Clear();foreach(var id in current)exitGroups.Add(id);
+            if(request)
+            {
+                if(opening&&opening.effects&&opening.effects.presentation&&opening.effects.presentation.feedback)
+                    foreach(var id in current)opening.effects.presentation.feedback.Play(id,false);
+                QuitApplication();
+            }
+        }
+        public void SkipIntroMenu()
+        {
+            entered=true;entering=false;
+            enterButton.gameObject.SetActive(false);
+            blackBackground.gameObject.SetActive(false);
+            player.enabled=true;
+            var raycaster=GetComponent<GraphicRaycaster>();if(raycaster)raycaster.enabled=true;
+        }
         public void EnterWorld()
         {
             if (entering || Exiting || ConfirmingExit) return;
@@ -126,7 +152,7 @@ namespace PuzzleApple.V4
         public void ExitGame()
         {
             if (entering && !entered) return;
-            if(entered&&(!opening||!opening.board||!opening.board.Panel.IsOpen))return;
+            if(entered&&(!board||!board.Panel.IsOpen))return;
             QuitApplication();
         }
 
@@ -140,10 +166,10 @@ namespace PuzzleApple.V4
             if(Exiting||ConfirmingExit)return;
             if(opening&&opening.effects&&opening.effects.presentation)opening.effects.presentation.Cancel();
             savedLocked=player&&player.CinematicLocked;
-            savedBlocked=opening&&opening.board&&opening.board.Panel.InputBlocked;
+            savedBlocked=board&&board.Panel.InputBlocked;
             savedCursorLock=Cursor.lockState;savedCursorVisible=Cursor.visible;
             if(player)player.CinematicLocked=true;
-            if(opening&&opening.board){opening.board.CancelDrag();opening.board.Panel.InputBlocked=true;}
+            if(board){board.CancelDrag();board.Panel.InputBlocked=true;}
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
             if(entered&&opening&&opening.effects&&opening.effects.inscriptions)
                 opening.effects.inscriptions.Record(Cognition.CognitionSignal.WorldOff);
@@ -187,7 +213,7 @@ namespace PuzzleApple.V4
             var hit=DialogImage(name,parent,Color.clear);hit.rectTransform.sizeDelta=new Vector2(160,140);
             hit.rectTransform.anchoredPosition=new Vector2(x,0);
             var symbol=DialogImage("Symbol",hit.transform,Color.white);symbol.rectTransform.sizeDelta=new Vector2(64,64);
-            symbol.sprite=opening.board.Catalog.Word(word).Symbol;symbol.preserveAspect=true;symbol.raycastTarget=false;
+            symbol.sprite=board.Catalog.Word(word).Symbol;symbol.preserveAspect=true;symbol.raycastTarget=false;
             var button=hit.gameObject.AddComponent<Button>();button.targetGraphic=symbol;
             var colors=button.colors;colors.highlightedColor=new Color(.65f,.65f,.65f);colors.pressedColor=new Color(.45f,.45f,.45f);button.colors=colors;
             button.navigation=new Navigation{mode=Navigation.Mode.None};button.onClick.AddListener(action);
@@ -197,7 +223,7 @@ namespace PuzzleApple.V4
             if(!ConfirmingExit||Exiting)return;
             DismissExitDialog();
             if(player){player.CinematicLocked=savedLocked;player.SuppressInteractionThisFrame();}
-            if(opening&&opening.board)opening.board.Panel.InputBlocked=savedBlocked;
+            if(board)board.Panel.InputBlocked=savedBlocked;
             Cursor.lockState=savedCursorLock;Cursor.visible=savedCursorVisible;
         }
         public void ConfirmExit()
@@ -216,7 +242,7 @@ namespace PuzzleApple.V4
             Exiting=true;
             if(opening&&opening.effects&&opening.effects.presentation)opening.effects.presentation.Cancel();
             if(player)player.CinematicLocked=true;
-            if(opening&&opening.board)opening.board.Panel.InputBlocked=true;
+            if(board)board.Panel.InputBlocked=true;
             if(enterButton)enterButton.interactable=false;
             if(exitButton)exitButton.interactable=false;
             if(delay>0)yield return new WaitForSecondsRealtime(delay);

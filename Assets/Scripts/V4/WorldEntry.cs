@@ -141,6 +141,8 @@ namespace PuzzleApple.V4
             if (raycaster) raycaster.enabled = true;
             if (player) player.enabled = true;
             if (opening) opening.Begin();
+            var session = FindFirstObjectByType<SessionSceneManager>();
+            if (session) session.PlayCurrentMusic();
         }
 
         static CanvasGroup FadeGroup(GameObject target)

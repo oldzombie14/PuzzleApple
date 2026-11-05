@@ -21,6 +21,9 @@ namespace PuzzleApple.V4
         [Tooltip("灯群离地较低时只调 pitch，超过此高度后对准灯群。")]
         [Min(0)] public float elevatedGroupHeight=6;
         [Min(1)] public float lightGroupRadius=18;
+        [InspectorName("近地高度阈值（米）")]
+        [Tooltip("仅用于 light move：所选灯群超过半数的灯底部离当前地面不超过此高度时，地平线固定在画面下三分之一。演出开始前判断一次。")]
+        [Min(0)] public float nearGroundHeight=3;
         [Tooltip("目标在画面中的垂直位置，0 为底部，0.5 为中央。")]
         [Range(.2f,.8f)] public float targetViewportY=.5f;
         public bool followTarget;

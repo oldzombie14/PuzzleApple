@@ -33,7 +33,13 @@ namespace PuzzleApple.V4.Editor
                     Horizon(flow,camera);
                 },false,180);
                 yield return Shot(flow,"positive light","light-on-horizon",()=>Horizon(flow,camera));
-                yield return Shot(flow,"light move","light-move",()=>
+                yield return Shot(flow,"light move","light-move-near-ground",()=>
+                {
+                    Horizon(flow,camera);
+                    Require(Mathf.Abs(Yaw(flow.player.view.forward))<.1f&&!p.TrackingTarget,"near-ground light move preserves yaw without tracking");
+                });
+                Lamps(flow,16);
+                yield return Shot(flow,"light move","light-move-high",()=>
                 {
                     Require(Mathf.Abs(Yaw(flow.player.view.forward))<.1f,"light move preserves yaw");
                     var delta=p.FocusPoint-flow.player.view.position;

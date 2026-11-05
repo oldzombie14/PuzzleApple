@@ -20,6 +20,7 @@ MonoBehaviour:
   skyMinimumElevation: 25
   elevatedGroupHeight: 6
   lightGroupRadius: 18
+  nearGroundHeight: 3
   targetViewportY: 0.5
   followTarget: 0
   followResponse: 1.5

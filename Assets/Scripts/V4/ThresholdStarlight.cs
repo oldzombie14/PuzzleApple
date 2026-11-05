@@ -23,14 +23,17 @@ namespace PuzzleApple.V4
         public float Clock { get; private set; }
         public int CurrentSymbol { get; private set; } = -1;
         public float Formation { get; private set; }
-        ParticleSystem system;
-        ParticleSystemRenderer starRenderer;
+        Mesh mesh;
+        MeshRenderer starRenderer;
+        Vector3[] centers, directions;
+        Vector2[] offsets;
+        Color[] signals;
         MaterialPropertyBlock starProperties;
         Color baseGlow;
-        ParticleSystem.Particle[] particles;
         DoorStateEffects state;
         ThresholdDoor door;
-        const int TrailSteps = 24;
+        const int TrailSteps = 12;
+        const int VerticesPerStar = 4 + 2 * (TrailSteps + 1);
         float landingStart = float.PositiveInfinity;
         float reveal;
         readonly Bounds[] symbolBounds = new Bounds[3];
@@ -52,24 +55,52 @@ namespace PuzzleApple.V4
                 frames.Add(bounds);
             }
             frameBounds = frames.ToArray();
-            system = gameObject.AddComponent<ParticleSystem>();
-            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            var main = system.main;
-            main.playOnAwake = false; main.startSpeed = 0; main.maxParticles = starCount * (TrailSteps + 1);
-            main.simulationSpace = ParticleSystemSimulationSpace.Local;
-            var emission = system.emission; emission.enabled = false;
-            var shape = system.shape; shape.enabled = false;
-            var renderer = system.GetComponent<ParticleSystemRenderer>();
-            renderer.sharedMaterial = material;
-            starRenderer = renderer;
+            starRenderer = gameObject.AddComponent<MeshRenderer>();
+            starRenderer.sharedMaterial = material;
+            starRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            starRenderer.receiveShadows = false;
             starProperties = new MaterialPropertyBlock();
             baseGlow = material.GetColor("_Color");
-            renderer.minParticleSize = 0; renderer.maxParticleSize = .15f;
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            particles = new ParticleSystem.Particle[main.maxParticles];
+            mesh = new Mesh { name = "Threshold stars and trails" };
+            mesh.MarkDynamic();
+            gameObject.AddComponent<MeshFilter>().sharedMesh = mesh;
+            BuildTopology();
             CacheSymbolBounds();
-            system.Play();
+        }
+
+        void OnDestroy()
+        {
+            if (mesh) Destroy(mesh);
+        }
+
+        void BuildTopology()
+        {
+            int count = Mathf.Max(0, starCount);
+            centers = new Vector3[count * VerticesPerStar];
+            directions = new Vector3[centers.Length];
+            offsets = new Vector2[centers.Length];
+            signals = new Color[centers.Length];
+            var uv = new Vector2[centers.Length];
+            var triangles = new System.Collections.Generic.List<int>(count * (1 + TrailSteps) * 6);
+            for (int i = 0; i < count; i++)
+            {
+                int head = i * VerticesPerStar;
+                uv[head] = Vector2.zero; uv[head + 1] = Vector2.right;
+                uv[head + 2] = Vector2.one; uv[head + 3] = Vector2.up;
+                triangles.AddRange(new[] {head, head+1, head+2, head, head+2, head+3});
+                for (int j = 0; j <= TrailSteps; j++)
+                {
+                    int left = head + 4 + j * 2;
+                    float age = j / (float)TrailSteps;
+                    uv[left] = new Vector2(0, age);
+                    uv[left + 1] = new Vector2(1, age);
+                    if (j > 0) triangles.AddRange(new[] {left-2,left-1,left,left,left-1,left+1});
+                }
+            }
+            if (centers.Length > 65535) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.vertices = centers;
+            mesh.uv = uv;
+            mesh.SetTriangles(triangles, 0);
         }
 
         static float Seed(int i, int channel)
@@ -117,7 +148,7 @@ namespace PuzzleApple.V4
 
         void LateUpdate()
         {
-            if (!system) return;
+            if (!mesh) return;
             if (door && door.Appearing) reveal = 0;
             else reveal = Mathf.MoveTowards(reveal, 1, Time.deltaTime / Mathf.Max(.01f, revealDuration));
             bool running = (!state || state.IsOn) && (!door || !door.Appearing);
@@ -222,49 +253,85 @@ namespace PuzzleApple.V4
 
         void RenderAt(float time)
         {
-            // HDR gain belongs on the renderer, not byte-clamped particle alpha or the shared material.
+            if (centers.Length != Mathf.Max(0, starCount) * VerticesPerStar) BuildTopology();
             var glowColor = baseGlow * Mathf.Lerp(1, landedBrightness, LandingBlend(time));
             glowColor.a = baseGlow.a;
-            starProperties.SetColor("_Color", glowColor);
+            // Pass linear HDR emission directly; SetColor would apply another color-space conversion.
+            starProperties.SetVector("_Color", (Vector4)glowColor);
             starRenderer.SetPropertyBlock(starProperties);
             float visibility = (state ? state.Brightness : 1) * Mathf.SmoothStep(0, 1, reveal);
             if (door && door.Appearing) visibility = 0;
-            int count = 0;
             Formation = 0; CurrentSymbol = -1;
             for (int i = 0; i < starCount; i++)
             {
-                var position = PositionAt(i, time, out float formation, out int symbol);
+                Vector3 position = PositionAt(i, time, out float formation, out int symbol);
                 Formation += formation / starCount;
                 if (symbol >= 0) CurrentSymbol = symbol;
                 float variation = Seed(i, 15);
-                // More even cores preserve the narrow gaps and corners of the glyphs.
-                float size = starSize * Mathf.Lerp(.68f, 1.25f, variation);
-                float glow = (.86f + .1f * Mathf.Sin(time * (.7f + variation * .6f) + i)) * visibility;
-                SetParticle(count++, position, size, glow);
-                for (int j = 0; j < TrailSteps; j++)
+                float period = Mathf.Lerp(3.1f, 6.2f, Seed(i, 21));
+                float phase = time / period + Seed(i, 22);
+                // Vary the spacing between successive glints as well as between stars.
+                int cycle = Mathf.FloorToInt(phase);
+                float localPhase = Mathf.Repeat(phase, 1);
+                float peak = Mathf.Lerp(.29f, .71f, Seed(i, 85 + cycle));
+                float seconds = (localPhase - peak) * period;
+                float pulse = seconds < 0 ? Mathf.SmoothStep(0, 1, 1 + seconds / .31f)
+                    : 1 - Mathf.SmoothStep(0, 1, seconds / .59f);
+                // Hide the rays briefly between cycles so a new bearing emerges from a round core.
+                float toBoundary = Mathf.Min(localPhase, 1 - localPhase) * period;
+                float open = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.06f, .42f, toBoundary));
+                float flare = open * Mathf.Lerp(.59f, 1, pulse);
+                // A short motion average follows the visible trail through bends without reacting to tiny jitter.
+                const float motionWindow = .28f;
+                Vector3 travel = (position - PositionAt(i, Mathf.Max(0, time - motionWindow), out _, out _)) / motionWindow;
+                float moving = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.025f, .5f, travel.magnitude));
+                float turn = Mathf.Lerp(28f, 39f, Seed(i, 27)) * Mathf.Lerp(.65f, 1, moving);
+                if (Seed(i, 7001 + cycle) < .5f) turn = -turn;
+                float turnProgress = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(-.33f, .48f, seconds));
+                float angle = Mathf.PI * Seed(i, 5003 + cycle) + turn * Mathf.Deg2Rad * turnProgress;
+                // Keep most of the field quiet; give the largest stars a stronger silhouette.
+                float accent = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.76f, .98f, variation));
+                float size = starSize * Mathf.Lerp(.65f, 1.12f, variation) * (1 + .56f * accent);
+                Vector2 right = size * new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                Vector2 up = new Vector2(-right.y, right.x);
+                int head = i * VerticesPerStar;
+                offsets[head] = -right-up; offsets[head+1] = right-up;
+                offsets[head+2] = right+up; offsets[head+3] = up-right;
+                for (int j = head; j < head+4; j++)
                 {
-                    float age = (j + 1f) / TrailSteps;
-                    float fade = 1 - age;
-                    // Sample actual past positions at fixed time intervals, independent of frame rate.
-                    var tail = PositionAt(i, Mathf.Max(0, time - age * trailDuration), out _, out _);
-                    float separation = Vector3.Distance(position, tail);
-                    float moving = Mathf.Clamp01(separation / Mathf.Max(.01f, size * .35f));
-                    // Dim blue-grey dust, not another bright stellar core. Slightly irregular density
-                    // breaks the solid tapered silhouette while retaining a readable motion trace.
-                    float grain = Mathf.Lerp(.45f, 1, Seed(i, 60 + j));
-                    SetParticle(count++, tail, size * trailWidth * Mathf.Lerp(.65f, 1, fade),
-                        glow * fade * fade * trailOpacity * grain * moving * (1 - formation * .92f), true);
+                    centers[j] = position;
+                    directions[j] = travel;
+                    signals[j] = new Color(1, flare, 0, visibility * Mathf.Lerp(.54f, .98f, variation));
+                }
+                float duration = trailDuration * Mathf.Lerp(.46f, .73f, variation);
+                Vector3 previous = position;
+                for (int j = 0; j <= TrailSteps; j++)
+                {
+                    float age = j / (float)TrailSteps;
+                    float history = Mathf.Max(0, time - age * duration);
+                    Vector3 point = j == 0 ? position : PositionAt(i, history, out _, out _);
+                    Vector3 tangent = previous - point;
+                    int left = head + 4 + j*2;
+                    centers[left] = centers[left+1] = point;
+                    directions[left] = directions[left+1] = tangent;
+                    if (j == 1) directions[left-2] = directions[left-1] = tangent;
+                    float width = starSize * trailWidth * .106f;
+                    offsets[left] = Vector2.left * width;
+                    offsets[left+1] = Vector2.right * width;
+                    float speed = tangent.magnitude * TrailSteps / Mathf.Max(.01f, duration);
+                    float strength = visibility * trailOpacity * Mathf.Clamp01(speed / .5f) * (1 - formation * .92f);
+                    signals[left] = signals[left+1] = new Color(0, 0, history + i * .25f, strength);
+                    previous = point;
                 }
             }
-            system.SetParticles(particles, count);
-        }
-
-        void SetParticle(int index, Vector3 position, float size, float alpha, bool tail = false)
-        {
-            particles[index].position = position;
-            particles[index].startSize = size;
-            particles[index].startColor = tail ? new Color(.16f, .32f, .52f, alpha) : new Color(.8f, .9f, 1, alpha);
-            particles[index].startLifetime = particles[index].remainingLifetime = 1000;
+            mesh.vertices = centers;
+            mesh.normals = directions;
+            mesh.uv2 = offsets;
+            mesh.colors = signals;
+            mesh.RecalculateBounds();
+            var bounds = mesh.bounds;
+            bounds.Expand(4 * starSize);
+            mesh.bounds = bounds;
         }
     }
 }

@@ -72,6 +72,7 @@ namespace PuzzleApple.V4
         Camera cameraView;
         readonly List<OpeningLight> shotLights=new List<OpeningLight>();
         bool focusElevatedGroup;
+        bool nearGroundLightMove;
         public Vector3 FocusPoint {get;private set;}
         public bool TrackingTarget {get;private set;}
         sealed class Observation
@@ -215,6 +216,7 @@ namespace PuzzleApple.V4
             // Keep the eye position fixed; world motion needs a clear view of the sky.
             Quaternion rotation=player.view.localRotation;
             SelectLightGroup();
+            nearGroundLightMove=observation.signals.Contains(CognitionSignal.LightMove)&&MajorityNearGround();
             focusElevatedGroup=TryGroupPoint(out var center)&&effects.lights.ground&&
                 center.y-effects.lights.ground.bounds.max.y>=activeShot.elevatedGroupHeight;
             TrackingTarget=activeShot.followTarget&&activeShot.aim!=IntroShotAim.PitchOnly&&
@@ -266,6 +268,8 @@ namespace PuzzleApple.V4
             Vector3 forward=parent*original*Vector3.forward;
             float elevation=Mathf.Asin(Mathf.Clamp(forward.y,-1,1))*Mathf.Rad2Deg;
             float framePitch=Mathf.Atan((2*activeShot.targetViewportY-1)*Mathf.Tan(cameraView.fieldOfView*.5f*Mathf.Deg2Rad))*Mathf.Rad2Deg;
+            if(nearGroundLightMove)
+                return ElevationRotation(forward,Mathf.Atan(Mathf.Tan(cameraView.fieldOfView*.5f*Mathf.Deg2Rad)/3)*Mathf.Rad2Deg);
             if(activeShot.target==IntroShotTarget.Horizon)
                 return ElevationRotation(forward,-framePitch);
             if(activeShot.target==IntroShotTarget.Sky)
@@ -327,6 +331,21 @@ namespace PuzzleApple.V4
             foreach(var lamp in effects.lights.Lamps)
                 if(lamp&&lamp.isActiveAndEnabled&&Vector3.Distance(lamp.transform.position,seed.transform.position)<=activeShot.lightGroupRadius)
                     shotLights.Add(lamp);
+        }
+        bool MajorityNearGround()
+        {
+            if(!effects.lights.ground)return false;
+            float groundHeight=effects.lights.ground.bounds.max.y;
+            int count=0,near=0;
+            foreach(var lamp in shotLights)
+            {
+                if(!lamp||!lamp.isActiveAndEnabled)continue;
+                var collider=lamp.GetComponent<Collider>();
+                if(!collider)continue;
+                count++;
+                if(collider.bounds.min.y-groundHeight<=activeShot.nearGroundHeight)near++;
+            }
+            return count>0&&near*2>count;
         }
         bool TryGroupPoint(out Vector3 point)
         {

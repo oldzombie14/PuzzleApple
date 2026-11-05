@@ -83,7 +83,7 @@ namespace PuzzleApple.V4.Editor
                 state.ClearWorkspace();state.TryAcquireSentence("sky.check.moveAgain","light move");
                 state.ClearWorkspace();state.TryAcquireSentence("sky.check.down","light ground move");
                 yield return new WaitForSecondsRealtime(1);
-                Require(hints.DisplayStage==1&&hints.Visibility>.7f&&hints.VisualRoot.childCount==3,"three completed rows replaced by negative light");
+                Require(hints.DisplayStage==1&&hints.Visibility>.7f&&hints.VisualRoot.childCount==2,"three completed rows replaced by negative light");
                 // Simulate arriving at night with only light-off left, without recording the operation.
                 hints.environment.lamp.SetOn(false);
                 yield return new WaitForSecondsRealtime(hints.environment.transitionDuration+hints.fadeDuration+.6f);
@@ -96,10 +96,15 @@ namespace PuzzleApple.V4.Editor
                 yield return new WaitForSecondsRealtime(.08f);
                 Require(hints.Visibility>0&&hints.environment.NightBlend<.001f,"sky stays light while inscription fades");
                 yield return new WaitForSecondsRealtime(.8f);
-                Require(hints.DisplayStage==2&&hints.Visibility==0&&hints.Progress.Finished&&new IntroHintProgress(hints.progressKey).Finished,"all completed hints persist and stay hidden");
+                Require(hints.DisplayStage==1&&hints.Visibility==0&&PlayerPrefs.GetInt(hints.progressKey)==7,"using the daytime prompt saves only checklist progress");
                 Require(hints.environment.NightBlend>.1f,"night begins after letters disappear");
+                state.ClearWorkspace();state.TryAcquireSentence("sky.check.dayAgain","positive light");
+                yield return new WaitForSecondsRealtime(hints.environment.transitionDuration+hints.fadeDuration+.6f);
+                Require(hints.DisplayStage==1&&hints.Visibility>.7f,"daytime prompt returns after using the off sentence");
+                PlayerPrefs.SetInt(hints.progressKey,15);
+                Require(new IntroHintProgress(hints.progressKey).ChecklistComplete&&PlayerPrefs.GetInt(hints.progressKey)==7,"old saves retain only checklist progress");
                 hints.TryClearFromShortcut(true);
-                Require(hints.DisplayStage==0&&hints.Progress.Mask==0&&!new IntroHintProgress(hints.progressKey).Finished,"finished progress resets immediately");
+                Require(hints.DisplayStage==0&&hints.Progress.Mask==0&&!new IntroHintProgress(hints.progressKey).ChecklistComplete,"checklist progress resets immediately");
                 Result="PASS: rear reveal, saved completion, night checklist, day-only final hint, exit cancellation, immediate reset, held-effect deduplication, fixed bearing and scale";
             }
             finally

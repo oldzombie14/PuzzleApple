@@ -11,6 +11,8 @@ namespace PuzzleApple.V4
         public GameObject content;
         public Transform arrival;
         public bool intro;
+        [Tooltip("Music on actual arrival; empty fades the previous track to silence. Preview loading never starts music.")]
+        public MusicTrack music;
         [Tooltip("Eye height for this scene; zero restores the player default.")]
         public float eyeHeight;
         [Tooltip("Optional scene-specific camera presentation; null restores the session default.")]

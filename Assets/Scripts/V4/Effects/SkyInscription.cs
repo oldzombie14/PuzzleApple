@@ -32,7 +32,7 @@ namespace PuzzleApple.V4
         public bool Revealed {get;private set;}
         public Vector3 Bearing {get;private set;}
         public float Elapsed {get;private set;}
-        public int DisplayStage {get;private set;} // 0: checklist, 1: answer, 2: finished
+        public int DisplayStage {get;private set;} // 0: checklist, 1: daytime prompt
         public float Visibility {get;private set;}
         public Transform VisualRoot=>root;
         RectTransform root;
@@ -60,7 +60,7 @@ namespace PuzzleApple.V4
             group=go.GetComponent<CanvasGroup>();group.blocksRaycasts=false;group.interactable=false;group.alpha=0;
             BuildRows();
         }
-        int DesiredStage()=>Progress.Finished?2:Progress.ChecklistComplete?1:0;
+        int DesiredStage()=>Progress.ChecklistComplete?1:0;
         public void RecordApplied(CognitionState state)
         {
             var current=new HashSet<CognitionSignal>();
@@ -103,7 +103,7 @@ namespace PuzzleApple.V4
             int desired=DesiredStage();
             float night=environment?environment.NightBlend:0;
             bool hiddenAtNight=DisplayStage==1&&(nightRequested||night>.001f);
-            float target=Revealed&&!hiddenAtNight&&DisplayStage!=2&&desired==DisplayStage?Mathf.Lerp(opacity,nightOpacity,night):0;
+            float target=Revealed&&!hiddenAtNight&&desired==DisplayStage?Mathf.Lerp(opacity,nightOpacity,night):0;
             Visibility=Mathf.MoveTowards(Visibility,target,Time.unscaledDeltaTime/Mathf.Max(.1f,fadeDuration));
             if(desired!=DisplayStage&&Visibility<=.001f){DisplayStage=desired;BuildRows();}
             group.alpha=Visibility;
@@ -114,8 +114,9 @@ namespace PuzzleApple.V4
             Color ink=Color.Lerp(dayInk,nightInk,environment?environment.NightBlend:0);
             foreach(var row in rows)
             {
-                bool done=Progress.Has(row.signal);
+                bool done=row.strike && Progress.Has(row.signal);
                 foreach(var symbol in row.symbols){var color=ink;color.a=done?.55f:1;symbol.color=color;}
+                if(!row.strike)continue;
                 row.strikeProgress=Mathf.MoveTowards(row.strikeProgress,done?1:0,Time.unscaledDeltaTime*2);
                 row.strike.rectTransform.sizeDelta=new Vector2(row.width*row.strikeProgress,3);
                 row.strike.color=ink;
@@ -124,7 +125,6 @@ namespace PuzzleApple.V4
         void BuildRows()
         {
             for(int i=root.childCount-1;i>=0;i--){var child=root.GetChild(i).gameObject;child.SetActive(false);Destroy(child);}
-            if(DisplayStage==2){rows=new Row[0];return;}
             rows=DisplayStage==0?new[]{
                 CreateRow(CognitionSignal.WorldOff,new[]{"negative","world"},110),
                 CreateRow(CognitionSignal.LightMove,new[]{"light","move"},0),
@@ -133,7 +133,7 @@ namespace PuzzleApple.V4
         }
         Row CreateRow(CognitionSignal signal,string[] words,float y)
         {
-            var row=new Row{signal=signal,symbols=new Image[words.Length],width=words.Length*92-16,strikeProgress=Progress.Has(signal)?1:0};
+            var row=new Row{signal=signal,symbols=new Image[words.Length],width=words.Length*92-16};
             for(int i=0;i<words.Length;i++)
             {
                 var image=NewImage(signal+" "+words[i]);image.sprite=opening.board.Catalog.Word(words[i]).Symbol;image.preserveAspect=true;
@@ -141,6 +141,8 @@ namespace PuzzleApple.V4
                 image.rectTransform.anchoredPosition=new Vector2((i-(words.Length-1)*.5f)*92,y);
                 row.symbols[i]=image;
             }
+            if(DisplayStage==1)return row;
+            row.strikeProgress=Progress.Has(signal)?1:0;
             row.strike=NewImage(signal+" completed");
             row.strike.rectTransform.pivot=new Vector2(0,.5f);
             row.strike.rectTransform.anchoredPosition=new Vector2(-row.width*.5f,y);

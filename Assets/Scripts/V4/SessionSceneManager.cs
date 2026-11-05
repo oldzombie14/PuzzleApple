@@ -18,6 +18,11 @@ namespace PuzzleApple.V4
         public RectTransform hud;
         public CanvasGroup loading;
         public Image progress;
+        public SessionAudio audio;
+        public void PlayCurrentMusic()
+        {
+            if (audio && Current) audio.Play(Current.music);
+        }
         public SceneEntry Current { get; private set; }
         public bool Busy { get; private set; }
         public float Progress { get; private set; }
@@ -53,6 +58,7 @@ namespace PuzzleApple.V4
             player.AdoptCurrentView();
             collectionSymbol.gameObject.SetActive(false); hoverEye.gameObject.SetActive(false);
             player.SuppressInteractionThisFrame();
+            PlayCurrentMusic();
             return true;
         }
         IEnumerator Start()
@@ -187,6 +193,7 @@ namespace PuzzleApple.V4
         }
         void FinishArrival(SceneEntry entry, bool initial)
         {
+            if (!initial || !entry.intro) PlayCurrentMusic();
             if (!entry.intro)
             {
                 menu.SkipIntroMenu();

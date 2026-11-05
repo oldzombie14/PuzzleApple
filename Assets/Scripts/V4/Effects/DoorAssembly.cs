@@ -47,6 +47,13 @@ namespace PuzzleApple.V4
                 for (int i = 0; i < materials.Length; i++)
                 {
                     var source = materials[i];
+                    if (source && source.HasProperty("_SolidProgress"))
+                    {
+                        // Reveal the frame's own finish, including its two-tone moulding.
+                        temporary[i] = new Material(source);
+                        woven.Add(temporary[i]);
+                        continue;
+                    }
                     var material = new Material(shader);
                     material.SetColor("_BaseColor", source && source.HasProperty("_BaseColor") ? source.GetColor("_BaseColor") : Color.gray);
                     material.SetColor("_EmissionColor", source && source.IsKeywordEnabled("_EMISSION") && source.HasProperty("_EmissionColor") ? source.GetColor("_EmissionColor") : Color.black);
@@ -70,7 +77,6 @@ namespace PuzzleApple.V4
             {
                 material.SetFloat("_SolidProgress", Mathf.SmoothStep(0, 1,
                     Mathf.InverseLerp(SolidStart, SolidComplete, Progress)));
-                material.SetMatrix("_WorldToDoor", transform.worldToLocalMatrix);
             }
             // Show the actual finished frame before retiring the deposited strands.
             if (Progress >= SolidComplete)
@@ -98,7 +104,26 @@ namespace PuzzleApple.V4
                 for (int c = 0; c < 8; c++) bounds.Encapsulate(transform.InverseTransformPoint(filter.transform.TransformPoint(
                     mesh.center + Vector3.Scale(mesh.extents, new Vector3((c & 1) == 0 ? -1 : 1,
                         (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1)))));
-                surfaces.Add(bounds); total += bounds.size.x * bounds.size.y; area.Add(total);
+                var frame = filter.GetComponent<WeaveFrameOpening>();
+                if (!frame)
+                {
+                    surfaces.Add(bounds);
+                    continue;
+                }
+                var opening = Vector2.Scale(bounds.extents, frame.openingFraction);
+                var innerMin = bounds.center - (Vector3)opening;
+                var innerMax = bounds.center + (Vector3)opening;
+                var min = bounds.min;
+                var max = bounds.max;
+                surfaces.Add(Rail(min, new Vector3(innerMin.x, max.y, max.z)));
+                surfaces.Add(Rail(new Vector3(innerMax.x, min.y, min.z), max));
+                surfaces.Add(Rail(new Vector3(innerMin.x, min.y, min.z), new Vector3(innerMax.x, innerMin.y, max.z)));
+                surfaces.Add(Rail(new Vector3(innerMin.x, innerMax.y, min.z), new Vector3(innerMax.x, max.y, max.z)));
+            }
+            foreach (var surface in surfaces)
+            {
+                total += surface.size.x * surface.size.y;
+                area.Add(total);
             }
             if (surfaces.Count == 0) return;
             var random = new System.Random(7349);
@@ -146,6 +171,13 @@ namespace PuzzleApple.V4
                 threads.Add(new FeedThread { line = line, anchor = anchor, origin = origin, end = end,
                     start = .02f + .51f * hash, span = .32f });
             }
+        }
+
+        static Bounds Rail(Vector3 min, Vector3 max)
+        {
+            var bounds = new Bounds();
+            bounds.SetMinMax(min, max);
+            return bounds;
         }
 
         void UpdateThreads()

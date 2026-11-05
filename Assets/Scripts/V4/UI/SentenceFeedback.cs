@@ -12,6 +12,8 @@ namespace PuzzleApple.V4
         public CognitionBoard board;
         public ParticleSystem sparklePrefab;
         public Material rippleMaterial;
+        public AudioClip rippleSound;
+        [Range(0,1)] public float rippleVolume=.45f;
         [Range(0,31)] public int effectLayer=31;
         public float duration=.85f;
         public int StrongCount {get;private set;}
@@ -20,8 +22,13 @@ namespace PuzzleApple.V4
         RawImage output;
         RenderTexture texture;
         Transform stage;
+        AudioSource rippleAudio;
         void Start()
         {
+            rippleAudio=gameObject.AddComponent<AudioSource>();
+            rippleAudio.playOnAwake=false;
+            rippleAudio.loop=false;
+            rippleAudio.spatialBlend=0;
             var root=new GameObject("Sentence feedback rendering");root.transform.SetParent(transform,false);
             stage=root.transform;stage.position=new Vector3(0,0,-10000);
             var cameraObject=new GameObject("Sentence feedback camera",typeof(Camera));cameraObject.transform.SetParent(stage,false);
@@ -58,6 +65,8 @@ namespace PuzzleApple.V4
         IEnumerator Pulse(int groupId,bool strong)
         {
             var rect=board.GroupRect(groupId);if(!rect)yield break;
+            var initialGroup=board.State.Find(groupId);
+            if(initialGroup==null||!initialGroup.Recognized||(strong&&!initialGroup.Effective))yield break;
             var content=board.GroupContentBounds(groupId);
             var root=new GameObject(strong?"Sentence effect ripple":"Sentence grammar ripple");root.layer=effectLayer;
             root.transform.SetParent(stage,false);
@@ -78,6 +87,8 @@ namespace PuzzleApple.V4
                 var main=particles.main;main.startSize=new ParticleSystem.MinMaxCurve(34*scale,60*scale);
                 particles.Play();
             }
+            // One cue per pulse, shared by its rings and stars; follows global listener mute.
+            if(rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
             for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
             {
                 var group=board.State.Find(groupId);

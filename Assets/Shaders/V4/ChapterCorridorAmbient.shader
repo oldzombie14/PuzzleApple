@@ -43,7 +43,16 @@ Shader "PuzzleApple/V4/Chapter Corridor Ambient"
                 // An art-directed indirect-light bridge, evaluated per pixel in
                 // world space. Native URP still handles direct lights and shadows.
                 float t=smoothstep(_CorridorGradient.x,_CorridorGradient.y,input.positionWS.x);
-                input.bakedGI=lerp(_CorridorGradient.z,_CorridorGradient.w,t).xxx;
+                float ambient = lerp(_CorridorGradient.z, _CorridorGradient.w, t);
+                float wallFacing = 1.0 - abs(input.normalWS.y);
+                float height = input.positionWS.y;
+                // A continuous wall wash falls away toward the floor and ceiling.
+                float wash = smoothstep(0.0, 5.0, height) * (1.0 - smoothstep(13.0, 22.0, height));
+                ambient += wallFacing * (0.08 + 0.12 * wash);
+                // Ground the side walls over a short distance on the gallery floor.
+                float wallDistance = abs(abs(input.positionWS.z) - 10.5);
+                float floorEdge = saturate(input.normalWS.y) * (1.0 - smoothstep(0.0, 0.55, wallDistance));
+                input.bakedGI = (ambient * (1.0 - 0.22 * floorEdge)).xxx;
                 return UniversalFragmentPBR(input,surface);
             }
             #define UniversalFragmentPBR CorridorFragmentPBR

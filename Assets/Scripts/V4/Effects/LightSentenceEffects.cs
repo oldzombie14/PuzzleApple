@@ -120,7 +120,8 @@ namespace PuzzleApple.V4
             if (!CanOperate || Motion == CognitionSignal.Empty || Motion == CognitionSignal.LightMove) return;
             foreach (var lamp in lamps)
             {
-                if (!InRange(lamp)) continue;
+                if (!lamp || !lamp.isActiveAndEnabled) continue;
+                if (Motion != CognitionSignal.LightWorldMove && !InRange(lamp)) continue;
                 var body = lamp.GetComponent<Rigidbody>(); var collider = lamp.GetComponent<Collider>();
                 if (!body || !collider) continue;
                 Vector3 target = body.position;

@@ -29,15 +29,18 @@ namespace PuzzleApple.V4
         MaterialPropertyBlock revealProperties;
         float revealStart, revealDuration;
         bool revealing;
+        const float LocalGlowFadeDuration = .35f;
+        float localGlowAmount;
         public float RevealAmount { get; private set; } = 1;
         public void BeginReveal(Material material, float start, float duration)
         {
             revealStart=start; revealDuration=Mathf.Max(.01f,duration); revealing=true;
             RevealAmount=0;
+            localGlowAmount=0;
             surface.sharedMaterial=material;
             if(revealProperties==null)revealProperties=new MaterialPropertyBlock();
             ApplyReveal();
-            if(glow)glow.enabled=false;
+            if(glow){glow.intensity=0;glow.enabled=false;}
         }
         void ApplyReveal()
         {
@@ -92,8 +95,12 @@ namespace PuzzleApple.V4
                 }
                 if (glow)
                 {
-                    glow.enabled = illuminate && appearanceSource.brightness > 0 && RevealAmount>0;
-                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f * RevealAmount;
+                    // Nearby-light budget changes must fade too, even after the body is revealed.
+                    localGlowAmount=Mathf.MoveTowards(localGlowAmount,illuminate?1:0,
+                        Time.unscaledDeltaTime/LocalGlowFadeDuration);
+                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f * RevealAmount
+                        * Mathf.SmoothStep(0,1,localGlowAmount);
+                    glow.enabled = glow.intensity>0;
                 }
                 return;
             }

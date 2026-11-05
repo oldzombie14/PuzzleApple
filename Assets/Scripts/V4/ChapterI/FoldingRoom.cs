@@ -15,7 +15,8 @@ namespace PuzzleApple.V4
         public Panel[] panels;
         public Collider[] movingColliders;
         public float duration = 4;
-        public float sinkDuration = 2.5f, sinkDepth = .35f;
+        [Tooltip("展开过程中同步下沉的距离。初始埋深由房间 Transform 设置。")]
+        [Min(0)] public float sinkDepth = .35f;
         public bool Opened { get; private set; }
         public bool Animating { get; private set; }
         SessionSceneManager session;
@@ -36,13 +37,17 @@ namespace PuzzleApple.V4
             {
                 foreach (var panel in panels)
                     if (panel.hinge)
+                    {
+                        float progress = Mathf.SmoothStep(0, 1, t / PanelDuration(panel));
+                        // Spend more of the motion approaching the floor, where it hides the panel.
+                        float eased = 1 - (1 - progress) * (1 - progress);
                         panel.hinge.localRotation = Quaternion.Slerp(Quaternion.identity,
-                            Quaternion.Euler(panel.openEuler), Mathf.SmoothStep(0, 1, t / PanelDuration(panel)));
+                            Quaternion.Euler(panel.openEuler), eased);
+                    }
+                SetSink(Mathf.SmoothStep(0, 1, t / unfoldDuration));
                 yield return null;
             }
             SetPose(1);
-            for(float t=0;t<sinkDuration;t+=Time.deltaTime)
-            {SetSink(Mathf.SmoothStep(0,1,t/Mathf.Max(.01f,sinkDuration)));yield return null;}
             SetSink(1); Opened = true; Animating = false;
         }
         float PanelDuration(Panel panel) => Mathf.Max(.01f, panel.durationOverride > 0 ? panel.durationOverride : duration);

@@ -26,13 +26,13 @@ namespace PuzzleApple.V4.Editor
                 f.player.view.rotation=Quaternion.LookRotation(d.transform.TransformPoint(new Vector3(0,3,0))-f.player.view.position);
                 yield return new WaitForSecondsRealtime(.7f);
                 var assembly=d.GetComponent<DoorAssembly>();
-                Require(d.Appearing&&assembly.Progress>0&&assembly.Progress<1&&d.GetComponentInChildren<ParticleSystem>().particleCount>100,"particle assembly is visible before solid door");
+                Require(d.Appearing&&assembly.Progress>0&&assembly.Progress<1&&d.GetComponentsInChildren<MeshRenderer>().Where(r=>r.enabled).All(r=>r.sharedMaterial.shader.name=="PuzzleApple/V4/DoorWeave"),"woven materials are active before solid door");
                 System.IO.Directory.CreateDirectory("Temp/V4Review");
                 ScreenCapture.CaptureScreenshot("Temp/V4Review/door-assembly.png");yield return new WaitForEndOfFrame();
                 float assemblyDeadline=Time.realtimeSinceStartup+12;
                 while(d.Appearing&&Time.realtimeSinceStartup<assemblyDeadline)yield return null;
                 yield return null;
-                Require(!d.Appearing&&assembly.Progress==1&&!d.GetComponentInChildren<ParticleSystem>(),"assembly finishes and cleans particles");
+                Require(!d.Appearing&&assembly.Progress==1&&d.GetComponentsInChildren<MeshRenderer>().Where(r=>r.enabled).All(r=>r.sharedMaterial.shader.name!="PuzzleApple/V4/DoorWeave"),"assembly finishes and restores surface materials");
                 f.RememberDoor();f.library.Select("door");
                 var photo=f.library.SnapshotImage.texture as Texture2D;
                 Require(photo&&photo.width==640&&photo.height==640,"orthographic door memory captured");
@@ -73,7 +73,7 @@ namespace PuzzleApple.V4.Editor
                     float starSpeed=env.MatchedStarSpeed()*Mathf.Deg2Rad*Vector3.Cross(axis,ray).magnitude;
                     Require(Mathf.Abs(cloudSpeed-starSpeed)<.0001f,"cloud/star apparent angular speeds match at "+elevation);
                 }
-                Result="PASS: particle assembly and cleanup, front orthographic memory, new moving lamps spawn at ground, on-to-motion feedback/camera handoff, grounded door upward start and weak descent feedback, matched sky speeds";
+                Result="PASS: woven assembly and material restoration, front orthographic memory, new moving lamps spawn at ground, on-to-motion feedback/camera handoff, grounded door upward start and weak descent feedback, matched sky speeds";
             }
             finally{Application.runInBackground=background;}
         }

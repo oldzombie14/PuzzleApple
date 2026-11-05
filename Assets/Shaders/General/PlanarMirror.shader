@@ -5,6 +5,7 @@ Shader "PuzzleApple/Planar Mirror"
         _ReflectionTex ("Reflection", 2D) = "white" {}
         _Tint ("Glass tint", Color) = (0.96, 0.98, 0.98, 1)
         _ReflectionReady ("Reflection ready", Float) = 0
+        [HideInInspector] _DepthClip ("Depth clipping", Float) = 1
     }
     SubShader
     {
@@ -14,6 +15,7 @@ Shader "PuzzleApple/Planar Mirror"
             Name "Mirror"
             Tags { "LightMode"="UniversalForward" }
             Cull Back ZWrite On
+            ZClip [_DepthClip]
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag

@@ -30,10 +30,91 @@ namespace PuzzleApple.V4.Cognition
         public RectTransform Surface => surface;
         public bool IsDragging => drag != null;
         public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
+        public Rect GroupContentBounds(int id)
+        {
+            if (!views.TryGetValue(id, out var view)) return default;
+            var rect = view.Root.rect;
+            return new Rect(rect.xMin + view.InkStart, rect.yMin,
+                view.InkEnd - view.InkStart, rect.height);
+        }
         public void RemoveToken(int groupId,int wordId,bool whole=false)
         {
-            CancelDrag(); State.ReturnToLibrary(groupId,wordId,whole);
+            CancelDrag();
+            if (views.TryGetValue(groupId, out var view))
+                foreach (var word in view.Words)
+                    if (whole || view.Group.Independent || word.GetComponent<CognitionDragHandle>().WordId == wordId)
+                        BeginRemovalEffect(word, view.Fade.alpha);
+            State.ReturnToLibrary(groupId,wordId,whole);
         }
+        sealed class RemovedWord
+        {
+            public Image Image;
+            public Material Material;
+            public Vector3 Position;
+            public float Started;
+        }
+        readonly List<RemovedWord> removedWords = new List<RemovedWord>();
+        Shader removalShader;
+        const float RemovalDuration = .6f;
+        static readonly int DissolveProgress = Shader.PropertyToID("_Progress");
+        void BeginRemovalEffect(Image source, float opacity)
+        {
+            if (!removalShader) removalShader = Resources.Load<Shader>("SymbolDissolve");
+            if (!removalShader) return;
+            // Erode one intact glyph using broad, soft regions rather than moving cutouts.
+            var image = new GameObject("Dissolving word", typeof(RectTransform), typeof(CenteredSymbolImage))
+                .GetComponent<CenteredSymbolImage>();
+            var rect = image.rectTransform;
+            var original = source.rectTransform;
+            rect.SetParent(original, false);
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(.5f, .5f);
+            rect.sizeDelta = original.rect.size;
+            rect.anchoredPosition = Vector2.zero;
+            rect.SetParent(Surface, true);
+            image.sprite = source.sprite;
+            image.preserveAspect = source.preserveAspect;
+            image.raycastTarget = false;
+            var color = source.color;
+            color.a *= opacity;
+            image.color = color;
+            var material = new Material(removalShader);
+            var ink = SymbolUI.InkRect(source);
+            material.SetVector("_InkSize", new Vector4(Mathf.Max(1, ink.width), Mathf.Max(1, ink.height), 0, 0));
+            material.SetFloat("_Seed", Mathf.Repeat(source.GetInstanceID() * .618034f, 97));
+            image.material = material;
+            removedWords.Add(new RemovedWord { Image = image, Material = material,
+                Position = rect.localPosition, Started = Time.unscaledTime });
+        }
+        void UpdateRemovalEffects()
+        {
+            for (int i = removedWords.Count - 1; i >= 0; i--)
+            {
+                var word = removedWords[i];
+                float t = Mathf.Clamp01((Time.unscaledTime - word.Started) / RemovalDuration);
+                if (!word.Image || t >= 1)
+                {
+                    DisposeRemovedWord(word);
+                    removedWords.RemoveAt(i);
+                    continue;
+                }
+                float progress = t * t * (3 - 2 * t);
+                word.Image.rectTransform.localPosition = word.Position + Vector3.up * (2 * progress);
+                word.Material.SetFloat(DissolveProgress, progress);
+                // A parent Mask may provide a stencil-derived rendering material.
+                word.Image.materialForRendering.SetFloat(DissolveProgress, progress);
+            }
+        }
+        void DisposeRemovedWord(RemovedWord word)
+        {
+            if (word.Image) Destroy(word.Image.gameObject);
+            if (word.Material) Destroy(word.Material);
+        }
+        void ClearRemovalEffects()
+        {
+            foreach (var word in removedWords) DisposeRemovedWord(word);
+            removedWords.Clear();
+        }
+        void OnDisable() { ClearRemovalEffects(); }
         public void PlaceGroup(int id, Vector2 screen)
         {
             if (!views.TryGetValue(id, out var v)) return;
@@ -64,6 +145,8 @@ namespace PuzzleApple.V4.Cognition
             public float InkStart, InkEnd;
             public RectTransform LeadingHandle;
             public CanvasGroup HandleFade;
+            public bool AwaitHoverExit = true;
+            public bool FloatIndependently = true;
         }
         sealed class Drag
         {
@@ -105,10 +188,11 @@ namespace PuzzleApple.V4.Cognition
         }
         void OnDestroy()
         {
+            ClearRemovalEffects();
             if (State != null) State.Changed -= Refresh;
             if (panel) panel.OpenChanged.RemoveListener(OnPanelChanged);
         }
-        void OnPanelChanged(bool open) { if (!open) CancelDrag(); }
+        void OnPanelChanged(bool open) { if (!open) { CancelDrag(); ClearRemovalEffects(); } }
         bool CanFit(IEnumerable<CognitionState.Word> words)
         {
             var tokens = words.ToArray();
@@ -130,7 +214,8 @@ namespace PuzzleApple.V4.Cognition
                 {
                     // Word IDs are stored on the view, because the model has already committed.
                     var handle = v.Words[i].GetComponent<CognitionDragHandle>();
-                    wordPositions[handle.WordId] = v.Position + new Vector2(v.Offsets[i], 0);
+                    wordPositions[handle.WordId] = new Vector2(v.Root.anchoredPosition.x,
+                        -v.Root.anchoredPosition.y) + new Vector2(v.Offsets[i], 0);
                 }
             var next = new Dictionary<int, View>();
             foreach (var group in State.Groups)
@@ -142,6 +227,14 @@ namespace PuzzleApple.V4.Cognition
                 Vector2 position = old != null ? old.Position : wordPositions.TryGetValue(group.Words[0].Id, out var p) ? p : NewPosition(next.Count);
                 int scratches = group.Independent || group.Recognized ? 0 : (old != null ? old.Scratches : 0) + 1;
                 var view = BuildView(group, position, scratches, signature);
+                if (kind == CognitionChange.Split && wordPositions.TryGetValue(group.Words[0].Id, out var firstPosition))
+                {
+                    // Keep the first remaining glyph in place when its sentence indent disappears.
+                    view.FloatIndependently = false;
+                    view.Position = view.DisplayPosition = firstPosition - new Vector2(view.Offsets[0], 0);
+                    Place(view);
+                }
+                else if (old != null) view.FloatIndependently = old.FloatIndependently;
                 next[group.Id] = view;
             }
             foreach (var old in previous)
@@ -226,6 +319,7 @@ namespace PuzzleApple.V4.Cognition
         Vector2 NewPosition(int count) => new Vector2(18 + (count % 2) * 55, 24 + (count % 7) * 82);
         void Update()
         {
+            UpdateRemovalEffects();
             if (!Surface) return;
             if ((lastSurfaceSize - Surface.rect.size).sqrMagnitude > 1 && drag == null)
             {
@@ -256,14 +350,23 @@ namespace PuzzleApple.V4.Cognition
                 bool hovered = panel.IsOpen && !panel.InputBlocked && Surface.gameObject.activeInHierarchy
                     && Mouse.current != null
                     && RectTransformUtility.RectangleContainsScreenPoint(v.Root, Mouse.current.position.ReadValue());
-                bool dragging = drag != null && (drag.GroupId == v.Group.Id || snapTargetId == v.Group.Id);
-                v.HandleFade.alpha = Mathf.MoveTowards(v.HandleFade.alpha, hovered || dragging ? 1 : 0,
+                bool movingSentence = drag != null && drag.Whole && snapTargetId < 0 && drag.GroupId == v.Group.Id;
+                if (drag != null && !movingSentence)
+                {
+                    v.AwaitHoverExit = true;
+                    v.HandleFade.alpha = 0;
+                    continue;
+                }
+                // A drop beneath the pointer is not a new hover to move the sentence.
+                if (!hovered) v.AwaitHoverExit = false;
+                v.HandleFade.alpha = Mathf.MoveTowards(v.HandleFade.alpha,
+                    movingSentence || (hovered && !v.AwaitHoverExit) ? 1 : 0,
                     Time.unscaledDeltaTime / handleFadeDuration);
             }
         }
         void Place(View v)
         {
-            float bob = v.Group.Independent && v.Group.Id != snapTargetId && (drag == null || drag.GroupId != v.Group.Id)
+            float bob = v.FloatIndependently && v.Group.Independent && v.Group.Id != snapTargetId && (drag == null || drag.GroupId != v.Group.Id)
                 ? Mathf.Sin(Time.unscaledTime * 1.25f + v.Group.Id * 1.73f) * wordFloatAmplitude : 0;
             v.Root.anchoredPosition = new Vector2(v.DisplayPosition.x, -v.DisplayPosition.y + bob);
         }
@@ -347,8 +450,9 @@ namespace PuzzleApple.V4.Cognition
             var source = views[drag.GroupId];
             drag.Ghost.localScale = Vector3.one * (drag.Whole ? 1 : source.FontScale);
             snapTargetId = target != null ? target.Group.Id : -1;
-            foreach (var v in views.Values) if (v.LeadingHandle) v.LeadingHandle.gameObject.SetActive(true);
-            if (drag.GhostHandle) drag.GhostHandle.gameObject.SetActive(true);
+            foreach (var v in views.Values) if (v.LeadingHandle)
+                v.LeadingHandle.gameObject.SetActive(target == null && drag.Whole && v.Group.Id == drag.GroupId);
+            if (drag.GhostHandle) drag.GhostHandle.gameObject.SetActive(target == null);
             previewBullet.gameObject.SetActive(false);
             snapHint.gameObject.SetActive(target != null);
             if (target != null)
@@ -366,13 +470,6 @@ namespace PuzzleApple.V4.Cognition
                 pos.y = targetY + target.TextCenterY - source.TextCenterY * scaleRatio;
                 if (prepend && target.LeadingHandle) target.LeadingHandle.gameObject.SetActive(false);
                 if (!prepend && drag.GhostHandle) drag.GhostHandle.gameObject.SetActive(false);
-                if ((prepend && !drag.Whole) || (!prepend && target.Group.Independent))
-                {
-                    previewBullet.gameObject.SetActive(true);
-                    float firstWordX = prepend ? pos.x : targetStart;
-                    CognitionUI.Place(previewBullet.rectTransform, firstWordX - (SentenceIndent - 6) * target.FontScale,
-                        targetY + target.TextCenterY - 5 * target.FontScale,10 * target.FontScale,10 * target.FontScale);
-                }
                 float dotSize = 6 * target.FontScale;
                 float leftInk = prepend ? pos.x + source.InkEnd * scaleRatio : targetX + target.InkEnd;
                 float rightInk = prepend ? targetX + target.InkStart : pos.x + source.InkStart * scaleRatio;
@@ -440,7 +537,6 @@ namespace PuzzleApple.V4.Cognition
                     var view = views[independent.Id];
                     view.DisplayPosition = Clamp(position, view.Width, view.Height);
                     view.Position = FindFree(view, position);
-                    foreach (var v in views.Values.Where(v => v != view)) v.Position = FindFree(v, v.Position);
                 }
             }
             else if (target != null)

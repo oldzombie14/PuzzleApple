@@ -28,7 +28,7 @@ namespace PuzzleApple.V4
         [Range(1, 64)] public int spawnBudget = 16;
         [Min(.05f)] public float refreshInterval = .2f;
         [Header("加载淡入")]
-        [Min(.01f)] public float revealDuration = 1.2f;
+        [Min(.01f)] public float revealDuration = .65f;
         [Min(0)] public float revealInterval = .035f;
         [Header("移动与局部照明")]
         [Min(0)] public float moveSpeed = 1.2f;

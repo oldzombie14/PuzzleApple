@@ -29,13 +29,13 @@ namespace PuzzleApple.V4.Editor
         {
             var player=m.player;
             // The actual CharacterController crosses the plane; no direct scene-switch call.
-            var start=portal.transform.position+portal.transform.forward*1.2f;
+            var start=portal.transform.position+portal.transform.forward*2.8f;
             start.y=portal.gameObject.scene.name=="ChapterI"?.105f:.03f;
             player.Teleport(start,Quaternion.LookRotation(-portal.transform.forward));
             player.view.localRotation=Quaternion.identity;player.AdoptCurrentView();Physics.SyncTransforms();
             yield return null;
             string source=m.Current.gameObject.scene.name;
-            for(int i=0;i<70&&m.Current.gameObject.scene.name==source;i++)
+            for(int i=0;i<115&&m.Current.gameObject.scene.name==source;i++)
             {player.GetComponent<CharacterController>().Move(-portal.transform.forward*.04f+Vector3.down*.02f);yield return null;}
             Require(m.Current.gameObject.scene.name==portal.destinationScene,"physical crossing enters "+portal.destinationScene);
         }

@@ -24,11 +24,19 @@ namespace PuzzleApple.V4
         MaterialPropertyBlock properties;
         Vector3 previousEye;
         bool tracking;
+        Bounds apertureBounds;
+        Material apertureMaterial;
         readonly Plane[] frustum = new Plane[6];
         readonly UniversalRenderPipeline.SingleCameraRequest request = new UniversalRenderPipeline.SingleCameraRequest();
         static readonly Quaternion HalfTurn = Quaternion.Euler(0, 180, 0);
         IEnumerator Start()
         {
+            if (surface)
+            {
+                apertureBounds = surface.localBounds;
+                apertureMaterial = surface.material;
+                apertureMaterial.SetFloat("_DepthClip", 0);
+            }
             session = FindFirstObjectByType<SessionSceneManager>();
             while (!session || !session.Current) yield return null;
             yield return session.PreparePreview(destinationScene);
@@ -72,6 +80,12 @@ namespace PuzzleApple.V4
         {
             if (!source || !Ready || !surface || !surface.enabled) return;
             if (Vector3.Dot(transform.forward, source.transform.position - transform.position) <= 0) return;
+            // Match the shader's near-plane clamp during CPU frustum culling.
+            var padding = surface.transform.InverseTransformVector(source.transform.forward * source.nearClipPlane);
+            var bounds = apertureBounds;
+            bounds.Encapsulate(apertureBounds.min + padding);
+            bounds.Encapsulate(apertureBounds.max + padding);
+            surface.localBounds = bounds;
             GeometryUtility.CalculateFrustumPlanes(source, frustum);
             if (!GeometryUtility.TestPlanesAABB(frustum, surface.bounds)) return;
             if (!viewCamera)
@@ -112,6 +126,10 @@ namespace PuzzleApple.V4
             surface.GetPropertyBlock(properties);
             properties.SetTexture("_ReflectionTex", texture); properties.SetFloat("_ReflectionReady", 1);
             surface.SetPropertyBlock(properties);
+        }
+        void OnDestroy()
+        {
+            if (apertureMaterial) Destroy(apertureMaterial);
         }
         void OnDisable()
         {

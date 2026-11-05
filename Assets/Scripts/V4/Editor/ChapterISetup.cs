@@ -228,7 +228,7 @@ namespace PuzzleApple.V4.EditorTools
         }
         static void Fold(Transform parent)
         {
-            var root=Node("Unfolding arrival box",parent,Vector3.zero);
+            var root=Node("Unfolding arrival box",parent,new Vector3(0,-.25f,0));
             var fold=root.AddComponent<FoldingRoom>();var panels=new List<FoldingRoom.Panel>();var colliders=new List<Collider>();
             var front=Node("Front hinge",root.transform,new Vector3(23.8f,.075f,0));
             colliders.Add(Box("Front panel",front.transform,new Vector3(0,6,0),new Vector3(.12f,12,12),wall).GetComponent<Collider>());

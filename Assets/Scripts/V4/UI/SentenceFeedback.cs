@@ -58,6 +58,7 @@ namespace PuzzleApple.V4
         IEnumerator Pulse(int groupId,bool strong)
         {
             var rect=board.GroupRect(groupId);if(!rect)yield break;
+            var content=board.GroupContentBounds(groupId);
             var root=new GameObject(strong?"Sentence effect ripple":"Sentence grammar ripple");root.layer=effectLayer;
             root.transform.SetParent(stage,false);
             var lines=new LineRenderer[strong?2:1];
@@ -73,7 +74,7 @@ namespace PuzzleApple.V4
             if(strong&&sparklePrefab)
             {
                 var particles=Instantiate(sparklePrefab,root.transform);
-                var shape=particles.shape;shape.scale=new Vector3(rect.rect.width*scale,rect.rect.height*scale*.8f,0);
+                var shape=particles.shape;shape.scale=new Vector3(content.width*scale,content.height*scale*.8f,0);
                 var main=particles.main;main.startSize=new ParticleSystem.MinMaxCurve(34*scale,60*scale);
                 particles.Play();
             }
@@ -81,7 +82,8 @@ namespace PuzzleApple.V4
             {
                 var group=board.State.Find(groupId);
                 if(!rect||group==null||!group.Recognized||(strong&&!group.Effective))break;
-                Vector2 screen=RectTransformUtility.WorldToScreenPoint(null,rect.TransformPoint(rect.rect.center));
+                content=board.GroupContentBounds(groupId);
+                Vector2 screen=RectTransformUtility.WorldToScreenPoint(null,rect.TransformPoint(content.center));
                 root.transform.localPosition=new Vector3(screen.x-Screen.width*.5f,screen.y-Screen.height*.5f,5);
                 for(int i=0;i<lines.Length;i++)
                 {
@@ -90,8 +92,8 @@ namespace PuzzleApple.V4
                     lines[i].startColor=lines[i].endColor=new Color(.89f,.94f,1,alpha);
                     // Briefly hold the expanded frame before it resumes spreading and fades.
                     float expansion=u<.35f?Mathf.SmoothStep(0,.55f,u/.35f):u<.55f?.55f:Mathf.SmoothStep(.55f,1,(u-.55f)/.45f);
-                    float x=(rect.rect.width*.5f+Mathf.Lerp(4,45,expansion))*scale;
-                    float y=(rect.rect.height*.5f+Mathf.Lerp(2,35,expansion))*scale;
+                    float x=(content.width*.5f+Mathf.Lerp(4,45,expansion))*scale;
+                    float y=(content.height*.5f+Mathf.Lerp(2,35,expansion))*scale;
                     lines[i].SetPosition(0,new Vector3(-x,-y,0));
                     lines[i].SetPosition(1,new Vector3(-x,y,0));
                     lines[i].SetPosition(2,new Vector3(x,y,0));

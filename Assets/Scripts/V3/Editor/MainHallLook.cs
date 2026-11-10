@@ -66,8 +66,8 @@ namespace PuzzleApple.V3.Editor
             foreach(var camera in room.GetComponentsInChildren<OpeningSnapshotCamera>(true))
             {var data=camera.GetComponent<UniversalAdditionalCameraData>();if(data)data.volumeLayerMask|=1<<layer;}
             var brass=Material("HallBrass",AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V3/BalanceBrass.mat"),new Color(.67f,.53f,.31f),.88f,.53f);
-            var wall=Material("HallPlaster",AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/GalleryWall.mat"),new Color(.86f,.86f,.86f),0,.2f);
-            var floor=Material("HallStone",AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/GalleryFloor.mat"),wall.GetColor("_BaseColor"),0,.64f);
+            var wall=Material("HallPlaster",AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V3/GalleryWall.mat"),new Color(.86f,.86f,.86f),0,.2f);
+            var floor=Material("HallStone",AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V3/GalleryFloor.mat"),wall.GetColor("_BaseColor"),0,.64f);
             floor.SetFloat("_EnvironmentReflections",0);floor.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
             var corridorWall=AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V3/Opening/CorridorPlaster.mat");
             foreach(var renderer in route.balance.GetComponentsInChildren<Renderer>(true))renderer.sharedMaterial=brass;

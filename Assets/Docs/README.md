@@ -1,10 +1,13 @@
 # PuzzleApple 项目文档
 
-当前开发 V4：启动入口为 `Assets/Scenes/V4/P4_Systems.unity`，Intro 内容为 `P4.unity`，中转房间与走廊为 `ChapterI.unity`，独立花房为 `ChapterI_Garden.unity`；内容场景也支持直接 Play。
+当前开发 V5：入口为 `Assets/Scenes/V5/P5.unity`，直接 Play。先阅读 [V5 当前设计与开发](V5.md)，其中区分已确认要求、实现假设与验收边界。
 
-- [V4 当前设计](GameDesign.md)：理解项目默认阅读；当前要求、探索方向和实现假设。
+V4 保留：启动入口为 `Assets/Scenes/V4/P4_Systems.unity`，Intro 内容为 `P4.unity`，中转房间与走廊为 `ChapterI.unity`，独立花房为 `ChapterI_Garden.unity`；内容场景也支持直接 Play。仅在涉及 V4 或明确复用部分时查阅以下说明。
+
+- [V4 当前设计](GameDesign.md)：V4 要求、探索方向和实现假设。
 - [当前进度](Progress.md)：继续开发时阅读；已完成、未解决、下一步和验收状态。
 - [V4 编辑与资源](Prototypes.md)：定位组件、资源依赖和验证入口时按需阅读。
+- [版本归档与依赖边界](VersionArchive.md)：V1–V4 入口、各版自有资源、工程级共用项及检查方式。
 - [TMP：Blender 维特鲁威人交接](TMP/TMP-Blender维特鲁威人交接.md)：跨电脑继续人体减面、拆分与补形时阅读；Blender 文件也放在该 TMP 文件夹。
 
 ## 阅读与维护

@@ -1,0 +1,65 @@
+// Existing Toon Passage door and Impact Floor effects, kept on the shared surface.
+// Their coordinates, timing and property names remain compatible with the controllers.
+float _SurfaceMode,_FrontWhite,_Dissolve,_DoorInset,_DoorBackBrightness;
+float _CorridorFill;
+float4 _ShadeColor,_ShadowColor,_DoorBackColor;
+float4 _FloorColor,_Impacts[16],_Hole,_RoomBounds;
+float4x4 _WorldToFloor;
+float _Brightness,_RippleDuration,_RippleSpeed,_RingCount,_RingSpacing,_RingWidth,_RippleStrength,_Plane;
+float _RoomOpeningWidth;
+float4 _RippleTaper;
+float _LightSteps,_LightStepBlend,_LightBandEdge,_CorridorPureWhite;
+TEXTURE2D(_MuralNormal);SAMPLER(sampler_MuralNormal);
+float4 _MuralRect;float3 _MuralLight;
+float _MuralEnabled,_MuralRelief,_MuralCavity;
+
+void ClipSurfaceDoor(float3 local,bool roomFace)
+{
+    if(_DoorInset>0&&!roomFace)clip(.5-max(abs(local.x),abs(local.y))-_DoorInset);
+
+}
+float RoomPerimeterDistance(float3 positionWS)
+{
+    float3 local=mul(_WorldToFloor,float4(positionWS,1)).xyz;
+    float3 edge=float3(_RoomBounds.x-abs(local.x),min(local.y,_RoomBounds.y-local.y),
+        min(local.z-_RoomBounds.z,_RoomBounds.z+_RoomBounds.w-local.z));
+    if(_Plane<.5&&local.y<.5&&abs(local.x)<_RoomOpeningWidth*.5)
+        edge.z=_RoomBounds.z+_RoomBounds.w-local.z;
+    return _Plane<.5?min(edge.x,edge.z):(_Plane<1.5?min(edge.x,edge.y):min(edge.z,edge.y));
+}
+float3 RoomSurfaceEffects(float3 positionWS)
+{
+    float3 local=mul(_WorldToFloor,float4(positionWS,1)).xyz;
+    float2 p=_Plane<.5?local.xz:(_Plane<1.5?local.xy:local.zy);
+    if(_Hole.w>.5)clip(max(abs(p.x-_Hole.x),abs(p.y-_Hole.y))-_Hole.z);
+    float ink=0;
+    for(int n=0;n<16;n++)
+    {
+        float age=_Time.y-_Impacts[n].w;
+        if(age<0||age>_RippleDuration)continue;
+        float distance=length(local-_Impacts[n].xyz);
+        for(int ring=0;ring<4;ring++)
+        {
+            if(ring>=_RingCount)break;
+            float radius=age*_RippleSpeed-ring*_RingSpacing;
+            if(radius<0)continue;
+            float edge=abs(distance-radius);
+            float taper=smoothstep(_RippleTaper.x,_RippleTaper.x+max(.01,_RippleTaper.y),radius);
+            float width=_RingWidth*lerp(1,_RippleTaper.z,taper);
+            float aa=max(.0001,fwidth(distance));
+            float band=(1-smoothstep(width*.5,width+aa,edge))*saturate(width/aa);
+            ink=max(ink,band*(1-smoothstep(.35*_RippleDuration,_RippleDuration,age)));
+        }
+    }
+    float carving=1;
+    if(_MuralEnabled>.5)
+    {
+        float2 uv=(p-_MuralRect.xy)/_MuralRect.zw+.5;
+        float inside=step(0,uv.x)*step(uv.x,1)*step(0,uv.y)*step(uv.y,1);
+        float4 relief=SAMPLE_TEXTURE2D(_MuralNormal,sampler_MuralNormal,saturate(uv));
+        float3 normal=normalize(relief.rgb*2-1);
+        float shade=saturate(1+(dot(normal,_MuralLight)-_MuralLight.z)*_MuralRelief-relief.a*_MuralCavity);
+        carving=lerp(1,shade,inside);
+    }
+    return carving*(1-ink*_RippleStrength);
+}

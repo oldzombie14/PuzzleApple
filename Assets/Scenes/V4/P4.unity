@@ -2643,7 +2643,7 @@ MonoBehaviour:
   content: {fileID: 1994184430}
   arrival: {fileID: 1949692774}
   intro: 1
-  music: {fileID: 11400000, guid: e897300fbe89da1478556f0775d99e88, type: 2}
+  music: {fileID: 11400000, guid: 748e9870d3694034a808d052e3ce2073, type: 2}
   eyeHeight: 0
   pictureMaterialOverride: {fileID: 0}
   temporaryWords: []
@@ -6580,7 +6580,7 @@ MonoBehaviour:
   board: {fileID: 0}
   sparklePrefab: {fileID: 5007774088618566452, guid: abcf287f355dd394aa47352ce99c00d4, type: 3}
   rippleMaterial: {fileID: 2100000, guid: cf0cfd1b168f5ee4b99c2c7106ac0beb, type: 2}
-  rippleSound: {fileID: 8300000, guid: 46128e9aa01505a42b102e3dbe7dd82e, type: 3}
+  rippleSound: {fileID: 8300000, guid: fb9e2d37aa7155e4897ac5b42e173587, type: 3}
   rippleVolume: 0.45
   effectLayer: 31
   duration: 0.85

@@ -121,7 +121,7 @@ namespace PuzzleApple.Editor
             Require(rises && falls && rotationTravel>10,"toss rises, accelerates down and rotates before settling: rise="+rises+", fall="+falls+", rotation="+rotationTravel);
             Require(apple.Eaten && !apple.Busy && key.Revealed,"bite and toss finish with key revealed");
             var keyMesh=key.GetComponentInChildren<MeshFilter>();
-            Require(keyMesh && AssetDatabase.GetAssetPath(keyMesh.sharedMesh)=="Assets/ArtAssets-3D/General/Key.fbx" && !key.GetComponent<MeshRenderer>(),
+            Require(keyMesh && AssetDatabase.GetAssetPath(keyMesh.sharedMesh)=="Assets/ArtAssets-3D/V1/Key.fbx" && !key.GetComponent<MeshRenderer>(),
                 "authored key replaces cube placeholder");
             var bitten=key.transform.parent;
             var mesh=bitten.GetComponent<MeshFilter>();

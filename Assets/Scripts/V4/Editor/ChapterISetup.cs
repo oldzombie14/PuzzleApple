@@ -1,3 +1,4 @@
+using PlanarMirror = PuzzleApple.V4.Dependencies.PlanarMirror;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -83,12 +84,12 @@ namespace PuzzleApple.V4.EditorTools
             neutral.SetColor("_ShadowTint",Color.white);neutral.SetColor("_LightTint",Color.white);
             neutral.SetFloat("_Saturation",1);neutral.SetFloat("_Strength",0);
             AssetDatabase.CreateAsset(neutral,Mats+"NeutralPicture.mat");
-            portalMaterial=new Material(Shader.Find("PuzzleApple/Planar Mirror")){name="PortalSurface"};
+            portalMaterial=new Material(Shader.Find("PuzzleApple/V4/Planar Mirror")){name="PortalSurface"};
             portalMaterial.SetColor("_Tint",Color.white);AssetDatabase.CreateAsset(portalMaterial,Mats+"PortalSurface.mat");
         }
         static void AddWord()
         {
-            AssetDatabase.CopyAsset("Assets/Sprites/V3/Mirror.png","Assets/Sprites/V4/Mirror.png");
+            if (!AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/V4/Mirror.png")) throw new System.InvalidOperationException("Missing V4-owned Mirror sprite.");
             var word=ScriptableObject.CreateInstance<WordDefinition>();
             var so=new SerializedObject(word);
             so.FindProperty("id").stringValue="mirror";so.FindProperty("displayText").stringValue="mirror";

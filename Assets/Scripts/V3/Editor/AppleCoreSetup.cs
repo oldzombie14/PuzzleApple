@@ -24,7 +24,7 @@ namespace PuzzleApple.V3.Editor
             var room=Object.FindFirstObjectByType<OpeningRoom>();
             if(!room||room.gameObject.scene.path!="Assets/Scenes/V3/P3.unity")throw new InvalidOperationException("Open P3 first.");
             var skin=Material("AppleCoreSkin",new Color(.65f,.1f,.12f),.32f);
-            var original=AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/Apple.mat");
+            var original=AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V3/Apple.mat");
             if(original){skin.CopyPropertiesFromMaterial(original);EditorUtility.SetDirty(skin);}
             // The original is an atlas, not a repeating texture. Sample only a red
             // skin patch; its authored normal map does not match this new topology.

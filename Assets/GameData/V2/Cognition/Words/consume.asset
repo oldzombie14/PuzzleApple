@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.Cognition.WordDefinition
   id: consume
   displayText: consume
-  symbol: {fileID: 21300000, guid: 5fe0f3823a8062546ac8463287c2ce62, type: 3}
+  symbol: {fileID: 21300000, guid: 2e83150946ec5dc4c96c492ff202d770, type: 3}

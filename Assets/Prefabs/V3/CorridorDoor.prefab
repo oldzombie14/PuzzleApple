@@ -51,7 +51,7 @@ PrefabInstance:
     - target: {fileID: -6846623891914052116, guid: 2837201c0be8fe949873f186b5d59096, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 48efd99647313bf4abc0496a590ce92b, type: 2}
+      objectReference: {fileID: 2100000, guid: 8e6e09911dd172843b7d7902aae62147, type: 2}
     - target: {fileID: 919132149155446097, guid: 2837201c0be8fe949873f186b5d59096, type: 3}
       propertyPath: m_Name
       value: CorridorDoor
@@ -59,7 +59,7 @@ PrefabInstance:
     - target: {fileID: 7966079122534722423, guid: 2837201c0be8fe949873f186b5d59096, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 48efd99647313bf4abc0496a590ce92b, type: 2}
+      objectReference: {fileID: 2100000, guid: 8e6e09911dd172843b7d7902aae62147, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

@@ -16,7 +16,7 @@ namespace PuzzleApple.Editor
                 throw new InvalidOperationException("Open TutorialLevel in Edit Mode.");
             const string folder = "Assets/Prefabs/V1/Interaction";
             if (!AssetDatabase.IsValidFolder(folder)) AssetDatabase.CreateFolder("Assets/Prefabs/V1", "Interaction");
-            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/General/AppleBitten.fbx").GetComponentInChildren<MeshFilter>();
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/V1/AppleBitten.fbx").GetComponentInChildren<MeshFilter>();
             var mesh = UnityEngine.Object.Instantiate(source.sharedMesh);
             mesh.name = "AppleBitten split skin and flesh";
             var vertices = mesh.vertices;
@@ -50,7 +50,7 @@ namespace PuzzleApple.Editor
             var fleshMaterial = Material("AppleFlesh", new Color(.96f, .91f, .72f), .18f);
             var model = new GameObject("Bitten apple");
             model.AddComponent<MeshFilter>().sharedMesh = mesh;
-            model.AddComponent<MeshRenderer>().sharedMaterials = new[] { AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/Apple.mat"), fleshMaterial };
+            model.AddComponent<MeshRenderer>().sharedMaterials = new[] { AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V1/Apple.mat"), fleshMaterial };
             model.AddComponent<MeshCollider>().sharedMesh = mesh;
             var prefab = PrefabUtility.SaveAsPrefabAsset(model, folder + "/BittenApple.prefab");
             UnityEngine.Object.DestroyImmediate(model);
@@ -71,7 +71,7 @@ namespace PuzzleApple.Editor
         public static CognitionKey ConfigureKey()
         {
             if (Application.isPlaying) throw new InvalidOperationException("Configure the key in Edit Mode.");
-            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/General/Key.fbx");
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/V1/Key.fbx");
             if (!source) throw new InvalidOperationException("Missing authored Key.fbx.");
             var key = UnityEngine.Object.FindObjectsByType<CognitionKey>(FindObjectsInactive.Include, FindObjectsSortMode.None).FirstOrDefault();
             if (!key) key = new GameObject("Apple key").AddComponent<CognitionKey>();

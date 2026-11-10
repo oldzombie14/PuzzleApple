@@ -1,3 +1,4 @@
+using PlanarMirror = PuzzleApple.V3.Dependencies.PlanarMirror;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;

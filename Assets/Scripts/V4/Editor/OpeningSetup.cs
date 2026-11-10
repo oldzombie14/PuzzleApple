@@ -70,9 +70,6 @@ namespace PuzzleApple.V4.Editor
             var contents = PrefabUtility.LoadPrefabContents(uiPath);
             try
             {
-                UnityEngine.Object.DestroyImmediate(contents.GetComponent<PuzzleApple.V3.V3Presentation>());
-                UnityEngine.Object.DestroyImmediate(contents.transform.Find("V3 HUD").gameObject);
-                UnityEngine.Object.DestroyImmediate(contents.transform.Find("World display").gameObject);
                 contents.name = "V4Interface"; contents.GetComponent<Canvas>().sortingOrder = 20;
                 Ref(contents.GetComponent<CognitionBoard>(), "catalog", catalog);
                 var libraryData = new SerializedObject(contents.GetComponent<WordLibrary>());
@@ -82,7 +79,7 @@ namespace PuzzleApple.V4.Editor
             finally { PrefabUtility.UnloadPrefabContents(contents); }
             var ui = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(uiPath));
             var board = ui.GetComponent<CognitionBoard>();
-            var old = UnityEngine.Object.FindFirstObjectByType<PuzzleApple.General.BasicFirstPersonController>();
+            var old = UnityEngine.Object.FindFirstObjectByType<PuzzleApple.V4.Dependencies.BasicFirstPersonController>();
             var playerObject = old.gameObject;
             UnityEngine.Object.DestroyImmediate(old);
             var player = playerObject.AddComponent<FirstPersonController>(); player.view = player.GetComponentInChildren<Camera>().transform;
@@ -103,14 +100,14 @@ namespace PuzzleApple.V4.Editor
         public static void RestoreHud(OpeningFlow flow)
         {
             // Copy the authored HUD geometry, sprite, and contrast material exactly.
-            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/V3/UI/V3Interface.prefab");
-            var so = new SerializedObject(source.GetComponent<PuzzleApple.V3.V3Presentation>());
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/V4/UI/OpeningHudTemplate.prefab");
+            if (!source) throw new InvalidOperationException("Missing V4-owned OpeningHudTemplate prefab.");
             for (int i = flow.hud.childCount - 1; i >= 0; i--) UnityEngine.Object.DestroyImmediate(flow.hud.GetChild(i).gameObject);
-            var eye = (Image)so.FindProperty("eye").objectReferenceValue;
+            var eye = source.transform.Find("Eye").GetComponent<Image>();
             flow.hoverEye = UnityEngine.Object.Instantiate(eye, flow.hud, false); flow.hoverEye.name = "Collectible";
-            var cross = (GameObject)so.FindProperty("cross").objectReferenceValue;
+            var cross = source.transform.Find("Cross").gameObject;
             flow.reticle = UnityEngine.Object.Instantiate(cross, flow.hud, false); flow.reticle.name = "Reticle";
-            var symbol = (Image)so.FindProperty("symbol").objectReferenceValue;
+            var symbol = source.transform.Find("Symbol").GetComponent<Image>();
             var go = new GameObject("Collected symbol", typeof(RectTransform), typeof(CenteredSymbolImage)); go.transform.SetParent(flow.hud, false);
             flow.collectionSymbol = go.GetComponent<CenteredSymbolImage>();
             flow.collectionSymbol.rectTransform.anchorMin = symbol.rectTransform.anchorMin;

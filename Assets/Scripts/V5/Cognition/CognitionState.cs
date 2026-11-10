@@ -1,0 +1,241 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace PuzzleApple.V5.Cognition
+{
+    public enum CognitionChange { Add, Layout, Join, Split, Swap }
+
+    // Pure state: visual positions and persistent world facts do not belong here.
+    public sealed class CognitionState
+    {
+        public sealed class Word
+        {
+            public int Id { get; }
+            public WordDefinition Definition { get; }
+            public string Text => Definition.DisplayText;
+            public string Meaning => Definition.Id;
+            internal Word(int id, WordDefinition definition) { Id = id; Definition = definition; }
+        }
+
+        public sealed class Group
+        {
+            public int Id { get; }
+            internal readonly List<Word> words;
+            public IReadOnlyList<Word> Words => words;
+            public bool Independent => words.Count == 1;
+            public bool Recognized { get; internal set; }
+            public bool Conflicted { get; internal set; }
+            public bool Effective => Recognized && !Conflicted;
+            public CognitionSignal Signal { get; internal set; }
+            public IReadOnlyList<CognitionSignal> Signals { get; internal set; } = Array.Empty<CognitionSignal>();
+            public string RuleId { get; internal set; }
+            public long Established { get; internal set; }
+            internal Group(int id, IEnumerable<Word> source) { Id = id; words = source.ToList(); }
+        }
+
+        readonly List<Group> groups = new List<Group>();
+        readonly Dictionary<string, CognitionRule> rules = new Dictionary<string, CognitionRule>();
+        readonly Dictionary<string, WordDefinition> vocabulary;
+        readonly Dictionary<string, string> exclusionKeys;
+        readonly (CognitionSignal First, CognitionSignal Second, bool Earliest)[] conflicts;
+        readonly HashSet<string> learned = new HashSet<string>();
+        long chronology;
+        readonly HashSet<string> acquisitions = new HashSet<string>();
+        readonly Dictionary<string, string[]> acquisitionWords = new Dictionary<string, string[]>();
+        int nextWord, nextGroup;
+        public IReadOnlyList<Group> Groups => groups;
+        public sealed class HistoryEntry
+        {
+            public WordDefinition[] Words { get; internal set; }
+            public bool Effective { get; internal set; }
+        }
+        readonly List<HistoryEntry> history = new List<HistoryEntry>();
+        readonly Dictionary<int, string> lastEvaluations = new Dictionary<int, string>();
+        public IReadOnlyList<HistoryEntry> History => history;
+        public int HistoryVersion { get; private set; }
+        public event Action<CognitionChange> Changed;
+        public bool HasEffect(CognitionSignal signal) => groups.Any(g => g.Effective && g.Signals.Contains(signal));
+        public bool Knows(string id) => learned.Contains(id);
+
+        public CognitionState(CognitionCatalog catalog)
+        {
+            if (!catalog) throw new ArgumentNullException(nameof(catalog));
+            catalog.ValidateOrThrow();
+            vocabulary = catalog.Words.ToDictionary(w => w.Id);
+            exclusionKeys = catalog.Rules.ToDictionary(r => r.Id, r => r.ExclusionKey);
+            foreach (var rule in catalog.Rules)
+                rules.Add(string.Join(" ", rule.Words.Select(w => w.Id)), rule);
+            conflicts = catalog.Conflicts.Select(c => (c.First, c.Second, c.EarliestWins)).ToArray();
+        }
+
+        public static string[] Tokenize(string text) => (text ?? "").Trim().TrimEnd('.', '。')
+            .Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+        static string Key(IEnumerable<Word> words) => string.Join(" ", words.Select(w => w.Meaning));
+        public bool HasAcquired(string sourceId) => acquisitions.Contains(sourceId);
+        public bool TryAcquireWord(string sourceId, WordDefinition definition)
+        {
+            if (string.IsNullOrWhiteSpace(sourceId) || definition == null) throw new ArgumentException("Missing acquisition data.");
+            if (!vocabulary.TryGetValue(definition.Id, out var registered) || registered != definition)
+                throw new ArgumentException("Word is not registered in this cognition catalog: " + definition.Id);
+            if (!acquisitions.Add(sourceId)) return false;
+            acquisitionWords[sourceId] = new[] { definition.Id };
+            if (!learned.Add(definition.Id)) return false;
+            // Acquisitions enter the permanent left-hand vocabulary; tokens are
+            // created only when the player drags a word into the workspace.
+            Commit(CognitionChange.Add);
+            return true;
+        }
+        public bool TryAcquireSentence(string sourceId, string text)
+        {
+            var tokens = Tokenize(text);
+            if (string.IsNullOrWhiteSpace(sourceId) || tokens.Length < 2) throw new ArgumentException("Missing sentence acquisition data.");
+            if (acquisitions.Contains(sourceId)) return false;
+            // Resolve all definitions before committing: malformed acquisitions must not consume their source.
+            var definitions = tokens.Select(t => vocabulary.TryGetValue(t.ToLowerInvariant(), out var word) ? word
+                : throw new ArgumentException("Unknown cognition word ID: " + t)).ToArray();
+            acquisitions.Add(sourceId);
+            acquisitionWords[sourceId] = definitions.Select(d => d.Id).ToArray();
+            foreach (var d in definitions) learned.Add(d.Id);
+            NewGroup(definitions.Select(d => new Word(++nextWord, d)));
+            Commit(CognitionChange.Add);
+            return true;
+        }
+        Group NewGroup(IEnumerable<Word> words)
+        {
+            var group = new Group(++nextGroup, words);
+            groups.Add(group);
+            return group;
+        }
+        public Group Find(int id) => groups.Find(g => g.Id == id);
+        public Group Spawn(WordDefinition word)
+        {
+            if (!word || !learned.Contains(word.Id)) return null;
+            var group = NewGroup(new[] { new Word(++nextWord, word) });
+            Commit(CognitionChange.Add); return group;
+        }
+        public void ReturnToLibrary(int groupId, int wordId, bool whole)
+        {
+            var group = Find(groupId); if (group == null) return;
+            if (whole || group.Independent) groups.Remove(group);
+            else
+            {
+                int index = group.words.FindIndex(w => w.Id == wordId); if (index < 0) return;
+                var right = group.words.Skip(index + 1).ToArray();
+                group.words.RemoveRange(index, group.words.Count - index);
+                if (group.words.Count == 0) groups.Remove(group);
+                if (right.Length > 0) NewGroup(right);
+            }
+            Commit(CognitionChange.Split);
+        }
+        public void ClearWorkspace()
+        {
+            if(groups.Count==0)return;
+            groups.Clear();Commit(CognitionChange.Split);
+        }
+        // Remove affected sentences as a whole: never accidentally form a new rule
+        // by concatenating the words on either side of an expired word.
+        public void ForgetWords(IEnumerable<string> ids)
+        {
+            var expired = new HashSet<string>(ids ?? Array.Empty<string>());
+            if (expired.Count == 0) return;
+            groups.RemoveAll(g => g.words.Any(w => expired.Contains(w.Meaning)));
+            learned.ExceptWith(expired);
+            // Acquisition IDs are tracked per word so revisiting a scene can collect it again.
+            foreach (var source in acquisitionWords.Where(p => p.Value.Any(expired.Contains)).Select(p => p.Key).ToArray())
+            { acquisitions.Remove(source); acquisitionWords.Remove(source); }
+            Commit(CognitionChange.Split);
+        }
+        public Group Owning(int wordId) => groups.Find(g => g.words.Any(w => w.Id == wordId));
+
+        // Removing a middle word preserves the two remaining connected runs.
+        public Group Detach(int groupId, int wordId)
+        {
+            var group = Find(groupId);
+            if (group == null) return null;
+            int index = group.words.FindIndex(w => w.Id == wordId);
+            if (index < 0 || group.Independent) return group;
+            var word = group.words[index];
+            var right = group.words.Skip(index + 1).ToArray();
+            group.words.RemoveRange(index, group.words.Count - index);
+            if (group.words.Count == 0) groups.Remove(group);
+            if (right.Length > 0) NewGroup(right);
+            var detached = NewGroup(new[] { word });
+            Commit(CognitionChange.Split);
+            return detached;
+        }
+        public void Swap(int groupId, int firstWordId, int secondWordId)
+        {
+            var group = Find(groupId);
+            if (group == null) return;
+            int a = group.words.FindIndex(w => w.Id == firstWordId);
+            int b = group.words.FindIndex(w => w.Id == secondWordId);
+            if (a < 0 || b < 0 || a == b) return;
+            var word = group.words[a]; group.words[a] = group.words[b]; group.words[b] = word;
+            Commit(CognitionChange.Swap);
+        }
+        // Joins are whole-group operations. A word still owned by a sentence cannot cross-swap.
+        public void Join(int movingGroupId, int targetGroupId, bool prepend)
+        {
+            var source = Find(movingGroupId); var target = Find(targetGroupId);
+            if (source == null || target == null || source == target) return;
+            target.words.InsertRange(prepend ? 0 : target.words.Count, source.words);
+            groups.Remove(source);
+            Commit(CognitionChange.Join);
+        }
+        void Commit(CognitionChange kind)
+        {
+            foreach (var group in groups)
+            {
+                var key = Key(group.words);
+                string previousRule = group.RuleId;
+                group.Recognized = !group.Independent && rules.ContainsKey(key);
+                group.Signal = group.Recognized ? rules[key].Effect : CognitionSignal.Empty;
+                group.Signals = group.Recognized ? rules[key].Effects.Distinct().ToArray() : Array.Empty<CognitionSignal>();
+                group.RuleId = group.Recognized ? rules[key].Id : null;
+                if (group.RuleId != previousRule) group.Established = group.Recognized ? ++chronology : 0;
+                group.Conflicted = false;
+            }
+            // Resolve whole sentences in establishment order. Rejected sentences claim no channels.
+            // Two accepted sentences may share the same effect; different effects in one channel conflict.
+            var accepted = new List<Group>();
+            foreach (var conflict in conflicts.Where(c => !c.Earliest))
+            {
+                if (!groups.Any(g => g.Recognized && g.Signals.Contains(conflict.First)) ||
+                    !groups.Any(g => g.Recognized && g.Signals.Contains(conflict.Second))) continue;
+                foreach (var g in groups.Where(g => g.Recognized))
+                    if (g.Signals.Contains(conflict.First) || g.Signals.Contains(conflict.Second)) g.Conflicted = true;
+            }
+            foreach (var group in groups.Where(g => g.Recognized && !g.Conflicted).OrderBy(g => g.Established))
+            {
+                group.Conflicted = accepted.Any(other => ConflictsWith(group, other));
+                if (!group.Conflicted) accepted.Add(group);
+            }
+            foreach (var id in lastEvaluations.Keys.Where(id => Find(id) == null).ToArray()) lastEvaluations.Remove(id);
+            foreach (var group in groups)
+            {
+                if (group.Independent) { lastEvaluations.Remove(group.Id); continue; }
+                string evaluation = Key(group.words) + ":" + group.Effective;
+                if (lastEvaluations.TryGetValue(group.Id, out var previous) && previous == evaluation) continue;
+                lastEvaluations[group.Id] = evaluation;
+                // Keep one entry per sentence/result, newest first; splitting never erases history.
+                history.RemoveAll(h => h.Effective == group.Effective && h.Words.SequenceEqual(group.words.Select(w => w.Definition)));
+                history.Insert(0, new HistoryEntry { Words = group.words.Select(w => w.Definition).ToArray(), Effective = group.Effective });
+                HistoryVersion++;
+            }
+            Changed?.Invoke(kind);
+        }
+        bool ConflictsWith(Group a, Group b)
+        {
+            foreach (var x in a.Signals) foreach (var y in b.Signals)
+            {
+                string channel = CognitionRule.Channel(x);
+                if (x != y && channel != null && channel == CognitionRule.Channel(y)) return true;
+                if (conflicts.Any(c => (c.First == x && c.Second == y) || (c.First == y && c.Second == x))) return true;
+            }
+            string key = exclusionKeys[a.RuleId];
+            return !string.IsNullOrEmpty(key) && key == exclusionKeys[b.RuleId] &&
+                !a.Signals.OrderBy(s => s).SequenceEqual(b.Signals.OrderBy(s => s));
+        }
+    }
+}

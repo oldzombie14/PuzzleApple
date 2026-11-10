@@ -1,3 +1,4 @@
+using PlanarMirror = PuzzleApple.V1.Dependencies.PlanarMirror;
 using System;
 using System.Linq;
 using UnityEditor;
@@ -11,14 +12,14 @@ namespace PuzzleApple.Editor
     {
         public static BoxCollider ConfigureMirror(Transform anchor)
         {
-            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/General/Mirror.fbx");
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/V1/Mirror.fbx");
             if (!source) throw new InvalidOperationException("Mirror.fbx is required.");
             var oldChildren = anchor.Cast<Transform>().Select(t => t.gameObject).ToArray();
             var model = InstantiateModel(source, anchor);
             model.name = "Mirror model";
             Fit(model, 1.87f, anchor.position, false);
             var glass = model.GetComponentsInChildren<MeshRenderer>().Single(r => r.name == "镜面");
-            var white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/GalleryWall.mat");
+            var white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V1/GalleryWall.mat");
             var glassMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V1/Tutorial/MirrorSurface.mat");
             if (!glassMaterial) throw new InvalidOperationException("MirrorSurface.mat is required.");
             foreach (var renderer in model.GetComponentsInChildren<MeshRenderer>()) renderer.sharedMaterial = renderer == glass ? glassMaterial : white;
@@ -39,7 +40,7 @@ namespace PuzzleApple.Editor
         }
         public static void ConfigureDoor(CognitionDoor door)
         {
-            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/General/Door.fbx");
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ArtAssets-3D/V1/Door.fbx");
             if (!source) throw new InvalidOperationException("Door.fbx is required.");
             var oldChildren = door.transform.Cast<Transform>().Select(t => t.gameObject).ToArray();
             door.transform.rotation = Quaternion.identity;

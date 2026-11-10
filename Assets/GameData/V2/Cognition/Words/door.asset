@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.Cognition.WordDefinition
   id: door
   displayText: door
-  symbol: {fileID: 21300000, guid: a239a69676939de43af2b1ea0504af22, type: 3}
+  symbol: {fileID: 21300000, guid: c33cab89ea51390488aa07b86609b153, type: 3}

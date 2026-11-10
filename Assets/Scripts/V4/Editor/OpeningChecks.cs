@@ -120,7 +120,7 @@ namespace PuzzleApple.V4.Editor
                 s.ClearWorkspace();yield return new WaitForSecondsRealtime(.2f);
                 Require(flow.lamp.CurrentState==LightLevelState.InBetween&&Mathf.Abs(flow.lamp.Brightness-heldBrightness)<.00001f,"removing off holds intermediate light");
                 Require(flow.hoverEye.rectTransform.sizeDelta == new Vector2(140, 140) && flow.hoverEye.rectTransform.anchoredPosition == Vector2.zero, "eye matches original geometry");
-                Require(flow.hoverEye.material.shader == AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/UI/ReticleContrast.mat").shader, "eye retains original contrast shader with V4 world image binding");
+                Require(flow.hoverEye.material.shader == AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V4/UI/ReticleContrast.mat").shader, "eye retains original contrast shader with V4 world image binding");
                 Require(!flow.gameObject.GetComponentsInChildren<MonoBehaviour>(true).Any(c => c && c.GetType().Namespace.StartsWith("PuzzleApple.V3")), "V4 UI has no V3 behavior components");
                 s.TryAcquireSentence("check.light.move", "light move");
                 var movingLamp = VisibleLamp(flow);

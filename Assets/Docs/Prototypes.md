@@ -21,7 +21,7 @@
 
 ## 入口与编辑位置
 
-- 场景：`Assets/Scenes/V4/` 下的 P4、ChapterI 与 ChapterI_Garden；Build Settings 以 P4_Systems 为入口，旧 P1 条目保留。ChapterI 沿用原中转场景 GUID。旧 Prototypes 菜单含过时场景名，不用它定位当前场景。
+- 场景：`Assets/Scenes/V4/` 下的 P4、ChapterI 与 ChapterI_Garden；Build Settings 以 P4_Systems 为入口，旧 P1 条目保留。ChapterI 沿用原中转场景 GUID。`PuzzleApple/Prototypes` 菜单可打开 V1–V4 的实际入口；版本与依赖边界见 [版本归档](VersionArchive.md)。
 - 脚本、Prefab、规则在 `Assets/Scripts/V4/`、`Assets/Prefabs/V4/`、`Assets/GameData/V4/Opening/`；其它资源按类别置于对应 V4 目录。
 - 退出确认框：`WorldEntry.ShowExitConfirmation` 使用原生 Canvas／Image／Button，并从当前词库取 positive／negative 的符号。`SentenceEffectManager` 记录已请求的退出句组，取消后不因无关编辑重复请求。
 - 常驻系统：P4_Systems 保存 Player、World picture style、EventSystem、World Entry、V4Interface 与 Session scene manager；Loading overlay 使用原生 Canvas/Image，右下角进度条可直接编辑。SessionSceneManager 处理加载、出生点、输入锁和卸载；门只提交请求。SceneEntry 的 Temporary Words 默认为空，填写场景临时词 ID 后离场统一清理。OpeningFlow 位于 P4 的 Intro flow，场景物体引用随内容卸载，WorldEntry 使用常驻 CognitionBoard，不依赖 Intro 存活。
@@ -48,19 +48,19 @@
 - 展台各部件围绕底座落地点等比调整，底座高约 1 米，展品处于玩家眼高附近；碰撞体随缩放同步。中转结构与走廊墙面共用 CorridorWall，沿用 V1 展墙的低光滑度，配合中性白底色与各朝向一致的柔和洗墙光。FBX 禁止导入灯光与相机；场景灯光为独立 Unity Light，Unity showcase light 提供展品补光。GalleryFloor 与 CorridorFloor 均使用中性哑光白色；ChapterI 与花房的 SceneEntry 引用 NeutralPicture，消除共享画面材质的青绿阴影染色，回到 Intro 自动恢复默认材质。走廊墙地使用 CorridorWall／CorridorFloor，引用 ChapterCorridorAmbient.shader（由 V3 CorridorAmbient 适配到世界 X 方向），关闭走廊顶灯，仅保留 Unity showcase light。花房照明见下方瓶花说明。SceneEntry 的 Eye Height 在 ChapterI 与花房设为 2 米，离开后恢复系统默认眼高和碰撞体。画框模型的局部 Z 轴对应世界高度；下沿完整露出，左右框外尺寸一致，画面和两端净开口均约 8.60×12.21 米。走廊双侧画框整体抬高 0.70 米，外框下沿高出地面约 0.71 米；花房双向门槛等高上移，两端均由三级踏步接近，花房门洞保留原净开口。右侧壁灯位于大画框上方，灯口对准画面。
 - 日常编辑原生组件、场景和 Prefab，不重跑初次搭建脚本覆盖手调布局。
 
-## 旧资源依赖（无需读取旧设计）
+## 版本自有资源（无需读取旧设计）
 
-旧资源保留原位，目录版本名不意味着继承玩法。
-
-- V4 符号独立放在 `Sprites/V4/`：Positive（正状态）、Negative（负状态）、World（世界）、Floor（地面）、Move（移动）、Light（灯）、Door（门），另有 Eye（词条模板原 I 符号）；收词眼睛继续使用共享 viewer 图标。旧版符号保留原位，V4 场景、Prefab、词资源使用独立副本；Floor 使用 `Sprites/v2_260929/Light.png` 的图案副本，保留 V4 GUID。仍复用 `Fonts/V3/PlayerNotes.fontsettings`、`Materials/V3/MemoryPrint.mat`、`UI/V3/SaveSquare.png`。
-- 初次迁移工具 OpeningSetup 引用 V3Interface／V3Presentation，WorldEntrySetup 与 OpeningSetup 的符号路径已指向 V4；这些工具依赖不是采用旧规则的依据。
-- General 及以上资产按共享资源处理；V4 专属修改前核对影响，必要时复制至 V4 再改引用，保留 `.meta` 和 GUID。
+- V4 符号独立放在 `Sprites/V4/`；Floor 保留既有 V4 GUID，来源图案不再构成对旧版文件的引用。收词眼睛使用 `UI/V4/Icons/viewer.png`，手写字体为 `Fonts/V4/Handodle-rg38A.ttf`，笔记字体为 `Fonts/V4/PlayerNotes.fontsettings`。
+- 快照使用 `Materials/V4/MemoryPrint.mat`、`Shaders/V4/MemoryPrint.shader` 与 `UI/V4/SaveSquare.png`。准星材质、Shader 和镜面 Shader 也位于各自类别的 V4 目录。
+- 镜面组件为 `Scripts/V4/Rendering/PlanarMirror.cs`，类型归入 `PuzzleApple.V4.Dependencies`；SessionSceneManager 与 V4 编辑工具使用该版本类型。各版镜面不会递归查找其他版本的镜面。
+- OpeningSetup 的 HUD 来源为 `Prefabs/V4/UI/OpeningHudTemplate.prefab`，只保留本版 UI 构件与本版依赖，不读取 V3Interface／V3Presentation。ChapterISetup 使用已有的 `Sprites/V4/Mirror.png`；旧的初始组装工具仍不应重跑覆盖手调内容。
+- 版本资源副本使用各自 GUID，原资源与旧版本保留。General 中的工程级渲染配置、帧率策略等边界见 [版本归档与依赖边界](VersionArchive.md)；修改 V4 素材时使用 V4 副本，不再通过旧版来源修改。
 - ProjectHelper 原位保留。其旧来源字符串中的 GameDesign.md／Progress.md 指整理前内容，现位于 `Archive/` 同名文件；未改设计数据、审核指纹和历史。仅用户要求追溯 V3 时使用。
 
 ## 验证
-组句音效入口：`P4` 的 Sentence Effects / SentenceFeedback 上配置 Ripple Sound 与 Ripple Volume，当前音量 .45 为试玩取值。音频为 `Audio/SFX/SentenceRipple_E5.wav`，原始来源为用户提供的 `88266__ttptp__f.wav`，使用本轮确认的 E5 短余韵轻回音版；原生 2D AudioSource 随涟漪调用 PlayOneShot，音频使用 PCM、Decompress On Load 并预加载。
+组句音效入口：`P4` 的 Sentence Effects / SentenceFeedback 上配置 Ripple Sound 与 Ripple Volume，当前音量 .45 为试玩取值。音频为 `Audio/V4/SFX/SentenceRipple_E5.wav`，原始来源为用户提供的 `88266__ttptp__f.wav`，使用本轮确认的 E5 短余韵轻回音版；原生 2D AudioSource 随涟漪调用 PlayOneShot，音频使用 PCM、Decompress On Load 并预加载。
 
-音乐入口：`P4_Systems` 的 Session scene manager 上配置 `SessionAudio`，使用两个原生 2D AudioSource。内容场景 `SceneEntry.music` 指定 `MusicTrack`，空引用表示淡出到安静；预加载不触发播放，实际到达／穿越才切换。`Audio/Music/IntroMusic.asset` 调整音量、Fade In／Out 与秒数，当前音量 .45、额外淡入关闭、淡出 2 秒，均为试玩取值。MP3 使用 Streaming 导入；每轮保留文件自带的首尾渐变。M 通过 AudioListener.volume 控制全局临时静音，恢复静音前总音量；不配置例外绕过 listener 的音源。
+音乐入口：`P4_Systems` 的 Session scene manager 上配置 `SessionAudio`，使用两个原生 2D AudioSource。内容场景 `SceneEntry.music` 指定 `MusicTrack`，空引用表示淡出到安静；预加载不触发播放，实际到达／穿越才切换。`Audio/V4/Music/IntroMusic.asset` 调整音量、Fade In／Out 与秒数，当前音量 .45、额外淡入关闭、淡出 2 秒，均为试玩取值。MP3 使用 Streaming 导入；每轮保留文件自带的首尾渐变。M 通过 AudioListener.volume 控制全局临时静音，恢复静音前总音量；不配置例外绕过 listener 的音源。
 
 
 - GrammarChecks.Run() 为无场景副作用的语法与整句冲突检查。SentenceRuntimeChecks.Run()、GatheringChecks.Run()、PassageChecks.Run() 分别在新的 P4 Play 中检查效果、聚集与目标选择、实际角色跨门进入 ChapterI；各读 Result。不注入输入设备，结束后退出 Play 恢复场景。

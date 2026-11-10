@@ -42,7 +42,7 @@ namespace PuzzleApple.V3.Editor
             for(int i=0;i<ids.Length;i++)
             {
                 string path="Assets/Sprites/V3/"+images[i]+".png";
-                if(!File.Exists(path))File.Copy("Assets/Sprites/v2_260929/"+images[i]+".png",path);
+                if(!File.Exists(path))throw new InvalidOperationException("Missing V3-owned sprite: "+path);
                 AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceSynchronousImport);
                 var importer=(TextureImporter)AssetImporter.GetAtPath(path);importer.textureType=TextureImporterType.Sprite;importer.spriteImportMode=SpriteImportMode.Single;importer.alphaIsTransparency=true;importer.mipmapEnabled=false;importer.SaveAndReimport();
                 var word=Asset<WordDefinition>(Root+"/Words/"+ids[i]+".asset");TextField(word,"id",ids[i]);TextField(word,"displayText",ids[i]);Field(word,"symbol",AssetDatabase.LoadAssetAtPath<Sprite>(path));words.Add(ids[i],word);
@@ -68,7 +68,7 @@ namespace PuzzleApple.V3.Editor
             var board=ui.GetComponent<CognitionBoard>();Field(board,"catalog",catalog);
             var panel=ui.GetComponent<GameplayPanel>();var library=ui.GetComponent<WordLibrary>();
             var presentation=ui.GetComponent<V3Presentation>();
-            var pg=GameObject.Find("Player");var basic=pg.GetComponent<PuzzleApple.General.BasicFirstPersonController>();if(basic)UnityEngine.Object.DestroyImmediate(basic);
+            var pg=GameObject.Find("Player");var basic=pg.GetComponent<PuzzleApple.V3.Dependencies.BasicFirstPersonController>();if(basic)UnityEngine.Object.DestroyImmediate(basic);
             var player=Add<FirstPersonController>(pg);player.view=pg.GetComponentInChildren<Camera>().transform;player.cognition=board;Field(panel,"player",player);
             presentation.view=player.view.GetComponent<Camera>();
             var world=new GameObject("V3 Runtime").AddComponent<V3World>();world.board=board;world.library=library;world.player=player;world.presentation=presentation;
@@ -119,7 +119,7 @@ namespace PuzzleApple.V3.Editor
         static void PreparePassage(V3World world)
         {
             GameObject.Find("Exit door").SetActive(false);GameObject.Find("主房-待改墙").SetActive(false);
-            var root=new GameObject("V3 balance passage");var white=AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/General/GalleryWall.mat");
+            var root=new GameObject("V3 balance passage");var white=AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/V3/GalleryWall.mat");
             GameObject Box(string name,Vector3 p,Vector3 size){var g=GameObject.CreatePrimitive(PrimitiveType.Cube);g.name=name;g.transform.SetParent(root.transform);g.transform.position=p;g.transform.localScale=size;g.GetComponent<Renderer>().sharedMaterial=white;return g;}
             Box("Rear wall left",new Vector3(-18,5.98f,-5.15f),new Vector3(.05f,12.04f,7.7f));Box("Rear wall right",new Vector3(-18,5.98f,5.15f),new Vector3(.05f,12.04f,7.7f));Box("Rear wall above passage",new Vector3(-18,7.6f,0),new Vector3(.05f,8.8f,2.6f));
             world.passageSeal=Box("Balance stone seal",new Vector3(-18,1.62f,0),new Vector3(.18f,3.16f,2.6f)).transform;

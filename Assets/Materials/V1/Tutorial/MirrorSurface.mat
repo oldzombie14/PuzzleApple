@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: MirrorSurface
-  m_Shader: {fileID: 4800000, guid: 060ca4d51e29a1547ac80a152a80c24f, type: 3}
+  m_Shader: {fileID: 4800000, guid: bd72d88376ec2c848a65c64a3402747c, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

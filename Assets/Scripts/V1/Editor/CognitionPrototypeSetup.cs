@@ -18,18 +18,18 @@ namespace PuzzleApple.Editor
             var player = UnityEngine.Object.FindFirstObjectByType<FirstPersonController>();
             var appleObject = GameObject.Find("AppleLowPoly");
             if (!panel || !player || !appleObject) throw new InvalidOperationException("Expected panel/player/apple are missing.");
-            var importer = (TextureImporter)AssetImporter.GetAtPath("Assets/UI/General/Icons/viewer.png");
+            var importer = (TextureImporter)AssetImporter.GetAtPath("Assets/UI/V1/Icons/viewer.png");
             importer.textureType = TextureImporterType.Sprite; importer.spriteImportMode = SpriteImportMode.Single;
             importer.alphaIsTransparency = true; importer.mipmapEnabled = false; importer.SaveAndReimport();
             var board = Ensure<CognitionBoard>(panel.gameObject);
             Assign(board,"panel",panel);
             Assign(board,"catalog",CognitionCatalogEditor.LoadTutorial());
-            Assign(board,"chalkFont",AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/General/Handodle-rg38A.ttf"));
+            Assign(board,"chalkFont",AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/V1/Handodle-rg38A.ttf"));
             var apple = Ensure<CognitionApple>(appleObject); Assign(apple,"board",board);
             ApplePuzzleSetup.ConfigurePhysics(apple);
             var interaction = Ensure<CognitionWorldInteraction>(panel.gameObject);
             Assign(interaction,"board",board); Assign(interaction,"player",player); Assign(interaction,"view",Camera.main);
-            Assign(interaction,"eyeSprite",AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/General/Icons/viewer.png"));
+            Assign(interaction,"eyeSprite",AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/V1/Icons/viewer.png"));
             ConfigureHoverIcons();
             ConfigureContrast();
             EditorSceneManager.MarkSceneDirty(scene);
@@ -39,10 +39,10 @@ namespace PuzzleApple.Editor
         public static void ConfigureContrast()
         {
             if (Application.isPlaying) throw new InvalidOperationException("Configure reticle contrast in Edit Mode.");
-            if (!AssetDatabase.IsValidFolder("Assets/Materials/General/UI")) AssetDatabase.CreateFolder("Assets/Materials/General","UI");
-            const string materialPath = "Assets/Materials/General/UI/ReticleContrast.mat";
+            if (!AssetDatabase.IsValidFolder("Assets/Materials/V1/UI")) AssetDatabase.CreateFolder("Assets/Materials/V1","UI");
+            const string materialPath = "Assets/Materials/V1/UI/ReticleContrast.mat";
             var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
-            var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/General/ReticleContrast.shader");
+            var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/V1/ReticleContrast.shader");
             if (!shader) throw new InvalidOperationException("Reticle contrast shader missing.");
             if (!material) { material = new Material(shader); AssetDatabase.CreateAsset(material,materialPath); }
             var renderer = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.Universal.UniversalRendererData>("Assets/Settings/General/SacredSpaceV2_Renderer.asset");
@@ -68,7 +68,7 @@ namespace PuzzleApple.Editor
         public static void ConfigureHoverIcons()
         {
             if (Application.isPlaying) throw new InvalidOperationException("Configure icons in Edit Mode.");
-            const string path = "Assets/UI/General/Icons/forbidden.png";
+            const string path = "Assets/UI/V1/Icons/forbidden.png";
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
             importer.textureType = TextureImporterType.Sprite; importer.spriteImportMode = SpriteImportMode.Single;
             importer.alphaIsTransparency = true; importer.mipmapEnabled = false; importer.SaveAndReimport();

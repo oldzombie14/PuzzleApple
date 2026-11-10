@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30cf7e53c92541a48f09e46285fd2bb8, type: 3}
+  m_Name: OpeningCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.CognitionCatalog
+  words:
+  - {fileID: 11400000, guid: e4ec2b73428d4e8db3a72aef270d2568, type: 2}
+  - {fileID: 11400000, guid: 3200fb36f1e44738ab1c7ee1767519fc, type: 2}
+  - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+  - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+  - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+  - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+  - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+  rules:
+  - {fileID: 11400000, guid: c4d7ce4b8d2f4fe7b2140faddd1f15e2, type: 2}
+  - {fileID: 11400000, guid: 084a3e378259496cbbbd32fc6a4ebe9d, type: 2}
+  - {fileID: 11400000, guid: a6dff4665febe9d438254fab18271f8b, type: 2}
+  - {fileID: 11400000, guid: 4494dd602efce6249a0aed78af7a4d42, type: 2}
+  - {fileID: 11400000, guid: 4e9240c38040ca14bb031ca98e8735bf, type: 2}
+  - {fileID: 11400000, guid: 99a507dabf90fc1449c026a7b7719f96, type: 2}
+  - {fileID: 11400000, guid: a138788e51bfa3143b80e4e387784847, type: 2}
+  - {fileID: 11400000, guid: 1a02482c7c1542be85aa043570cedbc7, type: 2}
+  - {fileID: 11400000, guid: 217af8f42e593104a8e57ff6e77926d1, type: 2}
+  - {fileID: 11400000, guid: 6db23133da22830468e3f1934a25a706, type: 2}
+  - {fileID: 11400000, guid: d57701a814f46e3429a2124e8adc0921, type: 2}
+  - {fileID: 11400000, guid: be9082cf297a1584b8acb933409bfae2, type: 2}
+  - {fileID: 11400000, guid: 23e96862015311c4585ef266ec4019a2, type: 2}
+  - {fileID: 11400000, guid: f4d7d8ce9a694944dae0c3ec1b5053c7, type: 2}
+  - {fileID: 11400000, guid: c50e8efe6d19d544d948b38ebddf82fd, type: 2}
+  - {fileID: 11400000, guid: e19f3ad1a0aefd44b836801e37543cfb, type: 2}
+  conflicts: []

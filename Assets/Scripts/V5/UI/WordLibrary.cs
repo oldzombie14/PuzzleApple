@@ -109,26 +109,33 @@ namespace PuzzleApple.V5
         {
             if(photos.ContainsKey(id))return;
             if(!HasPhoto(id)||!frame){Remember(id);return;}
+            const float aspect=2f/3;
+            float sourceAspect=(float)frame.width/frame.height;
+            var scale=new Vector2(Mathf.Min(1,aspect/sourceAspect),Mathf.Min(1,sourceAspect/aspect));
+            int height=Mathf.Clamp(Mathf.RoundToInt(frame.height*scale.y),2,768);
             var previous=RenderTexture.active;
+            var print=RenderTexture.GetTemporary(Mathf.Max(1,Mathf.RoundToInt(height*aspect)),height,0,RenderTextureFormat.ARGB32,RenderTextureReadWrite.sRGB);
             try
             {
-                RenderTexture.active=frame;
-                var photo=new Texture2D(frame.width,frame.height,TextureFormat.RGB24,false){name="Learning "+id};
-                photo.ReadPixels(new Rect(0,0,frame.width,frame.height),0,0);photo.Apply();
+                Graphics.Blit(frame,print,scale,(Vector2.one-scale)*.5f);
+                RenderTexture.active=print;
+                var photo=new Texture2D(print.width,print.height,TextureFormat.RGB24,false){name="Learning "+id};
+                photo.ReadPixels(new Rect(0,0,print.width,print.height),0,0);photo.Apply(false,true);
                 capturedPhotos.Add(photo);photos[id]=photo;if(selected==id)UpdatePhoto();
             }
-            finally{RenderTexture.active=previous;}
+            finally{RenderTexture.active=previous;RenderTexture.ReleaseTemporary(print);}
         }
         public void Select(string id)
         {
             if(!board.State.Knows(id))return;
+            if(id!="light")Remember(id);
             selected=id;playbackStart=Time.unscaledTime;UpdatePhoto();
             note.SetTextWithoutNotify(drafts.TryGetValue(id,out var draft)?draft:SavedNote(id));
             UpdateSaveButton();Show(true);
         }
         void UpdatePhoto()
         {
-            snapshotAspect.aspectMode=selected=="positive"||selected=="negative"||selected=="mirror"
+            snapshotAspect.aspectMode=selected=="positive"||selected=="negative"||selected=="world"||selected=="mirror"
                 ?AspectRatioFitter.AspectMode.FitInParent:AspectRatioFitter.AspectMode.EnvelopeParent;
             snapshot.uvRect=new Rect(0,0,1,1);
             snapshot.texture=photos.TryGetValue(selected,out var photo)?photo:null;
@@ -196,7 +203,13 @@ namespace PuzzleApple.V5
             }
             draggedGroup=-1;
         }
-        void CancelLibraryDrag(){if(draggedGroup<0)return;board.RemoveToken(draggedGroup,0,true);draggedGroup=-1;}
+        void CancelLibraryDrag()
+        {
+            if(draggedGroup<0)return;
+            board.CancelDrag();
+            board.State.ReturnToLibrary(draggedGroup,0,true);
+            draggedGroup=-1;
+        }
         void OnDestroy()
         {
             foreach(var photo in capturedPhotos)if(photo)Destroy(photo);

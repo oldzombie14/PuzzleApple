@@ -17,23 +17,24 @@ namespace PuzzleApple.V5
         void Start(){ring.raycastTarget=false;}
         public bool CanObserve=>entry.Entered&&!entry.Busy&&!entry.ConfirmingExit&&entry.room.Opened&&
             entry.player.CanInteractWithWorld&&!entry.chamberLight.Collecting&&!entry.chamberLight.ShowingKnown;
-        public ObservableBehaviour FindTarget()
+        public ObservableBehaviour FindTarget()=>FindTarget(out _);
+        Collider trackedMember;
+        ObservableBehaviour FindTarget(out Collider member)
         {
+            member=null;
             if(!CanObserve)return null;
             var ray=new Ray(entry.player.view.position,entry.player.view.forward);
-            ObservableBehaviour nearest=null;float distance=range;
             foreach(var target in targets)
-                if(target&&target.Hit(ray,range,out float hit)&&hit<=distance){nearest=target;distance=hit;}
-            if(nearest&&Physics.Raycast(ray,out var solid,range,~0,QueryTriggerInteraction.Ignore)&&solid.distance<distance&&!nearest.Contains(solid.collider))return null;
-            return nearest;
+                if(target&&(member=target.MemberAt(ray,range)))return target;
+            return null;
         }
         // ChamberLight routes the shared left-button gesture before deciding noun collection.
         public void Advance(bool held,float deltaTime)
         {
-            if(!held){completedHold=false;Progress=0;Target=FindTarget();return;}
+            if(!held){completedHold=false;Progress=0;Target=FindTarget(out trackedMember);return;}
             if(completedHold)return;
-            var next=FindTarget();
-            if(next!=Target){Progress=0;Target=next;}
+            var next=FindTarget(out var member);
+            if(next!=Target||member!=trackedMember){Progress=0;Target=next;trackedMember=member;}
             if(!Target){Progress=0;return;}
             Progress=Mathf.Clamp01(Progress+Mathf.Max(0,deltaTime)/Mathf.Max(.1f,Target.lesson.holdDuration));
             if(Progress<1)return;

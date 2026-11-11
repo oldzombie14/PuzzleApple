@@ -34,7 +34,7 @@ namespace PuzzleApple.V5.Editor
                 var squares=j.Root.Find("Floor impact squares").GetComponent<ParticleSystem>();
                 Check(squares.particleCount>0&&squares.GetComponent<ParticleSystemRenderer>().renderMode==ParticleSystemRenderMode.Mesh,"few mesh squares emitted on impact");
                 j.SetLights(false);yield return Until(()=>j.Brightness==0);yield return new WaitForEndOfFrame();
-                Check(floor.Surface.sharedMaterial.GetFloat("_Brightness")==0,"floor returns to black with lights");
+                Check(floor.Surface.sharedMaterial.GetFloat("_Brightness")==j.SurfaceBrightness,"floor retains dim fill");
                 var state=e.board.State;
                 state.TryAcquireSentence("observe.light.move","light move");
                 state.TryAcquireSentence("check.floor","light floor move");
@@ -73,4 +73,3 @@ namespace PuzzleApple.V5.Editor
         }
     }
 }
-

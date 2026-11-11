@@ -62,7 +62,7 @@ namespace PuzzleApple.V5
             var go=new GameObject("Floor impact squares",typeof(ParticleSystem));go.transform.SetParent(journey.Root,false);
             particles=go.GetComponent<ParticleSystem>();particles.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
             var main=particles.main;main.playOnAwake=false;main.loop=false;main.simulationSpace=ParticleSystemSimulationSpace.World;
-            main.maxParticles=96;main.startColor=Color.black;main.gravityModifier=.7f;
+            main.maxParticles=96;main.startColor=Color.black;main.gravityModifier=0;
             var emission=particles.emission;emission.enabled=false;var shape=particles.shape;shape.enabled=false;
             var shrink=particles.sizeOverLifetime;shrink.enabled=true;shrink.size=new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,1,1,0));
             var renderer=particles.GetComponent<ParticleSystemRenderer>();renderer.renderMode=ParticleSystemRenderMode.Mesh;
@@ -79,7 +79,17 @@ namespace PuzzleApple.V5
                 wall.material.SetFloat("_Plane",wall.plane);wall.material.SetVector("_Hole",Vector4.zero);
                 bool mural=child.name=="Room far wall"&&muralNormal;
                 wall.material.SetFloat("_MuralEnabled",mural?1:0);
-                if(mural)wall.material.SetTexture("_MuralNormal",muralNormal);
+                if(mural)
+                {
+                    wall.material.SetTexture("_MuralNormal",muralNormal);
+                    var catalog=journey.entry.board.Catalog;
+                    wall.material.SetTexture("_HintLight",catalog.Word("light").Symbol.texture);
+                    var floorSymbol=catalog.Word("floor").Symbol;
+                    wall.material.SetTexture("_HintFloor",floorSymbol.texture);
+                    float bottomPadding=UnityEngine.Sprites.DataUtility.GetPadding(floorSymbol).y/floorSymbol.rect.height;
+                    wall.material.SetFloat("_HintFloorUVOffset",bottomPadding-Cognition.SymbolUI.FloorBottomInset);
+                    wall.material.SetTexture("_HintMove",catalog.Word("move").Symbol.texture);
+                }
                 child.GetComponent<Renderer>().sharedMaterial=wall.material;walls.Add(wall);
             }
         }
@@ -118,11 +128,11 @@ namespace PuzzleApple.V5
             var go=new GameObject("Floor rim collision",typeof(BoxCollider));go.transform.SetParent(journey.Root,false);go.transform.localPosition=position;
             var box=go.GetComponent<BoxCollider>();box.size=size;rim.Add(box);
         }
-        public void Impact(Vector3 worldPoint)
+        public void Impact(Vector3 worldPoint,Vector3 normal)
         {
             if(!ink)return;
             RecordImpact(worldPoint);ImpactCount++;
-            EmitSquares(worldPoint,Vector3.up);
+            EmitSquares(worldPoint,normal);
         }
         void RecordImpact(Vector3 worldPoint)
         {
@@ -155,7 +165,7 @@ namespace PuzzleApple.V5
             ink.SetMatrix("_WorldToFloor",journey.Root.worldToLocalMatrix);ink.SetVectorArray("_Impacts",impacts);
             ink.SetVector("_RoomBounds",new Vector4(journey.roomSize.x*.5f-.15f,journey.roomSize.y,journey.pathLength+.15f,journey.roomSize.z-.3f));
             ink.SetFloat("_RoomOpeningWidth",journey.PathWidth);
-            ink.SetFloat("_Brightness",Mathf.SmoothStep(0,1,journey.Brightness));
+            ink.SetFloat("_Brightness",journey.SurfaceBrightness);
             ink.SetFloat("_RippleDuration",rippleDuration);ink.SetFloat("_RippleSpeed",rippleSpeed);
             ink.SetFloat("_RingCount",ringCount);ink.SetFloat("_RingSpacing",ringSpacing);ink.SetFloat("_RingWidth",ringWidth);ink.SetFloat("_RippleStrength",rippleStrength);
             ink.SetVector("_RippleTaper",new Vector4(thinningStartsAt,thinningDistance,distantWidth,0));
@@ -168,4 +178,3 @@ namespace PuzzleApple.V5
         void OnDestroy(){if(ink)Destroy(ink);foreach(var wall in walls)if(wall.material)Destroy(wall.material);}
     }
 }
-

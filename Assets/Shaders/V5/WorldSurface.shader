@@ -27,9 +27,12 @@ Shader "PuzzleApple/V5/World Surface"
         _Brightness("Room brightness",Range(0,1))=0
         _Plane("Room plane XZ / XY / ZY",Float)=0
         [NoScaleOffset] _MuralNormal("Carving normal RGB / cavity A",2D)="bump"{}
+        [NoScaleOffset] _HintLight("Light hint",2D)="black"{}
+        [NoScaleOffset] _HintFloor("Floor hint",2D)="black"{}
+        [NoScaleOffset] _HintMove("Move hint",2D)="black"{}
         _MuralEnabled("Mural enabled",Float)=0
         [HideInInspector] _Dissolve("Door dissolve",Range(0,1))=0
-        [HideInInspector] _DoorInset("Door outline clearance",Float)=0
+        [HideInInspector] _IsDoorLeaf("Door leaf",Float)=0
         [HideInInspector] _DoorBackBrightness("Room-side brightness",Float)=0
         [HideInInspector] _DoorBackColor("Room-side wall color",Color)=(1,1,1,1)
         [HideInInspector] _SpecColor("Specular",Color)=(.2,.2,.2,1)
@@ -88,10 +91,10 @@ Shader "PuzzleApple/V5/World Surface"
                 float3 normalOS=TransformWorldToObjectNormal(input.normalWS);
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(input.uv,surface);
-                bool roomFace=_SurfaceMode==1&&_DoorInset>0&&normalOS.z>.5;
+                bool roomFace=_SurfaceMode==1&&_IsDoorLeaf>0&&normalOS.z>.5;
                 if(_SurfaceMode==1)
                 {
-                    ClipSurfaceDoor(p,roomFace);
+
                     if(roomFace)surface.albedo=_DoorBackColor.rgb*_DoorBackBrightness;
                     else
                     {
@@ -135,6 +138,11 @@ Shader "PuzzleApple/V5/World Surface"
                 float3 face=abs(normalOS);
                 float2 q=face.y>.5?p.xz:(face.x>.5?p.zy:p.xy);
                 float d=min(.5-abs(q.x),.5-abs(q.y));
+                if(_RoundOutline>.5)
+                {
+                    float facing=saturate(dot(normalize(input.normalWS),GetWorldSpaceNormalizeViewDir(input.positionWS)));
+                    d=facing*facing;
+                }
                 // Use the whole room's perimeter, not each doorway collision section.
                 // This avoids drawing false seams that reveal the concealed room-side door.
                 if(_SurfaceMode==2)d=RoomPerimeterDistance(input.positionWS);
@@ -203,7 +211,7 @@ Shader "PuzzleApple/V5/World Surface"
             half4 SurfaceShadowFragment(SurfaceShadowVaryings input):SV_TARGET
             {
                 UNITY_SETUP_INSTANCE_ID(input);
-                if(_SurfaceMode==1){ClipSurfaceDoor(input.local,_DoorInset>0&&input.normalOS.z>.5);}
+
                 if(_SurfaceMode==2&&_Hole.w>.5)
                 {
                     float3 local=mul(_WorldToFloor,float4(input.world,1)).xyz;

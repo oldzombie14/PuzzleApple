@@ -6,12 +6,14 @@ Shader "PuzzleApple/V5/Reticle Contrast"
         [HideInInspector] _ReticleSceneColor ("World image", 2D) = "black" {}
         _ContrastThreshold ("Background brightness threshold", Range(0,1)) = 0.45
         _AlphaCutoff ("Ignore faint source pixels", Range(0,1)) = 0
+        [HideInInspector] _SrcBlend ("Source blend", Float) = 5
+        [HideInInspector] _ScreenPointer ("Draw screen pointer", Float) = 0
     }
     SubShader
     {
         Tags { "Queue"="Overlay" "RenderType"="Transparent" "RenderPipeline"="UniversalPipeline" }
         Cull Off ZWrite Off ZTest Always
-        Blend SrcAlpha OneMinusSrcAlpha
+        Blend [_SrcBlend] OneMinusSrcAlpha
         Pass
         {
             HLSLPROGRAM
@@ -25,6 +27,7 @@ Shader "PuzzleApple/V5/Reticle Contrast"
             float4 _ReticleViewportSize;
             float _ContrastThreshold;
             float _AlphaCutoff;
+            float _ScreenPointer;
             Varyings Vert(Attributes v)
             {
                 Varyings o;
@@ -34,6 +37,19 @@ Shader "PuzzleApple/V5/Reticle Contrast"
             }
             half4 Frag(Varyings i) : SV_Target
             {
+                if (_ScreenPointer > .5)
+                {
+                    // Premultiplied coverage with OneMinusDstColor inverts the final UI pixel.
+                    float distance = length(i.uv - .5);
+                    float pixel = max(fwidth(distance), .0001);
+                    float coverage = saturate((.5 - distance) / pixel + .5);
+                    if (_ScreenPointer > 1.5)
+                    {
+                        float fill = saturate((.5 - distance) / pixel - .5);
+                        return half4(fill,fill,fill,coverage);
+                    }
+                    return half4(coverage,coverage,coverage,coverage);
+                }
                 float2 screenUV = i.positionCS.xy / max(_ReticleViewportSize.xy, float2(1,1));
                 TransformNormalizedScreenUV(screenUV);
                 // The screen-space overlay projection has the opposite vertical orientation on D3D.

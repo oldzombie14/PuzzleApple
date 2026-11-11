@@ -516,8 +516,11 @@ namespace PuzzleApple.V5.Cognition
             if((!d.Whole||source.Group.Independent)&&token!=null)
             {
                 var entry=FindFirstObjectByType<WorldEntry>();
-                if(entry&&entry.outdoor&&entry.outdoor.TryWorldDrop(this,token.Meaning,screen))
-                {CancelDrag();State.ReturnToLibrary(d.GroupId,d.WordId,false);return;}
+                if(!RectTransformUtility.RectangleContainsScreenPoint(panel.ContentRoot,screen))
+                {
+                    if(entry&&entry.outdoor)entry.outdoor.TryWorldDrop(this,token.Meaning,screen);
+                    CancelDrag();State.ReturnToLibrary(d.GroupId,d.WordId,false);return;
+                }
             }
             var target = d.Whole || d.WasIndependent ? SnapTarget(d, out var unused) : null;
             bool before = false; if (target != null) SnapTarget(d, out before);
@@ -567,6 +570,7 @@ namespace PuzzleApple.V5.Cognition
             if (drag == null) return;
             if (views.TryGetValue(drag.GroupId, out var v))
             { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = ChalkColor; }
+            drag.Ghost.gameObject.SetActive(false);
             Destroy(drag.Ghost.gameObject); drag = null;
             snapTargetId = -1;
             foreach (var view in views.Values) if (view.LeadingHandle) view.LeadingHandle.gameObject.SetActive(true);

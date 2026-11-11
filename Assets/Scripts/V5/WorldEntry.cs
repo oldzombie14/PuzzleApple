@@ -38,7 +38,7 @@ namespace PuzzleApple.V5
         void Start()
         {
             player.enabled = false;
-            Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None; Cursor.visible = false;
             // All world controls share subdued idle ink and bright hover/focus ink.
             foreach (var option in new[] { enterButton, exitButton, confirmButton, cancelButton })
             {
@@ -117,12 +117,12 @@ namespace PuzzleApple.V5
         {
             Busy=true; board.Panel.InputBlocked=true;
             if(groupId>=0) {feedback.Play(groupId,true);yield return new WaitForSecondsRealtime(feedback.duration);}
-            wasPanelOpen=board.Panel.IsOpen; board.Panel.SetOpen(false);
+            board.Panel.SetOpen(false);
             if(portableClosure)portableClosure.Restore();
             room.Open();
             board.Panel.InputBlocked=false;
             while(room.Animating)yield return null;
-            Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false; board.Panel.SetOpen(wasPanelOpen);
+            Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false;
         }
         public void CloseWorldFromSentence(int groupId)
         {
@@ -141,14 +141,15 @@ namespace PuzzleApple.V5
         }
         IEnumerator CloseWorld(int groupId)
         {
-            if(portableClosure&&!portableClosure.CanFold)
-            {
-                wasPanelOpen=board.Panel.IsOpen;board.Panel.SetOpen(false);ShowDialog();yield break;
-            }
             Busy=true; player.MovementLocked=true;
             board.CancelDrag(); board.Panel.InputBlocked=true;
-            if(groupId>=0) {feedback.Play(groupId,!Mathf.Approximately(room.Progress,0));yield return new WaitForSecondsRealtime(feedback.duration);}
+            // Showing exit confirmation is a visible effect even when no fold is needed.
+            if(groupId>=0) {feedback.Play(groupId,true);yield return new WaitForSecondsRealtime(feedback.duration);}
             wasPanelOpen=board.Panel.IsOpen; board.Panel.SetOpen(false);
+            if(portableClosure&&!portableClosure.CanFold)
+            {
+                worldGroup=-1;ShowDialog();yield break;
+            }
             if(portableClosure)portableClosure.Prepare();
             room.CloseAt(player.transform.position);
             board.Panel.InputBlocked=false;
@@ -163,7 +164,7 @@ namespace PuzzleApple.V5
             // Position stays frozen; view remains controlled during folding.
             player.MovementLocked=true;
             player.PointerUIActive=true;
-            Cursor.lockState=CursorLockMode.None; Cursor.visible=true;
+            Cursor.lockState=CursorLockMode.None; Cursor.visible=false;
             Busy=true;DialogReady=false;
             var ink=Ink(dialog);ink.alpha=0;ink.interactable=false;
             dialog.SetActive(true);
@@ -189,7 +190,7 @@ namespace PuzzleApple.V5
                 player.MovementLocked=false;
                 board.Panel.InputBlocked=false; board.Panel.SetOpen(wasPanelOpen);
                 Cursor.lockState=wasPanelOpen?CursorLockMode.None:CursorLockMode.Locked;
-                Cursor.visible=wasPanelOpen; player.SuppressInteractionThisFrame();
+                Cursor.visible=false; player.SuppressInteractionThisFrame();
             }
         }
         public void ConfirmExit()

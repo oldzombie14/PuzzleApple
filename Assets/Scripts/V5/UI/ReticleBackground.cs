@@ -1,4 +1,7 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace PuzzleApple.V5
@@ -10,6 +13,12 @@ namespace PuzzleApple.V5
         public Camera worldCamera;
         public Image eye;
         public GameObject reticle;
+        [SerializeField,Min(4)] float pointerDiameterPixels=12;
+        RawImage pointerDot;
+        Material pointerInk,solidPointerInk;
+        GameplayPanel gameplayPanel;
+        Vector2 lastPointerPosition;
+        float lastPointerMotion;
         public Material Contrast { get; private set; }
         RenderTexture frame, previousTarget;
         GameObject output;
@@ -39,7 +48,41 @@ namespace PuzzleApple.V5
             image.raycastTarget=false;
             image.rectTransform.anchorMin=Vector2.zero;image.rectTransform.anchorMax=Vector2.one;
             image.rectTransform.offsetMin=image.rectTransform.offsetMax=Vector2.zero;
+            var pointerCanvas=new GameObject("Game pointer overlay",typeof(RectTransform),typeof(Canvas)).GetComponent<Canvas>();
+            pointerCanvas.transform.SetParent(output.transform.parent,false);
+            pointerCanvas.renderMode=RenderMode.ScreenSpaceOverlay;
+            pointerCanvas.sortingOrder=short.MaxValue;
+            pointerCanvas.targetDisplay=worldCamera.targetDisplay;
+            pointerInk=new Material(Contrast);
+            pointerInk.SetFloat("_ScreenPointer",1);
+            pointerInk.SetInt("_SrcBlend",(int)UnityEngine.Rendering.BlendMode.OneMinusDstColor);
+            solidPointerInk=new Material(pointerInk);
+            solidPointerInk.SetFloat("_ScreenPointer",2);
+            solidPointerInk.SetInt("_SrcBlend",(int)UnityEngine.Rendering.BlendMode.One);
+            gameplayPanel=FindFirstObjectByType<GameplayPanel>();
+            pointerDot=new GameObject("Pointer dot",typeof(RectTransform),typeof(RawImage)).GetComponent<RawImage>();
+            pointerDot.transform.SetParent(pointerCanvas.transform,false);
+            pointerDot.material=pointerInk;pointerDot.raycastTarget=false;
+            Cursor.visible=false;
             Resize();
+        }
+        void UpdatePointer()
+        {
+            var mouse=Mouse.current;
+            Vector2 pos=mouse!=null?mouse.position.ReadValue():Vector2.zero;
+            pointerDot.enabled=mouse!=null&&Application.isFocused&&Cursor.lockState!=CursorLockMode.Locked&&
+                new Rect(0,0,Screen.width,Screen.height).Contains(pos);
+            if(!pointerDot.enabled){lastPointerPosition=pos;lastPointerMotion=float.NegativeInfinity;return;}
+            if(pos!=lastPointerPosition)lastPointerMotion=Time.unscaledTime;
+            lastPointerPosition=pos;
+            bool moving=Time.unscaledTime-lastPointerMotion<.08f;
+            var module=EventSystem.current?EventSystem.current.currentInputModule as InputSystemUIInputModule:null;
+            var hit=module?module.GetLastRaycastResult(mouse.deviceId).gameObject:null;
+            bool control=hit&&(!gameplayPanel||!gameplayPanel.IsWorldBackdrop(hit))&&
+                (ExecuteEvents.GetEventHandler<IPointerClickHandler>(hit)||ExecuteEvents.GetEventHandler<IDragHandler>(hit));
+            pointerDot.material=moving&&!control&&!mouse.leftButton.isPressed?pointerInk:solidPointerInk;
+            pointerDot.rectTransform.sizeDelta=Vector2.one*Mathf.Round(pointerDiameterPixels);
+            pointerDot.rectTransform.position=new Vector2(Mathf.Round(pos.x),Mathf.Round(pos.y));
         }
         void Resize()
         {
@@ -55,6 +98,7 @@ namespace PuzzleApple.V5
         }
         void LateUpdate()
         {
+            UpdatePointer();
             if(frame&&(frame.width!=Screen.width||frame.height!=Screen.height))Resize();
             // Fade the whole rendered world (path, door, outlines and background) together.
             // The haze and gameplay UI live on separate canvases and remain independent.
@@ -62,6 +106,9 @@ namespace PuzzleApple.V5
         }
         void OnDisable()
         {
+            if(pointerDot)Destroy(pointerDot.transform.parent.gameObject);
+            if(pointerInk)Destroy(pointerInk);
+            if(solidPointerInk)Destroy(solidPointerInk);
             if(worldCamera)worldCamera.targetTexture=previousTarget;
             if(frame){frame.Release();Destroy(frame);}
             if(output)Destroy(output);

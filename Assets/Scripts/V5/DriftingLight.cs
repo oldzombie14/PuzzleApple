@@ -61,7 +61,7 @@ namespace PuzzleApple.V5
             {var contact=c.GetContact(0);journey.floorSurface.ImpactWall(c.collider,contact.point,contact.normal);}
             if(journey&&journey.floorSurface&&journey.floorSurface.Owns(c.collider))
                 foreach(var contact in c.contacts)if(Vector3.Dot(contact.normal,Vector3.up)>.6f)
-                {journey.floorSurface.Impact(contact.point);break;}
+                {journey.floorSurface.Impact(contact.point,contact.normal);break;}
             Reflect(c);
         }
         void OnCollisionStay(Collision c)=>Reflect(c);

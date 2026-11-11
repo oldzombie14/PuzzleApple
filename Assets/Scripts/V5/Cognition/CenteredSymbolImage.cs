@@ -22,7 +22,7 @@ namespace PuzzleApple.V5.Cognition
             }
             // Imported sprites can also carry unequal trim padding. Center the generated geometry.
             var offset = rect.center - (min + max) * .5f;
-            if(string.Equals(sprite.name,"floor",System.StringComparison.OrdinalIgnoreCase))offset.y=rect.yMin+rect.height*.08f-min.y;
+            if(string.Equals(sprite.name,"floor",System.StringComparison.OrdinalIgnoreCase))offset.y=rect.yMin+rect.height*SymbolUI.FloorBottomInset-min.y;
             for (int i = 0; i < vertices.currentVertCount; i++)
             {
                 vertices.PopulateUIVertex(ref vertex, i);

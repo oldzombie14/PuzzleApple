@@ -25,8 +25,10 @@ namespace PuzzleApple.V5
         [SerializeField] SentenceHistory history;
 
         public bool IsOpen { get; private set; }
+        public bool FullyOpen => IsOpen && progress >= 1;
         public bool InputBlocked { get; set; } = true;
         public RectTransform ContentRoot => contentRoot;
+        public bool IsWorldBackdrop(GameObject hit)=>worldInputBlocker&&hit==worldInputBlocker.gameObject;
         public UnityEvent<bool> OpenChanged => openChanged;
 
         void Awake()

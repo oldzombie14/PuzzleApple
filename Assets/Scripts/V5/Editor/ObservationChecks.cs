@@ -32,19 +32,36 @@ namespace PuzzleApple.V5.Editor
                 Check(o.FindTarget()==null,"dark behaviour unavailable");
                 e.board.State.TryAcquireSentence("observe.check.on","positive light");yield return Until(()=>j.Brightness==1&&!e.sentenceRuntime.presentation.Playing);
                 Cursor.lockState=CursorLockMode.Locked;
-                p.view.LookAt(j.Root.TransformPoint(new Vector3(0,4,j.pathLength+j.roomSize.z*.5f)));p.AdoptCurrentView();yield return null;
-                Check(o.FindTarget()==j.movementObservation,"ray finds whole group");
+                for(int i=0;i<j.Lamps.Count;i++)
+                {
+                    var lampBody=j.Lamps[i].GetComponent<Rigidbody>();
+                    lampBody.interpolation=RigidbodyInterpolation.None;
+                    lampBody.position=j.Root.TransformPoint(new Vector3(4,2+i*.5f,j.pathLength+10));
+                }
+                Physics.SyncTransforms();
+                p.view.LookAt(j.Root.Find("Room far wall"));p.AdoptCurrentView();
+                Check(o.FindTarget()==null,"bare mural cannot start observation");
+                body.position=j.Root.TransformPoint(new Vector3(0,3,j.pathLength+10));Physics.SyncTransforms();
+                p.view.LookAt(body.position+j.Root.right*.25f);p.AdoptCurrentView();
+                Check(o.FindTarget()==j.movementObservation,"near-edge tolerance");
+                p.view.LookAt(body.position);p.AdoptCurrentView();yield return null;
+                Check(o.FindTarget()==j.movementObservation,"ray finds moving lamp");
                 yield return new WaitForEndOfFrame();
                 Canvas.ForceUpdateCanvases();
                 Check(o.ring.gameObject.activeInHierarchy&&o.ring.canvasRenderer&&o.ring.canvasRenderer.GetMesh().vertexCount>0,"ring submits actual UI geometry");
                 Check(o.ring.material==e.chamberLight.hoverEye.material&&o.ring.material.GetTexture("_ReticleSceneColor")==p.view.GetComponent<Camera>().targetTexture,"ring shares exact symbol contrast material");
-                o.enabled=false;o.Advance(true,.8f);Check(o.Progress>0&&o.Progress<1&&!e.board.State.Knows("move"),"partial hold");
-                o.Advance(false,.1f);Check(o.Progress==0,"release resets");
-                o.Advance(true,.8f);p.view.rotation=Quaternion.LookRotation(Vector3.down,j.Root.forward);o.Advance(true,.1f);Check(o.Progress==0&&o.Target==null,"look away resets");
-                p.view.LookAt(j.Root.TransformPoint(new Vector3(0,4,j.pathLength+j.roomSize.z*.5f)));p.AdoptCurrentView();
-                o.Advance(true,.8f);e.board.Panel.SetOpen(true);o.Advance(true,.1f);Check(o.Progress==0,"panel interrupts");e.board.Panel.SetOpen(false);yield return null;
-                p.view.LookAt(j.Root.TransformPoint(new Vector3(0,4,j.pathLength+j.roomSize.z*.5f)));p.AdoptCurrentView();
-                for(int i=0;i<119;i++)o.Advance(true,1f/60);
+                o.enabled=false;o.Advance(true,.3f);Check(o.Progress>0&&o.Progress<1&&!e.board.State.Knows("move"),"partial hold");
+                var other=j.Lamps[1].GetComponent<Rigidbody>();
+                other.position=p.view.position+p.view.forward*3+p.view.right*2;
+                Physics.SyncTransforms();p.view.LookAt(other.position);p.AdoptCurrentView();o.Advance(true,.05f);
+                Check(o.Progress>0&&o.Progress<.1f,"switching lamps restarts the hold: "+o.Progress);
+                p.view.LookAt(body.position);o.Advance(false,.1f);Check(o.Progress==0,"release resets");
+                o.Advance(true,.3f);p.view.rotation=Quaternion.LookRotation(Vector3.down,j.Root.forward);o.Advance(true,.1f);Check(o.Progress==0&&o.Target==null,"look away resets");
+                p.view.LookAt(body.position);p.AdoptCurrentView();
+                o.Advance(true,.3f);e.board.Panel.SetOpen(true);o.Advance(true,.1f);Check(o.Progress==0,"panel interrupts");e.board.Panel.SetOpen(false);yield return null;
+                p.view.LookAt(body.position);p.AdoptCurrentView();
+                int pulsesBefore=e.feedback.StrongCount;
+                for(int i=0;i<47;i++)o.Advance(true,1f/60);
                 Check(!e.board.State.Knows("move"),"requires full configured duration");o.Advance(true,.03f);
                 Check(o.Progress==1&&e.chamberLight.Collecting&&e.chamberLight.collectionSymbol.gameObject.activeSelf,"full bar immediately shows vocabulary collection without release");
                 o.Advance(true,1);
@@ -52,16 +69,19 @@ namespace PuzzleApple.V5.Editor
                 o.Advance(false,0);yield return null;
                 var s=e.board.State;Check(s.Knows("move")&&s.HasEffect(Cognition.CognitionSignal.LightMove)&&e.board.Panel.IsOpen,"learned verb, effective example and automatic panel");
                 Check(j.LampsMoving,"learned example sustains movement");
+                yield return Until(()=>e.feedback.StrongCount>pulsesBefore);
+                Check(e.board.Panel.FullyOpen&&e.feedback.StrongCount==pulsesBefore+1,"acquired example pulses once after panel opens");
                 var group=s.Groups.Single(g=>g.RuleId=="light.move");var detached=s.Detach(group.Id,group.Words[1].Id);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
                 Check(!j.LampsMoving&&j.Lamps.All(l=>l.GetComponent<Rigidbody>().isKinematic),"split stops whole group");
                 before=body.position;yield return new WaitForSeconds(.15f);Check(Vector3.Distance(before,body.position)<.001f,"stopped positions stable");
                 s.Join(detached.Id,group.Id,false);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();Check(j.LampsMoving&&!body.isKinematic,"rejoin resumes");
-                e.board.Panel.SetOpen(false);yield return null;p.view.LookAt(j.Root.TransformPoint(new Vector3(0,4,j.pathLength+j.roomSize.z*.5f)));p.AdoptCurrentView();
-                int groups=s.Groups.Count;o.Advance(false,0);o.Advance(true,2.1f);
+                e.board.Panel.SetOpen(false);yield return null;p.view.LookAt(body.position);p.AdoptCurrentView();
+                int groups=s.Groups.Count;pulsesBefore=e.feedback.StrongCount;o.Advance(false,0);o.Advance(true,2.1f);
                 Check(e.chamberLight.ShowingKnown,"known full bar immediately shows vocabulary feedback");
                 Check(s.Groups.Count==groups&&!e.board.Panel.IsOpen,"known observation does not duplicate sentence");
                 Check(e.chamberLight.ShowingKnown&&e.chamberLight.KnownFeedbackWord=="move"&&!p.MovementLocked,"known observation displays only the learned verb");
                 yield return new WaitForSecondsRealtime(1);
+                Check(e.feedback.StrongCount==pulsesBefore&&!e.board.Panel.IsOpen,"known observation only shows the word");
                 o.Advance(true,2.1f);Check(!e.chamberLight.ShowingKnown,"held button cannot repeatedly replay known feedback");
                 o.Advance(false,0);
                 // The same concrete lamp remains left-click collectible while its group is observable.

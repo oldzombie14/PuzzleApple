@@ -1,6 +1,6 @@
 // Existing Toon Passage door and Impact Floor effects, kept on the shared surface.
 // Their coordinates, timing and property names remain compatible with the controllers.
-float _SurfaceMode,_FrontWhite,_Dissolve,_DoorInset,_DoorBackBrightness;
+float _SurfaceMode,_FrontWhite,_Dissolve,_IsDoorLeaf,_DoorBackBrightness;
 float _CorridorFill;
 float4 _ShadeColor,_ShadowColor,_DoorBackColor;
 float4 _FloorColor,_Impacts[16],_Hole,_RoomBounds;
@@ -10,14 +10,13 @@ float _RoomOpeningWidth;
 float4 _RippleTaper;
 float _LightSteps,_LightStepBlend,_LightBandEdge,_CorridorPureWhite;
 TEXTURE2D(_MuralNormal);SAMPLER(sampler_MuralNormal);
+TEXTURE2D(_HintLight);SAMPLER(sampler_HintLight);
+TEXTURE2D(_HintFloor);TEXTURE2D(_HintMove);
+float _HintFloorUVOffset;
+float _RoundOutline;
 float4 _MuralRect;float3 _MuralLight;
 float _MuralEnabled,_MuralRelief,_MuralCavity;
 
-void ClipSurfaceDoor(float3 local,bool roomFace)
-{
-    if(_DoorInset>0&&!roomFace)clip(.5-max(abs(local.x),abs(local.y))-_DoorInset);
-
-}
 float RoomPerimeterDistance(float3 positionWS)
 {
     float3 local=mul(_WorldToFloor,float4(positionWS,1)).xyz;
@@ -26,6 +25,13 @@ float RoomPerimeterDistance(float3 positionWS)
     if(_Plane<.5&&local.y<.5&&abs(local.x)<_RoomOpeningWidth*.5)
         edge.z=_RoomBounds.z+_RoomBounds.w-local.z;
     return _Plane<.5?min(edge.x,edge.z):(_Plane<1.5?min(edge.x,edge.y):min(edge.z,edge.y));
+}
+float HintDepth(float slot,float2 uv)
+{
+    if(any(uv<0)||any(uv>1))return 0;
+    if(slot<0)return SAMPLE_TEXTURE2D(_HintLight,sampler_HintLight,uv).a;
+    if(slot>0)return SAMPLE_TEXTURE2D(_HintMove,sampler_HintLight,uv).a;
+    return SAMPLE_TEXTURE2D(_HintFloor,sampler_HintLight,uv).a;
 }
 float3 RoomSurfaceEffects(float3 positionWS)
 {
@@ -60,6 +66,20 @@ float3 RoomSurfaceEffects(float3 positionWS)
         float3 normal=normalize(relief.rgb*2-1);
         float shade=saturate(1+(dot(normal,_MuralLight)-_MuralLight.z)*_MuralRelief-relief.a*_MuralCavity);
         carving=lerp(1,shade,inside);
+        float size=min(.9,_MuralRect.z*.12);
+        float2 glyph=(p-float2(_MuralRect.x,_MuralRect.y-_MuralRect.w*.5-size*.8))/size;
+        float slot=clamp(round(glyph.x/1.2),-1,1);
+        float2 symbolUV=glyph-float2(slot*1.2,0)+.5;
+        if(slot==0)symbolUV.y+=_HintFloorUVOffset;
+        if(all(abs(symbolUV-.5)<.53))
+        {
+            float bevel=.018;
+            float depth=HintDepth(slot,symbolUV);
+            float2 slope=float2(HintDepth(slot,symbolUV+float2(bevel,0))-HintDepth(slot,symbolUV-float2(bevel,0)),
+                                HintDepth(slot,symbolUV+float2(0,bevel))-HintDepth(slot,symbolUV-float2(0,bevel)));
+            float3 glyphNormal=normalize(float3(slope*1.4,1));
+            carving*=saturate(1+(dot(glyphNormal,_MuralLight)-_MuralLight.z)*_MuralRelief-depth*.55*_MuralCavity);
+        }
     }
     return carving*(1-ink*_RippleStrength);
 }

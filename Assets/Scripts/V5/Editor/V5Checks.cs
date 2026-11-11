@@ -57,6 +57,7 @@ namespace PuzzleApple.V5.Editor
                 s.Swap(on.Id,on.Words[0].Id,on.Words[1].Id);
                 yield return Until(()=>e.room.Opened&&!e.Busy);
                 Require(e.room.Opened&&!e.Busy&&e.feedback.StrongCount==1,"on world opens via UI token state");
+                Require(!b.Panel.IsOpen&&!e.player.PanelOpen,"world unfold finishes without reopening the panel");
                 Require(e.room.movingColliders.All(c=>!c.enabled),"open panels cannot obstruct movement");
                 yield return new WaitForEndOfFrame();
                 // Move to a different location before OFF, keeping the earlier ON sentence.

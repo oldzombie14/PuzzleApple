@@ -44,24 +44,24 @@ namespace PuzzleApple.V5.Editor
                 state.ReturnToLibrary(off.Id,0,true);yield return Until(()=>e.chamberLight.Brightness>=1);
                 Check(on.Effective,"removing off hands control to on");
                 var doorPosition=j.Door.position;
-                Check(j.Door.childCount==0,"plain leaf without raised frame or recessed panel");
+                Check(j.Door.parent.Find("Round handle"),"hinge carries a round handle");
                 Check(!j.Root.Cast<Transform>().Any(t=>t.name.Contains("reveal")),"no wide reveal-plane artifacts");
                 state.TryAcquireSentence("check.door.on","positive door");yield return new WaitForSeconds(.25f);
                 var doorOn=state.Groups.First(g=>g.RuleId=="door.on");
                 float progress=j.DoorProgress;Check(progress>0&&progress<1,"door starts gradual opening");
                 var token=state.Detach(doorOn.Id,doorOn.Words.Last().Id);yield return new WaitForSeconds(.2f);
-                Check(Mathf.Abs(progress-j.DoorProgress)<.0001f,"split holds door dissolve");
+                Check(Mathf.Abs(progress-j.DoorProgress)<.0001f,"split holds door angle");
                 var surface=new MaterialPropertyBlock();j.Door.GetComponent<Renderer>().GetPropertyBlock(surface);
-                Check(Mathf.Abs(surface.GetFloat("_Dissolve")-progress)<.0001f,"shader retains paused dissolve value");
-                Check(j.Door.position==doorPosition,"dissolve never lifts the door");
+                Check(surface.GetFloat("_Dissolve")==0,"swinging leaf stays opaque");
+                Check(Mathf.Abs(j.Door.position.y-doorPosition.y)<.001f,"swing stays level");
                 state.Join(token.Id,doorOn.Id,false);yield return Until(()=>j.DoorProgress>=1);
-                Check(!j.Door.GetComponent<Renderer>().enabled&&!j.Door.GetComponent<Collider>().enabled,"open door has no residual leaf or collision");
-                Check(j.Door.position==doorPosition,"fully open door remains at its original height");
+                Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled,"open leaf remains solid and visible");
+                Check(Mathf.Abs(Vector3.Dot(j.Door.forward,j.Root.forward))<.001f,"fully open leaf is perpendicular to doorway");
                 state.TryAcquireSentence("check.door.off","negative door");
                 var doorOff=state.Groups.First(g=>g.RuleId=="door.off");Check(doorOff.Conflicted,"opposite door state conflict");
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength)),j.Root.rotation);
                 state.ReturnToLibrary(doorOn.Id,0,true);yield return new WaitForSeconds(1.5f);
-                Check(j.DoorProgress==1&&!j.Door.GetComponent<Collider>().enabled,"closing dissolve waits without collision while player occupies doorway");
+                Check(j.DoorProgress==1,"closing waits while player occupies doorway");
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength+4)),j.Root.rotation);yield return Until(()=>j.DoorProgress<=0);
                 Check(j.DoorProgress==0,"off door closes after doorway clears");
                 Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled&&j.Door.position==doorPosition,"off restores stationary white leaf and collision");
@@ -132,6 +132,9 @@ namespace PuzzleApple.V5.Editor
                     Check(!presentation.transform.Find("V5 sentence letterbox/Top").gameObject.activeSelf,"bars hidden after shot");
                     if(pass==0)Check(!e.board.Panel.IsOpen&&!e.board.Panel.InputBlocked&&!p.PanelOpen,"normal completion returns to gameplay without reopening Tab");
                     if(pass==1)Check(e.board.Panel.IsOpen&&!e.board.Panel.InputBlocked,"interrupt restores editing");
+                    yield return null;
+                    if(pass==0)Check(Cursor.lockState==CursorLockMode.Locked&&!Cursor.visible&&p.CanInteractWithWorld,"gameplay aim resumes without clicking");
+                    else Check(Cursor.lockState==CursorLockMode.None,"editing pointer is free");
                 }
                 Result="PASS: full-width bars, fixed player/camera positions and unchanged roll throughout static/follow shots, normal completion, interruption, movement and editor restoration";
             }
@@ -158,7 +161,7 @@ namespace PuzzleApple.V5.Editor
                 int impacts=f.WallImpactCount;yield return Until(()=>f.WallImpactCount>impacts&&Vector3.Dot(lamp.direction,j.Root.right)<0);
                 Check(f.WallImpactCount>impacts,"actual wall collision emits ripple");
                 j.SetLights(false);yield return Until(()=>j.Brightness<=0);yield return null;
-                Check(wall.sharedMaterial.GetFloat("_Brightness")==0,"wall turns black with lights");
+                Check(wall.sharedMaterial.GetFloat("_Brightness")==j.SurfaceBrightness,"wall retains dim fill");
                 Check(!j.Root.Cast<Transform>().Any(t=>t.name.StartsWith("Door frame")),"fixed decorative frame absent");
                 Check(j.Root.Cast<Transform>().Count(t=>t.name.Contains("opening")&&t.name.Contains("reveal"))==0,"no widened filament reveal planes");
                 var path=j.Root.Find("White path");var floor=f.Surface.transform;

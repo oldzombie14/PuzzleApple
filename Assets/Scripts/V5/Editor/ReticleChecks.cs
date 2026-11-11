@@ -30,7 +30,7 @@ namespace PuzzleApple.V5.Editor
                 Check(!l.hoverEye.gameObject.activeSelf&&!l.reticle.activeSelf,"menu cursor hidden");
                 e.EnterWorld();yield return Until(()=>e.Entered);
                 e.board.State.TryAcquireSentence("cursor.world","positive world");yield return Until(()=>e.room.Opened&&!e.Busy);
-                e.board.Panel.SetOpen(false);p.Teleport(new Vector3(0,.08f,0),Quaternion.identity);yield return null;
+                e.board.Panel.SetOpen(false);p.Teleport(new Vector3(4,.08f,0),Quaternion.identity);yield return null;
                 Check(l.reticle.activeSelf&&!l.hoverEye.gameObject.activeSelf,"ordinary aim X");
                 p.view.LookAt(l.transform);p.AdoptCurrentView();yield return null;
                 Check(l.hoverEye.gameObject.activeSelf&&!l.reticle.activeSelf&&l.hoverEye.color.a==1,"unknown eye");
@@ -47,7 +47,7 @@ namespace PuzzleApple.V5.Editor
                 Check(l.TryCollect()&&!l.Collecting&&!p.MovementLocked&&!e.board.Panel.InputBlocked,"known feedback does not block movement or panel");
                 yield return null;Check(!l.hoverEye.gameObject.activeSelf&&!l.reticle.activeSelf,"known feedback hides aim");
                 Check(l.TryCollect(),"repeat click restarts known feedback");
-                yield return new WaitForSecondsRealtime(l.knownSymbolDuration+.1f);
+                yield return Until(()=>!l.ShowingKnown&&l.hoverEye.gameObject.activeSelf);
                 Check(l.hoverEye.gameObject.activeSelf&&!l.reticle.activeSelf,"known feedback restores eye");
                 Result="PASS: V4 asset pixels, layout, world texture binding, menu/X/eye/dark/panel/new/known/repeated collection";
             }

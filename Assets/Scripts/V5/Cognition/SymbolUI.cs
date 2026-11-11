@@ -6,6 +6,7 @@ namespace PuzzleApple.V5.Cognition
     // One visual vocabulary drives the board, drag ghost and acquisition overlay.
     public static class SymbolUI
     {
+        public const float FloorBottomInset = .08f;
         public static float Width(WordDefinition word, float size)
         {
             var sprite = word.Symbol;
@@ -22,7 +23,7 @@ namespace PuzzleApple.V5.Cognition
             var padding = UnityEngine.Sprites.DataUtility.GetPadding(image.sprite);
             var rendered = (size - new Vector2(padding.x + padding.z, padding.y + padding.w)) * scale;
             var origin=rect.center-rendered*.5f;
-            if(string.Equals(image.sprite.name,"floor",System.StringComparison.OrdinalIgnoreCase))origin.y=rect.yMin+rect.height*.08f;
+            if(string.Equals(image.sprite.name,"floor",System.StringComparison.OrdinalIgnoreCase))origin.y=rect.yMin+rect.height*FloorBottomInset;
             return new Rect(origin, rendered);
         }
     }

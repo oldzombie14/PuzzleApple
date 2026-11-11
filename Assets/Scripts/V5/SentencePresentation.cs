@@ -34,7 +34,7 @@ namespace PuzzleApple.V5
         public int PlayCount {get;private set;}
         public string LastRule {get;private set;}
         int revision;
-        bool previousOpen,previousBlocked,previousLock;
+        bool previousBlocked,previousLock;
         RectTransform top,bottom;
         Shot current;
         float shotRoll;
@@ -52,7 +52,7 @@ namespace PuzzleApple.V5
         public bool InterruptForEditing()
         {
             if(!Playing||!CanInterrupt)return false;
-            previousOpen=true;Cancel();return true;
+            Cancel();Entry.board.Panel.SetOpen(true);return true;
         }
         public void Cancel()
         {
@@ -61,7 +61,8 @@ namespace PuzzleApple.V5
             Playing=false;CanInterrupt=false;if(top)Bars(0);
             if(!runtime||!Entry||!Entry.player||!Entry.board)return;
             Entry.player.AdoptCurrentView();Entry.player.CinematicLocked=previousLock;
-            Entry.board.Panel.InputBlocked=previousBlocked;Entry.board.Panel.SetOpen(previousOpen);
+            Entry.board.Panel.InputBlocked=previousBlocked;
+            Entry.player.RestoreGameplayCursor();
             Entry.player.SuppressInteractionThisFrame();
         }
         public IEnumerator Play(string rule,Action apply)
@@ -70,7 +71,7 @@ namespace PuzzleApple.V5
             if(current==null){apply();yield break;}
             int token=++revision;
             Playing=true;CanInterrupt=false;PlayCount++;LastRule=rule;
-            previousOpen=Entry.board.Panel.IsOpen;previousBlocked=Entry.board.Panel.InputBlocked;previousLock=Entry.player.CinematicLocked;
+            previousBlocked=Entry.board.Panel.InputBlocked;previousLock=Entry.player.CinematicLocked;
             Entry.board.CancelDrag();Entry.board.Panel.InputBlocked=true;Entry.player.CinematicLocked=true;
             float lead=Entry.feedback?Entry.feedback.duration+.2f:1;
             for(float t=0;t<lead&&token==revision;t+=Time.unscaledDeltaTime)yield return null;
@@ -98,7 +99,7 @@ namespace PuzzleApple.V5
             }
             for(float t=0;t<current.exit&&token==revision;t+=Time.unscaledDeltaTime)
             {Bars(1-t/Mathf.Max(.001f,current.exit));yield return null;}
-            if(token==revision){previousOpen=false;Cancel();}
+            if(token==revision)Cancel();
         }
         Vector3 Target(Shot shot)
         {

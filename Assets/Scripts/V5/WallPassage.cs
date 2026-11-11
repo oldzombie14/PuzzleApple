@@ -19,8 +19,11 @@ namespace PuzzleApple.V5
         public int SelectedWall {get;private set;}
         public Transform Entrance {get;private set;}
         Renderer cover;
+        MaterialPropertyBlock wallProperties;
         readonly List<Renderer> segments=new List<Renderer>();
         Material glow;
+        Transform returnOutline;
+        Material returnGlow;
         void Start()
         {
             SelectedWall=Random.Range(0,walls.Length);var wall=walls[SelectedWall];
@@ -39,6 +42,7 @@ namespace PuzzleApple.V5
             segments.Add(Block(root,"Wall below opening",new Vector3(centre,sillHeight*.5f,0),new Vector3(width,sillHeight,thick),mat));
             float top=sillHeight+height;
             segments.Add(Block(root,"Wall above opening",new Vector3(centre,(top+tall)*.5f,0),new Vector3(width,tall-top,thick),mat));
+            wallProperties=new MaterialPropertyBlock();
             Entrance=new GameObject("Passage entrance").transform;Entrance.SetParent(root,false);Entrance.localPosition=new Vector3(centre,sillHeight,0);
             if(journey)journey.Build(Entrance,width,height,thick,edgeMaterial);
             else
@@ -51,10 +55,24 @@ namespace PuzzleApple.V5
             Block(Entrance,"Temporary passage end",new Vector3(0,height*.5f,entranceDepth),new Vector3(width,height,.2f),mat);
             }
             glow=new Material(edgeMaterial);
+
+            AddOutline(Entrance,glow,-thick*.5f-edgeInset);
+            if(journey)
+            {
+                returnOutline=new GameObject("Return entrance outline").transform;
+                returnOutline.SetParent(journey.Root,false);
+                returnGlow=new Material(edgeMaterial);returnGlow.SetFloat("_Visibility",1);
+                returnGlow.SetColor("_Color",new Color(2.4f,2.4f,2.4f,1));
+                AddOutline(returnOutline,returnGlow,thick*.5f+.07f);
+                returnOutline.gameObject.SetActive(false);
+            }
+        }
+        void AddOutline(Transform parent,Material material,float depth)
+        {
             foreach(float sign in new[]{-1f,1f})
             {
-                CreateFilament(Entrance,glow,"Vertical white filaments",new Vector3(sign*(width*.5f-.05f),height*.5f,-thick*.5f-edgeInset),height);
-                var cross=CreateFilament(Entrance,glow,"Horizontal white filaments",new Vector3(0,sign<0?.05f:height-.05f,-thick*.5f-edgeInset),width);
+                CreateFilament(parent,material,"Vertical white filaments",new Vector3(sign*(width*.5f-.05f),height*.5f,depth),height);
+                var cross=CreateFilament(parent,material,"Horizontal white filaments",new Vector3(0,sign<0?.05f:height-.05f,depth),width);
                 cross.transform.localRotation=Quaternion.Euler(0,0,90);
             }
         }
@@ -76,15 +94,23 @@ namespace PuzzleApple.V5
         void Update()
         {
             if(!cover)return;
-            // Visual wall stays opaque in both light states; only the segmented collision
-            // frame contains an opening. Darkness reveals the outline, not the passage.
-            cover.enabled=true;
-            foreach(var segment in segments)segment.enabled=false;
-            glow.SetFloat("_Visibility",1-Mathf.SmoothStep(0,1,lamp.Brightness));
+            // Switch the visible mesh; the sill and the passage collision stay in place.
+
+            bool covered=lamp.Brightness>.01f;
+            if(!covered&&cover.enabled)
+            {
+                cover.GetPropertyBlock(wallProperties);
+                foreach(var segment in segments)segment.SetPropertyBlock(wallProperties);
+            }
+            cover.enabled=covered;
+            foreach(var segment in segments)segment.enabled=!covered;
+            float darkness=1-Mathf.SmoothStep(0,1,lamp.Brightness);
+            glow.SetFloat("_Visibility",darkness);
+            if(returnOutline)returnOutline.gameObject.SetActive(journey.ViewBeyondChamber);
             var p=Entrance.InverseTransformPoint(lamp.entry.player.transform.position);
             if(!ReachedEntrance&&Mathf.Abs(p.x)<width*.5f&&p.z>.35f&&p.z<entranceDepth&&p.y>-.2f&&p.y<height)
             {ReachedEntrance=true;reachedEntrance.Invoke();}
         }
-        void OnDestroy(){if(glow)Destroy(glow);}
+        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);}
     }
 }

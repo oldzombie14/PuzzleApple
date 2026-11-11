@@ -28,8 +28,6 @@ namespace PuzzleApple.V5
         [Min(0)] public float moveSpeed=1.2f;
         Rigidbody motionBody;
         Vector3 moveDirection,roomMin,roomMax;
-        Transform ceilingWash;
-        Vector3 washOffset;
         public bool Moving=>entry&&entry.Entered&&entry.room.Opened&&entry.sentenceRuntime&&
             entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)&&
             (!entry.journey||!entry.journey.BeyondChamber)&&(!entry.outdoor||!entry.outdoor.IsOutside)&&
@@ -60,7 +58,7 @@ namespace PuzzleApple.V5
             motionBody.useGravity=false;motionBody.constraints=RigidbodyConstraints.FreezeRotation;
             motionBody.interpolation=RigidbodyInterpolation.Interpolate;motionBody.isKinematic=true;
             var own=GetComponent<Collider>();if(own)Physics.IgnoreCollision(own,entry.player.GetComponent<CharacterController>());
-            moveDirection=new Vector3(.6f,-.65f,.45f).normalized;
+            moveDirection=new Vector3(.6f,.65f,.45f).normalized;
             roomMin=new Vector3(-14,0,-14);roomMax=new Vector3(14,15.92f,14);
             var edges=FindFirstObjectByType<OuterRoomEdges>();
             if(edges&&edges.surfaces!=null)
@@ -72,9 +70,6 @@ namespace PuzzleApple.V5
                     if(b.center[axis]<surface.bounds.center[axis])roomMin[axis]=b.max[axis];else roomMax[axis]=b.min[axis];
                 }
             }
-            var rig=FindFirstObjectByType<RoomLighting>();
-            if(rig)foreach(var light in rig.spotlights)if(light&&light.name=="Ceiling wash")
-            {ceilingWash=light.transform;washOffset=ceilingWash.position-transform.position;}
         }
         void FixedUpdate()
         {
@@ -96,7 +91,6 @@ namespace PuzzleApple.V5
             foreach(var contact in collision.contacts)if(Vector3.Dot(moveDirection,contact.normal)<0)
                 moveDirection=Vector3.Reflect(moveDirection,contact.normal).normalized;
         }
-        void LateUpdate(){if(ceilingWash)ceilingWash.position=transform.position+washOffset;}
         public void SetOn(bool value){TargetOn=value;TransitionEnabled=true;}
         public void HoldCurrentState()=>TransitionEnabled=false;
         public bool LookingAtLight()
@@ -164,6 +158,12 @@ namespace PuzzleApple.V5
             string word=LookedAtWord();if(word==null)return false;
             if(knownFeedback!=null){StopCoroutine(knownFeedback);knownFeedback=null;knownSymbol.gameObject.SetActive(false);}
             if(entry.board.State.Knows(word)){ShowKnownVocabulary(word);return true;}
+            if(word=="light")
+            {
+                var library=entry.board.GetComponentInChildren<WordLibrary>(true);
+                if(!library)library=FindFirstObjectByType<WordLibrary>();
+                if(library)library.Remember(word,entry.player.view.GetComponent<Camera>().targetTexture);
+            }
             StartCoroutine(Collect(word));return true;
         }
         public void ShowKnownVocabulary(string id)
@@ -208,10 +208,18 @@ namespace PuzzleApple.V5
                 rect.anchoredPosition=Vector2.Lerp(Vector2.zero,new Vector2(-hud.rect.width*.42f,-hud.rect.height*.4f),fly);yield return null;
             }
             collectionSymbol.gameObject.SetActive(false);
-            if(lesson)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence);
+            Cognition.CognitionState.Group acquired=null;
+            if(lesson)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
             else entry.board.State.TryAcquireWord("collect."+id,word);
             p.MovementLocked=locked;entry.board.Panel.InputBlocked=false;Collecting=false;
-            if(lesson)entry.board.Panel.SetOpen(true);
+            if(acquired!=null)
+            {
+                var panel=entry.board.Panel;
+                panel.SetOpen(true);
+                while(panel.IsOpen&&!panel.FullyOpen)yield return null;
+                if(panel.FullyOpen&&entry.board.State.Find(acquired.Id)==acquired&&acquired.Recognized)
+                    entry.feedback.Play(acquired.Id,acquired.Effective);
+            }
         }
         void OnDisable()
         {

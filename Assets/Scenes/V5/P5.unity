@@ -2971,7 +2971,6 @@ Transform:
   - {fileID: 1861674051}
   - {fileID: 690615203}
   - {fileID: 2068321628}
-  - {fileID: 1642990293}
   - {fileID: 1921627226}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -3386,7 +3385,7 @@ Transform:
   m_GameObject: {fileID: 1011713575}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.2419219, z: 0, w: 0.9702957}
-  m_LocalPosition: {x: 0, y: 0.02, z: 0}
+  m_LocalPosition: {x: -5.305029, y: 0.02, z: -9.977307}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -4528,7 +4527,7 @@ GameObject:
   - component: {fileID: 1642990292}
   - component: {fileID: 1642990294}
   m_Layer: 0
-  m_Name: Ceiling wash
+  m_Name: Floor lamp illumination
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4543,7 +4542,7 @@ Light:
   m_GameObject: {fileID: 1642990291}
   m_Enabled: 1
   serializedVersion: 12
-  m_Type: 0
+  m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 0.8
   m_Range: 48
@@ -4607,12 +4606,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1642990291}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 14.920001, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.83333325, y: 0.83333325, z: 0.83333325}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 806281953}
+  m_Father: {fileID: 1885891470}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1642990294
 MonoBehaviour:
@@ -5004,7 +5003,7 @@ Transform:
   m_GameObject: {fileID: 1811441745}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.08, z: 0}
+  m_LocalPosition: {x: -5.305029, y: -0.08, z: -9.977307}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -5490,7 +5489,7 @@ GameObject:
   - component: {fileID: 1885891471}
   - component: {fileID: 1885891472}
   m_Layer: 0
-  m_Name: Collectible ceiling light
+  m_Name: Collectible floor light
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5611,11 +5610,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1885891465}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.62796307, y: 0, z: -0.627963, w: 0.45970085}
-  m_LocalPosition: {x: 0, y: 14.720001, z: 0}
+  m_LocalRotation: {x: 0, y: 0.2419219, z: 0, w: 0.9702957}
+  m_LocalPosition: {x: 0, y: 0.6, z: 0}
   m_LocalScale: {x: 1.2, y: 1.2, z: 1.2}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1642990293}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1885891471
@@ -5630,6 +5630,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 653b84fde7e6c6948aeca6ee58c1a383, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.ReticleBackground
+  pointerDiameterPixels: 12
   worldCamera: {fileID: 2002824180}
   eye: {fileID: 1641609185}
   reticle: {fileID: 1294761794}
@@ -5956,34 +5957,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.size
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.data[0].image
-      value: 
-      objectReference: {fileID: 2800000, guid: 8a2f562589a248558f70338550d365a7, type: 3}
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.data[1].image
-      value: 
-      objectReference: {fileID: 2800000, guid: 8a2f562589a248558f70338550d365a7, type: 3}
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.data[2].image
-      value: 
-      objectReference: {fileID: 2800000, guid: 72912ee3e448419fa0def0af8fd77f73, type: 3}
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.data[0].wordId
-      value: positive
-      objectReference: {fileID: 0}
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.data[1].wordId
-      value: negative
-      objectReference: {fileID: 0}
-    - target: {fileID: 146977453559962513, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
-      propertyPath: vocabularyImages.Array.data[2].wordId
-      value: world
-      objectReference: {fileID: 0}
     - target: {fileID: 510415134931336717, guid: 627fa3c7fafb4655915c90cf6c4d3c68, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0

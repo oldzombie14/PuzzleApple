@@ -21,9 +21,9 @@ namespace PuzzleApple.V5.Editor
                 e.board.State.TryAcquireSentence("test.world","positive world");yield return Until(()=>e.room.Opened&&!e.Busy);
                 e.board.Panel.SetOpen(false);yield return null;
                 var light=e.chamberLight;var p=e.player;
-                p.Teleport(new Vector3(0,.02f,0),Quaternion.identity);p.view.LookAt(light.transform);p.AdoptCurrentView();
+                p.view.LookAt(light.transform);p.AdoptCurrentView();
                 Cursor.lockState=CursorLockMode.Locked;yield return null;
-                Check(light.LookingAtLight(),"ground-to-ceiling target");
+                Check(light.LookingAtLight(),"floor lamp collectible from opening spawn");
                 light.AdvancePointer(true,true,false,.3f);
                 Check(light.Collecting,"ordinary left press collects immediately even on a long frame");
                 light.AdvancePointer(false,false,true,0);yield return Until(()=>!light.Collecting);
@@ -33,8 +33,11 @@ namespace PuzzleApple.V5.Editor
                 Check(light.Brightness>0,"gradual fade");yield return Until(()=>light.Brightness==0);
                 Check(!light.TryCollect(),"off light cannot collect");
                 var hole=UnityEngine.Object.FindFirstObjectByType<WallPassage>();int chosen=hole.SelectedWall;
-                Check(hole.walls[chosen].GetComponent<Renderer>().enabled,"dark opening remains visually covered");
-                e.board.State.TryAcquireSentence("test.on","positive light");yield return Until(()=>light.Brightness==1);
+                Check(!hole.walls[chosen].GetComponent<Renderer>().enabled,"dark opening reveals the passage");
+                e.board.State.TryAcquireSentence("test.on","positive light");
+                var off=System.Linq.Enumerable.First(e.board.State.Groups,g=>g.RuleId=="light.off");
+                e.board.State.ReturnToLibrary(off.Id,0,true);
+                yield return Until(()=>light.Brightness==1);
                 Check(hole.walls[chosen].GetComponent<Renderer>().enabled,"lit wall visually whole");
                 e.board.State.ClearWorkspace();yield return null;Check(light.TargetOn,"splitting preserves lamp state");
                 // Native CharacterController trajectory through the concealed opening.

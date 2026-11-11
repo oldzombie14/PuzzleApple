@@ -50,7 +50,7 @@ namespace PuzzleApple.V5.Editor
                 f.contactParticles=false;var particles=j.Root.Find("Floor impact squares").GetComponent<ParticleSystem>();particles.Clear();
                 f.ImpactWall(wall.GetComponent<Collider>(),point,j.Root.right);Check(particles.particleCount==0,"contact particle trial can be disabled");f.contactParticles=true;
                 j.SetLights(false);yield return Until(()=>j.Brightness==0);yield return null;
-                Check(wall.sharedMaterial.GetFloat("_Brightness")==0,"stepped walls still go dark");
+                Check(wall.sharedMaterial.GetFloat("_Brightness")==j.SurfaceBrightness,"walls retain dim fill");
                 e.sentenceRuntime.presentation.enabledShots=false;
                 e.board.State.ClearWorkspace();
                 p.Teleport(Vector3.up*.05f,Quaternion.identity);yield return null;yield return null;

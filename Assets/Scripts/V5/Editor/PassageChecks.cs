@@ -55,12 +55,15 @@ namespace PuzzleApple.V5.Editor
                     Check(Mathf.Abs(j.Door.localScale.x-h.width)<.0001f&&Mathf.Abs(j.Door.localScale.y-h.height)<.0001f,"door matches entrance width and height");
                     Check(Mathf.Abs(path.localScale.x-j.Door.localScale.x)<.0001f&&Mathf.Abs(j.Door.localPosition.y-j.Door.localScale.y*.5f)<.0001f,"door matches path width and floor height");
                     Check(Mathf.Abs(lintel.localPosition.y-lintel.localScale.y*.5f-h.height)<.0001f,"destination opening matches door height");
-                    Check(path.localPosition.z-path.localScale.z*.5f>-thickness*.5f+.02f,"path set behind cover plane");
+                    var sill=h.Entrance.parent.Find("Wall below opening");
+                    var sillEnd=sill.TransformPoint(new Vector3(0,.5f,.5f));
+                    var pathStart=path.TransformPoint(new Vector3(0,.5f,-.5f));
+                    Check(Vector3.Distance(sillEnd,pathStart)<.0001f,"sill and path meet at a single level edge");
                     Check(Mathf.Abs(path.localPosition.z+path.localScale.z*.5f-(floor.localPosition.z-floor.localScale.z*.5f))<.0001f,"floors meet without overlap");
                     foreach(bool on in new[]{true,false})
                     {
                         e.chamberLight.SetOn(on);yield return Until(()=>Mathf.Approximately(e.chamberLight.Brightness,on?1:0));yield return null;
-                        Check(testWall.GetComponent<Renderer>().enabled,"wall stays covered in either light state");
+                        Check(testWall.GetComponent<Renderer>().enabled==on,"light conceals passage and darkness reveals it");
                         var origin=h.Entrance.TransformPoint(new Vector3(0,-h.sillHeight+.08f,-1.3f));
                         p.Teleport(origin,h.Entrance.rotation);Physics.SyncTransforms();Walk(p,180);
                         Check(h.Entrance.InverseTransformPoint(p.transform.position).z<0,"raised sill requires jump");
@@ -83,7 +86,7 @@ namespace PuzzleApple.V5.Editor
                     Check(!testWall.GetComponent<Renderer>().forceRenderingOff,"return restores original wall rendering");
                     UnityEngine.Object.Destroy(testPassage);UnityEngine.Object.Destroy(testJourney);UnityEngine.Object.Destroy(testWall);yield return null;
                 }
-                Result="PASS: four centred enlarged entries; covered lit/dark wall; jump and physical return; corrected back plane; black GPU back-view samples near threshold, middle and door at three angles; restored chamber; collection cursor states";
+                Result="PASS: four centred enlarged entries; lit cover and open dark doorway; jump and physical return; corrected back plane; black GPU back-view samples near threshold, middle and door at three angles; restored chamber; collection cursor states";
             }
             finally
             {

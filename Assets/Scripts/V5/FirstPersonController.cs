@@ -33,7 +33,11 @@ namespace PuzzleApple.V5
         void OnEnable()=>LockCursor(true);
         void OnDisable()=>LockCursor(false);
         void OnApplicationFocus(bool focused){if(!focused)LockCursor(false);}
-        static void LockCursor(bool locked){Cursor.lockState=locked?CursorLockMode.Locked:CursorLockMode.None;Cursor.visible=!locked;}
+        static void LockCursor(bool locked){Cursor.lockState=locked?CursorLockMode.Locked:CursorLockMode.None;Cursor.visible=false;}
+        public void RestoreGameplayCursor()
+        {
+            if(isActiveAndEnabled&&!CinematicLocked)LockCursor(!PanelOpen&&!PointerUIActive);
+        }
         public void SuppressInteractionThisFrame()=>closedFrame=Time.frameCount;
         public void SetPanelOpen(bool open,float stop=.2f,float swayAngle=2.5f,float idlePitch=.35f)
         {

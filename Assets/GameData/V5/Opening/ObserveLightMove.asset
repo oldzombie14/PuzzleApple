@@ -15,4 +15,4 @@ MonoBehaviour:
   acquisitionId: observe.light.move
   verb: {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
   example: {fileID: 11400000, guid: 99a507dabf90fc1449c026a7b7719f96, type: 2}
-  holdDuration: 2
+  holdDuration: 0.8

@@ -1491,8 +1491,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.WordLibrary
   board: {fileID: 5471340164154830599}
-  vocabularyImages: []
-  moveMemory: {fileID: 0}
+  vocabularyImages:
+  - wordId: positive
+    image: {fileID: 2800000, guid: 8a2f562589a248558f70338550d365a7, type: 3}
+  - wordId: negative
+    image: {fileID: 2800000, guid: 8a2f562589a248558f70338550d365a7, type: 3}
+  - wordId: world
+    image: {fileID: 2800000, guid: 72912ee3e448419fa0def0af8fd77f73, type: 3}
+  - wordId: door
+    image: {fileID: 2800000, guid: 8807a252e27653147be0fa18fe2423db, type: 3}
+  - wordId: floor
+    image: {fileID: 2800000, guid: 9a15c03b7a8108b40b7c879a9359c83e, type: 3}
+  moveMemory: {fileID: 11400000, guid: 56bfd2398ba4a8a4fba3bb56593c0616, type: 2}
   scroll: {fileID: 5905967632299843001}
   column: {fileID: 3975698867436857571}
   details: {fileID: 6006807185647409149}

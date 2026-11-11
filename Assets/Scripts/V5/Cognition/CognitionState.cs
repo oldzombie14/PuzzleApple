@@ -86,8 +86,10 @@ namespace PuzzleApple.V5.Cognition
             Commit(CognitionChange.Add);
             return true;
         }
-        public bool TryAcquireSentence(string sourceId, string text)
+        public bool TryAcquireSentence(string sourceId, string text)=>TryAcquireSentence(sourceId,text,out _);
+        public bool TryAcquireSentence(string sourceId, string text,out Group acquired)
         {
+            acquired=null;
             var tokens = Tokenize(text);
             if (string.IsNullOrWhiteSpace(sourceId) || tokens.Length < 2) throw new ArgumentException("Missing sentence acquisition data.");
             if (acquisitions.Contains(sourceId)) return false;
@@ -97,7 +99,7 @@ namespace PuzzleApple.V5.Cognition
             acquisitions.Add(sourceId);
             acquisitionWords[sourceId] = definitions.Select(d => d.Id).ToArray();
             foreach (var d in definitions) learned.Add(d.Id);
-            NewGroup(definitions.Select(d => new Word(++nextWord, d)));
+            acquired=NewGroup(definitions.Select(d => new Word(++nextWord, d)));
             Commit(CognitionChange.Add);
             return true;
         }

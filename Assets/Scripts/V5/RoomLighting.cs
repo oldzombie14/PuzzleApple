@@ -20,6 +20,7 @@ namespace PuzzleApple.V5
         [Range(0,1)] public float unfoldedSpotContribution=.25f;
         [Range(0,1)] public float unfoldedAmbientLift=.15f;
         public Color openAmbient=new Color(.24f,.24f,.24f);
+        [Range(0,.15f)] public float offAmbient=.045f;
         void LateUpdate()
         {
             // Indoor lighting must not inherit the outdoor scene's coloured gradient.
@@ -37,13 +38,13 @@ namespace PuzzleApple.V5
                 interiorFill.enabled=false;
             }
             if(chamberBloom)chamberBloom.weight=journey&&journey.ViewBeyondChamber?0:blend;
-            Color outside=journey&&journey.ViewBeyondChamber?Color.black:Color.Lerp(new Color(.001f,.001f,.001f),openAmbient+new Color(unfoldedAmbientLift,unfoldedAmbientLift,unfoldedAmbientLift,0),lamp);
-            if(journey&&journey.InSecondRoom)outside=Color.white*(journey.ambientIntensity*Mathf.SmoothStep(0,1,journey.Brightness));
+            Color outside=journey&&journey.ViewBeyondChamber?Color.black:Color.Lerp(Color.white*offAmbient,openAmbient+new Color(unfoldedAmbientLift,unfoldedAmbientLift,unfoldedAmbientLift,0),lamp);
+            if(journey&&journey.ViewBeyondChamber)outside=Color.white*(journey.DoorwayLighting*Mathf.Lerp(offAmbient,journey.ambientIntensity,Mathf.SmoothStep(0,1,journey.Brightness)));
             RenderSettings.ambientLight=Color.Lerp(closedAmbient,outside,blend);
             // Keep the fog shader variant ready from the initial menu frame.
             RenderSettings.fog=true;RenderSettings.fogColor=Color.black;RenderSettings.fogMode=FogMode.ExponentialSquared;
             RenderSettings.fogDensity=journey&&journey.ViewBeyondChamber&&room.Opened?
-                (journey.InCorridor?journey.corridorFogDensity:journey.fogDensity):0;
+                Mathf.Lerp(journey.corridorFogDensity,journey.fogDensity,journey.DoorwayLighting):0;
         }
     }
 }

@@ -30,6 +30,12 @@ namespace PuzzleApple.V5.Cognition
         public RectTransform Surface => surface;
         public bool IsDragging => drag != null;
         public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
+        public void SetSentenceOpacity(int id,float opacity)
+        {
+            if (!views.TryGetValue(id,out var view)) return;
+            view.Fade.alpha = opacity * (view.Conflicted ? ConflictAlpha : 1);
+            view.Fade.blocksRaycasts = opacity >= 1;
+        }
         public Rect GroupContentBounds(int id)
         {
             if (!views.TryGetValue(id, out var view)) return default;
@@ -120,6 +126,17 @@ namespace PuzzleApple.V5.Cognition
             if (!views.TryGetValue(id, out var v)) return;
             centerFirstWord = false;
             v.Position = v.DisplayPosition = Clamp(ScreenToBoard(screen), v.Width, v.Height); Place(v);
+        }
+        public void PlaceAcquiredSentence(int id)
+        {
+            if (!views.TryGetValue(id, out var v)) return;
+            centerFirstWord = false;
+            float top = Mathf.Min(Mathf.Max(8, Surface.rect.height - v.Height - 8),
+                Mathf.Max(WordHeight + 16, Surface.rect.height * .12f));
+            var centre = new Vector2(Surface.rect.width * .5f - v.TextCenterX,
+                Surface.rect.height * .5f - v.TextCenterY);
+            v.Position = v.DisplayPosition = FindFree(v, centre, top);
+            Place(v);
         }
 
         sealed class View
@@ -375,9 +392,10 @@ namespace PuzzleApple.V5.Cognition
             Mathf.Clamp(p.y, 8, Mathf.Max(8, Surface.rect.height - height - 8)));
         Rect Bounds(View v, bool displayed = false)
         { var p = displayed ? v.DisplayPosition : v.Position; return new Rect(p, new Vector2(v.Width,v.Height)); }
-        Vector2 FindFree(View moving, Vector2 wanted)
+        Vector2 FindFree(View moving, Vector2 wanted, float minimumY = 8)
         {
             wanted = Clamp(wanted, moving.Width, moving.Height);
+            wanted.y = Mathf.Max(minimumY, wanted.y);
             bool Free(Vector2 p)
             {
                 var rect = new Rect(p - new Vector2(9, 10), new Vector2(moving.Width + 18, moving.Height + 20));
@@ -386,7 +404,7 @@ namespace PuzzleApple.V5.Cognition
             if (Free(wanted)) return wanted;
             // Choose the nearest vacant patch, then animate there to show repulsion.
             Vector2 best = wanted; float distance = float.MaxValue;
-            for (float y = 8; y <= Surface.rect.height - moving.Height - 8; y += 18)
+            for (float y = minimumY; y <= Surface.rect.height - moving.Height - 8; y += 18)
                 for (float x = 4; x <= Surface.rect.width - moving.Width - 4; x += 18)
                 {
                     var candidate = new Vector2(x,y); float d = (candidate-wanted).sqrMagnitude;

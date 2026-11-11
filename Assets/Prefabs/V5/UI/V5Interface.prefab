@@ -467,7 +467,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
-  m_Color: {r: 0.88, g: 0.88, b: 0.88, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -475,8 +475,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_FontData:
-    m_Font: {fileID: 12800000, guid: 7fd48d2af1bc417aaaf6bcf13f4d7262, type: 3}
-    m_FontSize: 20
+    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_FontSize: 22
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 10
@@ -941,7 +941,7 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 0
+  m_ChildAlignment: 4
   m_Spacing: 0
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
@@ -1492,10 +1492,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.WordLibrary
   board: {fileID: 5471340164154830599}
   vocabularyImages:
-  - wordId: positive
-    image: {fileID: 2800000, guid: 8a2f562589a248558f70338550d365a7, type: 3}
-  - wordId: negative
-    image: {fileID: 2800000, guid: 8a2f562589a248558f70338550d365a7, type: 3}
   - wordId: world
     image: {fileID: 2800000, guid: 72912ee3e448419fa0def0af8fd77f73, type: 3}
   - wordId: door
@@ -1506,10 +1502,13 @@ MonoBehaviour:
   scroll: {fileID: 5905967632299843001}
   column: {fileID: 3975698867436857571}
   details: {fileID: 6006807185647409149}
+  sidebarDivider: {fileID: 5421562034265281354}
   entryPrefab: {fileID: 6443111287660912658, guid: 64cc1acfa6e3453d92ea629aef90bec5, type: 3}
   snapshot: {fileID: 5731221925901235135}
   snapshotAspect: {fileID: 2529044207359508449}
-  emptySnapshot: {fileID: 913189422863037613}
+  snapshotFrame: {fileID: 4481432201678524133}
+  gapBeforeSnapshot: {fileID: 2525153796436726837}
+  gapBeforeNote: {fileID: 1250280079904287838}
   note: {fileID: 900268672799922041}
   saveNote: {fileID: 1107985496957121217}
   closeMemory: {fileID: 3466075536914610901}
@@ -2075,7 +2074,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.07, g: 0.07, b: 0.07, a: 0.98}
+  m_Color: {r: 0.07, g: 0.07, b: 0.07, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4511,7 +4510,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2085245656878621565
 RectTransform:
   m_ObjectHideFlags: 0

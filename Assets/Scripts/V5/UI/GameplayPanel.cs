@@ -20,6 +20,7 @@ namespace PuzzleApple.V5
         [SerializeField, Range(0, 20)] float lookAngle = 2.5f;
         [SerializeField, Range(0, 2)] float idlePitchAngle = 0.35f;
         [SerializeField] UnityEvent<bool> openChanged = new UnityEvent<bool>();
+        WordLibrary library;
         float progress;
         Vector2 openPosition;
         [SerializeField] SentenceHistory history;
@@ -34,6 +35,7 @@ namespace PuzzleApple.V5
         void Awake()
         {
             if (!player) player = FindFirstObjectByType<FirstPersonController>();
+            library = GetComponent<WordLibrary>();
             openPosition=panel.anchoredPosition;
             if (worldInputBlocker)
             {
@@ -44,7 +46,9 @@ namespace PuzzleApple.V5
 
         void DismissFromWorld()
         {
-            if (IsOpen && !InputBlocked) SetOpen(false);
+            if (!IsOpen || InputBlocked) return;
+            if (library && library.IsOpen) library.Show(false);
+            else SetOpen(false);
         }
 
         public void Toggle() => SetOpen(!IsOpen);
@@ -62,7 +66,13 @@ namespace PuzzleApple.V5
 
         void Update()
         {
-            if (!InputBlocked && Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame) Toggle();
+            var keyboard = Keyboard.current;
+            if (!InputBlocked && keyboard != null)
+            {
+                if (keyboard.tabKey.wasPressedThisFrame) Toggle();
+                else if (IsOpen && library && library.IsOpen && keyboard.escapeKey.wasPressedThisFrame)
+                    library.Show(false);
+            }
             if (IsOpen || !history || !history.IsVisible)
                 progress = Mathf.MoveTowards(progress, IsOpen ? 1 : 0,
                 slideDuration > 0 ? Time.unscaledDeltaTime / slideDuration : 1);

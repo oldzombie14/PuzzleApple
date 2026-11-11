@@ -1759,8 +1759,6 @@ MonoBehaviour:
   movementObservation: {fileID: 445868994}
   floorSurface: {fileID: 445868995}
   floorMotion: {fileID: 445868996}
-  observationBottom: 1.9
-  observationInset: 1
   allowCorridorClosure: 1
 --- !u!4 &445868992
 Transform:
@@ -1807,7 +1805,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.ObservableBehaviour
   lesson: {fileID: 11400000, guid: fcfafc040ee63214eaf984f41417949f, type: 2}
-  regions: []
+  aimToleranceDegrees: 1.5
   members: []
 --- !u!114 &445868995
 MonoBehaviour:
@@ -1832,8 +1830,8 @@ MonoBehaviour:
   rippleDuration: 1.2
   rippleSpeed: 1.6
   ringCount: 2
-  ringSpacing: 0.22
-  ringWidth: 0.035
+  ringSpacing: 0.34
+  ringWidth: 0.03
   rippleStrength: 0.9
   thinningStartsAt: 0.65
   thinningDistance: 1.1
@@ -1846,7 +1844,8 @@ MonoBehaviour:
   particleCount: 5
   particleSize: {x: 0.07, y: 0.16}
   particleLifetime: 0.65
-  holeSize: 4.5
+  holeSize: 3.5
+  holeOpenDuration: 1.4
 --- !u!114 &445868996
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2954,6 +2953,7 @@ MonoBehaviour:
   unfoldedSpotContribution: 0.4
   unfoldedAmbientLift: 0.4
   openAmbient: {r: 0.4, g: 0.4, b: 0.4, a: 1}
+  offAmbient: 0.055
 --- !u!4 &806281953
 Transform:
   m_ObjectHideFlags: 0
@@ -3092,7 +3092,6 @@ MonoBehaviour:
   portableClosure: {fileID: 916423652}
   sentenceRuntime: {fileID: 0}
   outdoor: {fileID: 0}
-  symbolFadeDuration: 0.4
   blackFadeDuration: 0.8
   closedPauseDuration: 0.65
   dialogFadeDuration: 0.5
@@ -3171,7 +3170,6 @@ RectTransform:
   m_LocalScale: {x: 0, y: 0, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 2123365092}
   - {fileID: 383497110}
   - {fileID: 18823684}
   - {fileID: 602867604}
@@ -3179,6 +3177,7 @@ RectTransform:
   - {fileID: 486396034}
   - {fileID: 1294761795}
   - {fileID: 1607271504}
+  - {fileID: 2123365092}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -4982,6 +4981,8 @@ MonoBehaviour:
   - hinge: {fileID: 80310687}
     openEuler: {x: 90, y: 0, z: 0}
     durationOverride: 0
+  floorPanel: {fileID: 310610727}
+  floorFinishDuration: 3
   movingColliders:
   - {fileID: 1515176655}
   - {fileID: 740580114}
@@ -5523,6 +5524,7 @@ MonoBehaviour:
   knownSymbolAlpha: 0.9
   knownSymbolDuration: 0.9
   knownSymbolScale: {x: 0.8, y: 1.2}
+  moveSpeed: 1.2
   clickDuration: 0.25
 --- !u!23 &1885891467
 MeshRenderer:
@@ -5630,10 +5632,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 653b84fde7e6c6948aeca6ee58c1a383, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.ReticleBackground
-  pointerDiameterPixels: 12
   worldCamera: {fileID: 2002824180}
   eye: {fileID: 1641609185}
   reticle: {fileID: 1294761794}
+  pointerDiameterPixels: 12
 --- !u!114 &1885891472
 MonoBehaviour:
   m_ObjectHideFlags: 0

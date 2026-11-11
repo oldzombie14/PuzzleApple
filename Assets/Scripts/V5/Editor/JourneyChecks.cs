@@ -49,8 +49,10 @@ namespace PuzzleApple.V5.Editor
                 Require(e.board.State.Knows("door"),"door word acquired");
                 p.enabled=false;Walk(p,220);yield return null;
                 Require(j.Root.InverseTransformPoint(p.transform.position).z<j.pathLength,"closed door blocks passage");
+                // Step back into the corridor to clear the outward swing.
+                p.Teleport(j.Root.TransformPoint(new Vector3(0,.02f,j.pathLength-j.PathWidth-1)),j.Root.rotation);
                 e.board.State.TryAcquireSentence("journey.door","positive door");yield return Until(()=>j.DoorProgress>=1);
-                Walk(p,120);yield return null;p.enabled=true;
+                Walk(p,Mathf.CeilToInt((j.PathWidth+2)/p.moveSpeed*120));yield return null;p.enabled=true;
                 Require(j.InSecondRoom&&!j.LightsOn&&j.Brightness==0,"new room starts dark");
                 var first=j.Lamps[0];var before=first.transform.position;yield return new WaitForSecondsRealtime(.6f);
                 Require(Vector3.Distance(before,first.transform.position)>.1f,"lamps move in darkness");

@@ -30,9 +30,16 @@ namespace PuzzleApple.V5.Editor
                 Check(e.board.State.Knows("light"),"light acquired");
                 e.board.State.TryAcquireSentence("test.off","negative light");
                 yield return Until(()=>!light.TargetOn);yield return null;
-                Check(light.Brightness>0,"gradual fade");yield return Until(()=>light.Brightness==0);
-                Check(!light.TryCollect(),"off light cannot collect");
+                Check(light.Brightness>0,"gradual fade");
                 var hole=UnityEngine.Object.FindFirstObjectByType<WallPassage>();int chosen=hole.SelectedWall;
+                yield return Until(()=>light.Brightness<.7f);yield return null;
+                Check(hole.Reveal>0&&hole.Reveal<1,"passage and filaments reveal during light fade");
+                var cover=hole.walls[chosen].GetComponent<Renderer>();
+                var properties=new MaterialPropertyBlock();cover.GetPropertyBlock(properties);
+                Check(cover.enabled&&Mathf.Abs(properties.GetFloat("_PassageOpacity")-(1-hole.Reveal))<.06f,"aperture cover fades instead of switching at darkness threshold");
+                Check(cover.sharedMaterial.GetFloat("_ZWrite")==0,"fading cover does not occlude exterior depth");
+                yield return Until(()=>light.Brightness==0);yield return null;
+                Check(!light.TryCollect(),"off light cannot collect");
                 Check(!hole.walls[chosen].GetComponent<Renderer>().enabled,"dark opening reveals the passage");
                 e.board.State.TryAcquireSentence("test.on","positive light");
                 var off=System.Linq.Enumerable.First(e.board.State.Groups,g=>g.RuleId=="light.off");

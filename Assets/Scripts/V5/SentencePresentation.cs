@@ -34,10 +34,14 @@ namespace PuzzleApple.V5
         public int PlayCount {get;private set;}
         public string LastRule {get;private set;}
         int revision;
+        int fadingGroup=-1;
         bool previousBlocked,previousLock;
         RectTransform top,bottom;
         Shot current;
         float shotRoll;
+        bool roomCut;
+        Vector3 returnPosition;
+        Quaternion returnRotation;
         WorldEntry Entry=>runtime.entry;
         Shot[] Profiles=>settings?settings.shots:shots;
         readonly Shot[] migrated={new Shot("light.light.move",Focus.LightGroup,true),new Shot("light.door.move",Focus.Door),
@@ -58,14 +62,22 @@ namespace PuzzleApple.V5
         {
             revision++;
             if(!Playing)return;
+            if(fadingGroup>=0)Entry.board.SetSentenceOpacity(fadingGroup,1);
+            fadingGroup=-1;
             Playing=false;CanInterrupt=false;if(top)Bars(0);
             if(!runtime||!Entry||!Entry.player||!Entry.board)return;
+            if(roomCut)
+            {
+                Entry.player.view.localPosition=returnPosition;
+                Entry.player.view.rotation=returnRotation;
+                roomCut=false;
+            }
             Entry.player.AdoptCurrentView();Entry.player.CinematicLocked=previousLock;
             Entry.board.Panel.InputBlocked=previousBlocked;
             Entry.player.RestoreGameplayCursor();
             Entry.player.SuppressInteractionThisFrame();
         }
-        public IEnumerator Play(string rule,Action apply)
+        public IEnumerator Play(string rule,Action apply,int oneShotGroup=-1)
         {
             current=Profile(rule);
             if(current==null){apply();yield break;}
@@ -74,22 +86,58 @@ namespace PuzzleApple.V5
             previousBlocked=Entry.board.Panel.InputBlocked;previousLock=Entry.player.CinematicLocked;
             Entry.board.CancelDrag();Entry.board.Panel.InputBlocked=true;Entry.player.CinematicLocked=true;
             float lead=Entry.feedback?Entry.feedback.duration+.2f:1;
-            for(float t=0;t<lead&&token==revision;t+=Time.unscaledDeltaTime)yield return null;
+            fadingGroup=oneShotGroup;
+            for(float t=0;t<lead&&token==revision;t+=Time.unscaledDeltaTime)
+            {
+                if(fadingGroup>=0)Entry.board.SetSentenceOpacity(fadingGroup,1-Mathf.SmoothStep(0,1,t/lead));
+                yield return null;
+            }
             if(token!=revision)yield break;
             Entry.board.Panel.SetOpen(false);Cursor.lockState=CursorLockMode.None;Cursor.visible=false;
             var view=Entry.player.view;
             shotRoll=view.eulerAngles.z;
-            Quaternion start=view.rotation,goal=LookAt(Target(current));
+            var journey=Entry.journey;
+            bool corridorShot=(rule=="light.on"||rule=="light.off")&&journey&&journey.InCorridor&&
+                !(Entry.outdoor&&Entry.outdoor.IsOutside)&&!(Entry.portableClosure&&Entry.portableClosure.Isolated);
+            bool farSide=corridorShot&&journey.Root.InverseTransformPoint(Entry.player.transform.position).z>journey.pathLength*.5f;
+            if(corridorShot)
+            {
+                float requested=rule=="light.on"?1:0;
+                bool chamberChanges=Mathf.Abs(Entry.chamberLight.Brightness-requested)>.001f;
+                bool lampRoomChanges=Mathf.Abs(journey.Brightness-requested)>.001f;
+                if(chamberChanges!=lampRoomChanges)farSide=lampRoomChanges;
+            }
+            Vector3 cameraPoint=corridorShot?journey.Root.TransformPoint(new Vector3(0,1.7f,farSide?journey.pathLength+2:-2)):view.position;
+            bool corridorCut=corridorShot&&rule=="light.off";
+            Vector3 focus=corridorShot&&!corridorCut?
+                (farSide?LampCentre(journey):Entry.chamberLight.surface.bounds.center)+current.offset:
+                (corridorCut?cameraPoint:Target(current));
+            Quaternion start=view.rotation,goal=LookAt(focus);
             for(float t=0;t<current.enter&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 float u=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,current.enter));
                 view.rotation=Blend(start,goal,u);Bars(u);yield return null;
             }
             if(token!=revision)yield break;
-            view.rotation=goal;Bars(1);apply();CanInterrupt=true;
+            view.rotation=goal;Bars(1);
+            if(corridorCut)
+            {
+                returnPosition=view.localPosition;
+                returnRotation=goal;
+                roomCut=true;
+                view.position=cameraPoint;
+                view.rotation=LookAt(farSide?LampCentre(journey):Entry.chamberLight.surface.bounds.center);
+                // Establish the unchanged room in frame before starting the light transition.
+                yield return null;
+                for(float t=0;t<.35f&&token==revision;t+=Time.unscaledDeltaTime)yield return null;
+                if(token!=revision)yield break;
+            }
+            if(fadingGroup>=0)Entry.board.SetSentenceOpacity(fadingGroup,0);
+            fadingGroup=-1;
+            apply();CanInterrupt=true;
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
-                if(current.follow)
+                if(current.follow&&!roomCut)
                 {
                     var target=LookAt(Target(current));var e=view.eulerAngles;var d=target.eulerAngles;
                     view.rotation=Quaternion.Euler(Mathf.MoveTowardsAngle(e.x,d.x,current.followSpeed*Time.unscaledDeltaTime),
@@ -108,13 +156,15 @@ namespace PuzzleApple.V5
             if(shot.focus==Focus.Door&&j&&j.Door)target=j.Door.position;
             else if(shot.focus==Focus.Floor&&j&&j.floorSurface&&j.floorSurface.Surface)target=j.floorSurface.Surface.bounds.center;
             else if(j&&j.InSecondRoom&&j.Lamps.Count>0)
-            {
-                target=Vector3.zero;int count=0;
-                foreach(var l in j.Lamps)if(l){target+=l.transform.position;count++;}
-                if(count>0)target/=count;
-            }
+                target=LampCentre(j);
             else if(Entry.chamberLight&&Entry.chamberLight.surface)target=Entry.chamberLight.surface.bounds.center;
             return target+shot.offset;
+        }
+        static Vector3 LampCentre(PassageJourney journey)
+        {
+            Vector3 sum=Vector3.zero;
+            foreach(var lamp in journey.Lamps)sum+=lamp.transform.position;
+            return journey.Lamps.Count>0?sum/journey.Lamps.Count:journey.Root.TransformPoint(new Vector3(0,0,journey.floorSurface.HoleCentreZ));
         }
         Quaternion LookAt(Vector3 point)
         {

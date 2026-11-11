@@ -44,7 +44,9 @@ namespace PuzzleApple.V5.Editor
 
                 
                 yield return new WaitForEndOfFrame();
-                e.enterButton.onClick.Invoke();yield return Until(()=>e.Entered);yield return new WaitForSecondsRealtime(.6f);
+                yield return Until(()=>!e.blackBackground.gameObject.activeSelf);
+                Require(e.Entered && !e.enterButton.gameObject.activeSelf && !e.blackBackground.gameObject.activeSelf && e.room.Progress==0,"starts inside the closed box without a title screen");
+                yield return Until(()=>e.board.Panel.FullyOpen);
                 var b=e.board;var s=b.State;
                 Require(e.Entered&&b.Panel.IsOpen&&!b.Panel.InputBlocked,"entry and automatic panel");
                 Require(new[]{"positive","negative","world"}.All(s.Knows)&&!s.Knows("light"),"three initial symbols, light requires collection");
@@ -55,12 +57,14 @@ namespace PuzzleApple.V5.Editor
                 var on=s.Groups.Single();
                 Require(!on.Recognized&&e.room.Progress==0&&e.feedback.StrongCount==0,"invalid order remains inert");
                 s.Swap(on.Id,on.Words[0].Id,on.Words[1].Id);
+                yield return Until(()=>b.GroupRect(on.Id) && b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha<.95f);
+                Require(b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha>0 && b.Panel.IsOpen,"world command visibly fades during feedback");
                 yield return Until(()=>e.room.Opened&&!e.Busy);
                 Require(e.room.Opened&&!e.Busy&&e.feedback.StrongCount==1,"on world opens via UI token state");
                 Require(!b.Panel.IsOpen&&!e.player.PanelOpen,"world unfold finishes without reopening the panel");
                 Require(e.room.movingColliders.All(c=>!c.enabled),"open panels cannot obstruct movement");
                 yield return new WaitForEndOfFrame();
-                // Move to a different location before OFF, keeping the earlier ON sentence.
+                yield return Until(()=>s.Find(on.Id)==null);
                 e.player.Teleport(new Vector3(9,.02f,7),Quaternion.Euler(0,35,0));
                 s.TryAcquireSentence("check.off","negative world");
                 var frozen=e.player.transform.position;
@@ -94,10 +98,10 @@ namespace PuzzleApple.V5.Editor
                 Require(!e.ConfirmingExit&&!e.player.MovementLocked&&e.room.Progress==0,"OFF cancels and leaves room closed");
                 s.Spawn(b.Catalog.Word("world"));yield return new WaitForSecondsRealtime(.2f);
                 Require(!e.ConfirmingExit&&!e.Busy&&e.room.Progress==0,"unrelated edit and old ON do not retrigger");
-                var oldOn=s.Groups.First(g=>g.RuleId=="world.on");s.ReturnToLibrary(oldOn.Id,0,true);
+                Require(!s.Groups.Any(g=>g.RuleId=="world.off"),"finished close command leaves the board");
                 s.TryAcquireSentence("check.on.again","positive world");
                 yield return Until(()=>e.room.Opened&&!e.Busy);
-                Require(e.room.Opened,"reformed ON opens with old OFF still present");
+                Require(e.room.Opened,"reformed ON opens again");
                 b.Panel.SetOpen(false);yield return null;b.Panel.SetOpen(true);yield return null;
                 Require(!e.ConfirmingExit&&e.room.Opened,"panel changes do not replay commands");
                 s.ClearWorkspace();yield return null;
@@ -108,7 +112,7 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>e.DialogReady);
                 Require(e.ConfirmingExit&&Mathf.Abs(e.room.transform.position.x-e.room.centreMax.x)<.01f&&Mathf.Abs(e.room.transform.position.z-e.room.centreMax.y)<.01f,"edge enclosure fits outer walls");
                 e.CancelExit();
-                Result="PASS: native UI drag, entry, invalid order, unfold, ON/OFF coexistence, exact position lock with view retained, reverse fold, cancel, re-form, panel toggles, dismantle, edge fit, no BGM.";
+                Result="PASS: native UI drag, entry, invalid order, unfold, command fade and removal, exact position lock with view retained, reverse fold, cancel, re-form, panel toggles, dismantle, edge fit, no BGM.";
             }
             finally{Application.runInBackground=background;}
         }

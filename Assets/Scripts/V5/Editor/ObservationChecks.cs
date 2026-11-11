@@ -71,7 +71,11 @@ namespace PuzzleApple.V5.Editor
                 Check(j.LampsMoving,"learned example sustains movement");
                 yield return Until(()=>e.feedback.StrongCount>pulsesBefore);
                 Check(e.board.Panel.FullyOpen&&e.feedback.StrongCount==pulsesBefore+1,"acquired example pulses once after panel opens");
-                var group=s.Groups.Single(g=>g.RuleId=="light.move");var detached=s.Detach(group.Id,group.Words[1].Id);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
+                var group=s.Groups.Single(g=>g.RuleId=="light.move");
+                var acquiredRect=e.board.GroupRect(group.Id);
+                Check(-acquiredRect.anchoredPosition.y>=e.board.Surface.rect.height*.12f,"acquired example stays below the top reserved area");
+                Check(-acquiredRect.anchoredPosition.y+acquiredRect.rect.height<=e.board.Surface.rect.height-7,"acquired example fits in the workspace");
+                var detached=s.Detach(group.Id,group.Words[1].Id);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
                 Check(!j.LampsMoving&&j.Lamps.All(l=>l.GetComponent<Rigidbody>().isKinematic),"split stops whole group");
                 before=body.position;yield return new WaitForSeconds(.15f);Check(Vector3.Distance(before,body.position)<.001f,"stopped positions stable");
                 s.Join(detached.Id,group.Id,false);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();Check(j.LampsMoving&&!body.isKinematic,"rejoin resumes");
@@ -98,7 +102,7 @@ namespace PuzzleApple.V5.Editor
                 e.chamberLight.AdvancePointer(true,true,false,.3f);
                 e.chamberLight.AdvancePointer(false,false,true,0);
                 Check(!e.chamberLight.ShowingKnown&&!e.chamberLight.Collecting,"cancelled long hold never falls through to noun");
-                var on=s.Groups.First(g=>g.RuleId=="light.on");s.ReturnToLibrary(on.Id,on.Words[0].Id,true);
+                Check(!s.Groups.Any(g=>g.RuleId=="light.on"),"completed light command left the workspace");
                 s.TryAcquireSentence("observe.check.off","negative light");yield return Until(()=>j.Brightness==0);Check(j.LampsMoving&&o.FindTarget()==null,"off light hides observation without stopping effective move");
                 Result="PASS: dark prelearning motion; group ray; hold/release/look/panel interruption; acquisition and tab; split/rejoin; known observation; noun coexistence; on/off light";
             }

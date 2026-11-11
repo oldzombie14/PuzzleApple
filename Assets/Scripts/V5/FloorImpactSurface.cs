@@ -18,7 +18,7 @@ namespace PuzzleApple.V5
         public bool MuralAvailable=>muralNormal;
         [Min(.1f)] public float rippleDuration=1.2f,rippleSpeed=1.6f;
         [Range(1,4)] public int ringCount=2;
-        [Min(.01f)] public float ringSpacing=.22f,ringWidth=.035f;
+        [Min(.01f)] public float ringSpacing=.34f,ringWidth=.03f;
         [Range(0,1)] public float rippleStrength=.9f;
         [Min(0)] public float thinningStartsAt=.65f;
         [Min(.1f)] public float thinningDistance=1.1f;
@@ -33,7 +33,7 @@ namespace PuzzleApple.V5
         [Range(0,12)] public int particleCount=5;
         public Vector2 particleSize=new Vector2(.07f,.16f);
         [Min(.05f)] public float particleLifetime=.65f;
-        [Min(1)] public float holeSize=4.5f;
+        [Min(1)] public float holeSize=3.5f;
         [Min(.1f)] public float holeOpenDuration=1.4f;
         public float HoleProgress {get;private set;}
         bool holeOpening;
@@ -110,11 +110,18 @@ namespace PuzzleApple.V5
             for(int i=0;i<4;i++)Rim(Vector3.zero,Vector3.one);
             UpdateHole(0);FloorCollider.enabled=false;
         }
+        public float HoleWidth=>Mathf.Clamp(holeSize,1,Mathf.Min(journey.roomSize.x,journey.roomSize.z)-2);
+        public float HoleCentreZ=>journey.pathLength+journey.roomSize.z*.5f;
+        public bool FitsOpening(Vector3 local,float radius)
+        {
+            float clearance=HoleWidth*.5f*Mathf.SmoothStep(0,1,HoleProgress)-radius;
+            return clearance>0&&Mathf.Abs(local.x)<clearance&&Mathf.Abs(local.z-HoleCentreZ)<clearance;
+        }
         void UpdateHole(float progress)
         {
-            float size=Mathf.Clamp(holeSize,1,Mathf.Min(journey.roomSize.x,journey.roomSize.z)-2)*Mathf.SmoothStep(0,1,progress);
+            float size=HoleWidth*Mathf.SmoothStep(0,1,progress);
             float half=size*.5f,width=journey.roomSize.x,front=journey.pathLength-.1f,back=journey.pathLength+journey.roomSize.z;
-            float centre=journey.pathLength+journey.roomSize.z*.5f;
+            float centre=HoleCentreZ;
             SetRim(0,new Vector3(-(width*.5f+half)*.5f,-.15f,(front+back)*.5f),new Vector3((width-size)*.5f,.3f,back-front));
             SetRim(1,new Vector3((width*.5f+half)*.5f,-.15f,(front+back)*.5f),new Vector3((width-size)*.5f,.3f,back-front));
             SetRim(2,new Vector3(0,-.15f,(front+centre-half)*.5f),new Vector3(Mathf.Max(.001f,size),.3f,centre-half-front));
@@ -144,10 +151,16 @@ namespace PuzzleApple.V5
         {
             if(!contactParticles||journey.Brightness<=.001f)return;
             if(!particles.isPlaying)particles.Play();
+            var orientation=Quaternion.FromToRotation(Vector3.up,normal);
+            const float spreadDegrees=55f;
             for(int i=0;i<particleCount;i++)
             {
                 var p=new ParticleSystem.EmitParams();p.position=worldPoint+normal*.02f;
-                p.velocity=normal*Random.Range(.5f,1.1f)+Vector3.ProjectOnPlane(Random.insideUnitSphere*.5f,normal);
+                float axial=Random.Range(Mathf.Cos(spreadDegrees*Mathf.Deg2Rad),1f);
+                float radial=Mathf.Sqrt(1f-axial*axial);
+                float angle=Random.value*Mathf.PI*2f;
+                var direction=new Vector3(radial*Mathf.Cos(angle),axial,radial*Mathf.Sin(angle));
+                p.velocity=orientation*direction*Random.Range(.52f,.98f);
                 p.startSize=Random.Range(particleSize.x,particleSize.y);p.startLifetime=particleLifetime;p.startColor=Color.black;
                 p.rotation3D=Random.insideUnitSphere*180;
                 particles.Emit(p,1);
@@ -165,7 +178,7 @@ namespace PuzzleApple.V5
             ink.SetMatrix("_WorldToFloor",journey.Root.worldToLocalMatrix);ink.SetVectorArray("_Impacts",impacts);
             ink.SetVector("_RoomBounds",new Vector4(journey.roomSize.x*.5f-.15f,journey.roomSize.y,journey.pathLength+.15f,journey.roomSize.z-.3f));
             ink.SetFloat("_RoomOpeningWidth",journey.PathWidth);
-            ink.SetFloat("_Brightness",journey.SurfaceBrightness);
+            ink.SetFloat("_Brightness",1);
             ink.SetFloat("_RippleDuration",rippleDuration);ink.SetFloat("_RippleSpeed",rippleSpeed);
             ink.SetFloat("_RingCount",ringCount);ink.SetFloat("_RingSpacing",ringSpacing);ink.SetFloat("_RingWidth",ringWidth);ink.SetFloat("_RippleStrength",rippleStrength);
             ink.SetVector("_RippleTaper",new Vector4(thinningStartsAt,thinningDistance,distantWidth,0));

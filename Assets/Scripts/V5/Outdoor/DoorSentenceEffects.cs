@@ -17,18 +17,19 @@ namespace PuzzleApple.V5.Outdoor
         float nextTargetUpdate;
         bool stateDriven;
         void Awake() { if(door) solids=door.GetComponentsInChildren<Collider>(true); }
-        public void Apply(CognitionState state,bool split=false)
+        public void Apply(System.Func<CognitionSignal,bool> hasEffect,bool split=false)
         {
-            bool on=state.HasEffect(CognitionSignal.DoorOn), off=state.HasEffect(CognitionSignal.DoorOff);
+            bool on=hasEffect(CognitionSignal.DoorOn), off=hasEffect(CognitionSignal.DoorOff);
             if(appearance && (on || off)) { appearance.SetState(on,off); stateDriven=true; }
             else if(appearance && stateDriven) { appearance.HoldCurrentState(); stateDriven=false; }
             var previousMotion=motion;
-            motion=state.HasEffect(CognitionSignal.DoorMove)?CognitionSignal.DoorMove:
-                state.HasEffect(CognitionSignal.DoorWorldMove)?CognitionSignal.DoorWorldMove:
-                state.HasEffect(CognitionSignal.DoorLightMove)?CognitionSignal.DoorLightMove:CognitionSignal.Empty;
+            motion=hasEffect(CognitionSignal.DoorMove)?CognitionSignal.DoorMove:
+                hasEffect(CognitionSignal.DoorWorldMove)?CognitionSignal.DoorWorldMove:
+                hasEffect(CognitionSignal.DoorLightMove)?CognitionSignal.DoorLightMove:CognitionSignal.Empty;
             RefreshMotion();
             if(split&&previousMotion==CognitionSignal.DoorMove&&motion==CognitionSignal.Empty&&door)door.SettleAfterFreeMotion();
         }
+        public void ReleaseStateCommand()=>stateDriven=false;
         public void RefreshMotion()
         {
             if(door && door.Revealed) door.SetMotion(motion==CognitionSignal.DoorMove,motion==CognitionSignal.DoorWorldMove);

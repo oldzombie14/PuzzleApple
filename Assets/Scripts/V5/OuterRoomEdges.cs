@@ -27,6 +27,8 @@ namespace PuzzleApple.V5
             foreach (var surface in surfaces)
             {
                 surface.GetPropertyBlock(block);
+                var direction=surface.transform.InverseTransformDirection(centre-surface.bounds.center);
+                block.SetVector("_RoomShellInward",direction.normalized);
                 block.SetFloat("_UseInkRoomBounds", 1);
                 block.SetVector("_InkRoomMin", min);
                 block.SetVector("_InkRoomMax", max);
@@ -42,7 +44,7 @@ namespace PuzzleApple.V5
             {
                 if (!surface) continue;
                 surface.GetPropertyBlock(block);
-                block.SetFloat("_UseInkRoomBounds", 0);
+                block.SetFloat("_UseInkRoomBounds", 0); block.SetVector("_RoomShellInward",Vector4.zero);
                 surface.SetPropertyBlock(block);
             }
         }

@@ -22,6 +22,8 @@ namespace PuzzleApple.V5
         MaterialPropertyBlock wallProperties;
         readonly List<Renderer> segments=new List<Renderer>();
         Material glow;
+        Material coverInk;
+        public float Reveal=>journey&&journey.ViewBeyondChamber?1:1-Mathf.SmoothStep(0,1,lamp.Brightness);
         Transform returnOutline;
         Material returnGlow;
         void Start()
@@ -44,6 +46,18 @@ namespace PuzzleApple.V5
             segments.Add(Block(root,"Wall above opening",new Vector3(centre,(top+tall)*.5f,0),new Vector3(width,tall-top,thick),mat));
             wallProperties=new MaterialPropertyBlock();
             Entrance=new GameObject("Passage entrance").transform;Entrance.SetParent(root,false);Entrance.localPosition=new Vector3(centre,sillHeight,0);
+            // Solid wall sections keep their depth and shadows. Only the aperture fades,
+            // after the opaque exterior has rendered, so the path appears continuously.
+            coverInk=new Material(mat);
+            coverInk.SetFloat("_PassageCover",1);
+            coverInk.SetFloat("_SrcBlend",(float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            coverInk.SetFloat("_DstBlend",(float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            coverInk.SetFloat("_ZWrite",0);
+            coverInk.renderQueue=(int)UnityEngine.Rendering.RenderQueue.Transparent;
+            coverInk.SetShaderPassEnabled("DepthOnly",false);
+            coverInk.SetShaderPassEnabled("DepthNormals",false);
+            cover.sharedMaterial=coverInk;
+            cover.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
             if(journey)journey.Build(Entrance,width,height,thick,edgeMaterial);
             else
             {
@@ -94,23 +108,24 @@ namespace PuzzleApple.V5
         void Update()
         {
             if(!cover)return;
-            // Switch the visible mesh; the sill and the passage collision stay in place.
-
-            bool covered=lamp.Brightness>.01f;
-            if(!covered&&cover.enabled)
-            {
-                cover.GetPropertyBlock(wallProperties);
-                foreach(var segment in segments)segment.SetPropertyBlock(wallProperties);
-            }
-            cover.enabled=covered;
-            foreach(var segment in segments)segment.enabled=!covered;
-            float darkness=1-Mathf.SmoothStep(0,1,lamp.Brightness);
+            float darkness=Reveal;
+            cover.GetPropertyBlock(wallProperties);
+            wallProperties.SetVector("_PassageOrigin",Entrance.position);
+            wallProperties.SetVector("_PassageRight",Entrance.right);
+            wallProperties.SetVector("_PassageUp",Entrance.up);
+            wallProperties.SetVector("_PassageSize",new Vector4(width,height,0,0));
+            wallProperties.SetFloat("_PassageOpacity",1-darkness);
+            cover.SetPropertyBlock(wallProperties);
+            // Sections use their own local inward normal and must never inherit the cover mask.
+            wallProperties.SetVector("_RoomShellInward",Vector3.back);
+            foreach(var segment in segments)segment.SetPropertyBlock(wallProperties);
+            cover.enabled=darkness<1;
             glow.SetFloat("_Visibility",darkness);
             if(returnOutline)returnOutline.gameObject.SetActive(journey.ViewBeyondChamber);
             var p=Entrance.InverseTransformPoint(lamp.entry.player.transform.position);
             if(!ReachedEntrance&&Mathf.Abs(p.x)<width*.5f&&p.z>.35f&&p.z<entranceDepth&&p.y>-.2f&&p.y<height)
             {ReachedEntrance=true;reachedEntrance.Invoke();}
         }
-        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);}
+        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);if(coverInk)Destroy(coverInk);}
     }
 }

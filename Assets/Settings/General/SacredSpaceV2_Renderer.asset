@@ -39,7 +39,8 @@ MonoBehaviour:
     probeVolumeBlendStatesCS: {fileID: 7200000, guid: b9a23f869c4fd45f19c5ada54dd82176, type: 3}
   m_RendererFeatures:
   - {fileID: -8689516114920288390}
-  m_RendererFeatureMap: ad6b866f10d7b46c
+  - {fileID: 1825406002}
+  m_RendererFeatureMap: ad6b866f10d7b46c327ccd6c00000000
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -68,3 +69,16 @@ MonoBehaviour:
   m_DepthTextureFormat: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 0
+--- !u!114 &1825406002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9555f43afd804fd9bffaabedb904012b, type: 3}
+  m_Name: V5 folding box outline
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.FoldingOutlineFeature
+  m_Active: 1

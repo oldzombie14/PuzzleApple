@@ -46,9 +46,9 @@ Shader "PuzzleApple/V5/Reticle Contrast"
                     if (_ScreenPointer > 1.5)
                     {
                         float fill = saturate((.5 - distance) / pixel - .5);
-                        return half4(fill,fill,fill,coverage);
+                        return half4(fill,fill,fill,coverage)*i.color.a;
                     }
-                    return half4(coverage,coverage,coverage,coverage);
+                    return half4(coverage,coverage,coverage,coverage)*i.color.a;
                 }
                 float2 screenUV = i.positionCS.xy / max(_ReticleViewportSize.xy, float2(1,1));
                 TransformNormalizedScreenUV(screenUV);

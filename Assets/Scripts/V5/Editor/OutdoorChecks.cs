@@ -17,7 +17,19 @@ namespace PuzzleApple.V5.Editor
         {
             var v4=AssetDatabase.LoadAssetAtPath<PuzzleApple.V4.Cognition.CognitionCatalog>("Assets/GameData/V4/Opening/OpeningCatalog.asset");
             var v5=AssetDatabase.LoadAssetAtPath<CognitionCatalog>("Assets/GameData/V5/Opening/OpeningCatalog.asset");v5.ValidateOrThrow();
-            Check(v4.Rules.Count==v5.Rules.Count,"complete V4 grammar count");
+            var lit=new CognitionState(v5);
+            foreach(var target in new[]{"world","door","floor","light"})
+            {
+                lit.TryAcquireSentence("illuminate."+target,"light "+target);
+                Check(lit.Groups.Last().Effective,"valid illumination target "+target);
+            }
+            Check(lit.Groups.All(g=>g.Effective)&&lit.Groups.Last().Signals.Count==0,"illumination sentences coexist and light light is inert");
+            lit.TryAcquireSentence("duplicate","light floor");
+            lit.ReturnToLibrary(lit.Groups.Last().Id,0,true);
+            Check(lit.HasEffect(CognitionSignal.IlluminateFloor),"remaining copy sustains floor emission");
+            var floor=lit.Groups.First(g=>g.RuleId=="light.floor");
+            lit.Detach(floor.Id,floor.Words[0].Id);
+            Check(!lit.HasEffect(CognitionSignal.IlluminateFloor)&&lit.HasEffect(CognitionSignal.IlluminateDoor),"split removes only its illumination");
             string Text(PuzzleApple.V4.Cognition.CognitionRule r)=>string.Join(" ",r.Words.Select(w=>w.Id));
             foreach(var a in v4.Rules)foreach(var b in v4.Rules)
             {
@@ -28,16 +40,16 @@ namespace PuzzleApple.V5.Editor
                 current.ReturnToLibrary(current.Groups[0].Id,0,true);old.ReturnToLibrary(old.Groups[0].Id,0,true);
                 Check(old.Groups.Select(g=>g.Effective).SequenceEqual(current.Groups.Select(g=>g.Effective)),"split takeover parity");
             }
-            foreach(var invalid in new[]{"world move","light world move","door door move","floor floor move","door move floor","light positive","positive light move","negative light floor move","light move move","light door"})
+            foreach(var invalid in new[]{"world move","light world move","door door move","floor floor move","door move floor","light positive","positive light move","negative light floor move","light move move","light door floor"})
             {var state=new CognitionState(v5);state.TryAcquireSentence("invalid",invalid);Check(!state.Groups.Single().Recognized,"invalid syntax "+invalid);}
-            return "PASS: all 16 V4 sentences, all ordered rule pairs, conflict takeover and invalid combinations (ground maps to floor).";
+            return "PASS: four illumination sentences, duplicate and split behavior, all 16 V4 sentences, all ordered rule pairs, conflict takeover and invalid combinations (ground maps to floor).";
         }
         static IEnumerator Until(Func<bool> predicate,string label,float timeout=30)
         {float end=Time.realtimeSinceStartup+timeout;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout: "+label);}
         public static void Run()
         {
             var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
-            if(!Application.isPlaying||!e||e.Entered)throw new InvalidOperationException("Fresh P5 Play required.");
+            if(!Application.isPlaying||!e||!e.Entered||e.room.Opened)throw new InvalidOperationException("Fresh P5 Play required.");
             Result="Running";e.StartCoroutine(Exercise(e));
         }
         static IEnumerator Exercise(WorldEntry e)
@@ -46,10 +58,7 @@ namespace PuzzleApple.V5.Editor
             bool shots=e.sentenceRuntime.presentation.enabledShots;e.sentenceRuntime.presentation.enabledShots=false;
             try
             {
-                Check(e.enterButton.IsInteractable()&&e.exitButton.IsInteractable(),"fresh menu buttons enabled");
-                var click=new PointerEventData(EventSystem.current){button=PointerEventData.InputButton.Left};
-                ExecuteEvents.Execute(e.enterButton.gameObject,click,ExecuteEvents.pointerClickHandler);
-                yield return Until(()=>e.Entered,"actual Button pointer click");
+                Check(e.Entered && !e.enterButton.gameObject.activeSelf,"starts indoors");
                 e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy,"unfold");
                 var player=e.player;var state=e.board.State;var j=e.journey;
                 e.board.Panel.SetOpen(false);player.MovementLocked=true;
@@ -70,17 +79,36 @@ namespace PuzzleApple.V5.Editor
                 Check(e.chamberLight.TryCollect(),"lit room lamp repeat collection");
                 foreach(var id in new[]{"floor","door","move"})state.TryAcquireWord("outdoor.check."+id,e.board.Catalog.Word(id));
                 // Solving the floor puzzle is covered by FloorImpactChecks; here exercise its exit.
-                j.floorSurface.OpenHole();player.MovementLocked=false;
+                var fallingLamp=j.Lamps[0];var body=fallingLamp.GetComponent<Rigidbody>();
+                body.position=j.Root.TransformPoint(new Vector3(0,.45f,j.floorSurface.HoleCentreZ));
+                fallingLamp.direction=Vector3.zero;
+                player.MovementLocked=true;j.floorSurface.OpenHole();
+                yield return Until(()=>e.outdoor.TransferredLamps>0,"a lamp falls and exits before the player");
+                Check(e.outdoor.RenderingWarmed&&!e.outdoor.IsOutside,"outdoor window rendered before travel");
+                player.MovementLocked=false;
                 var centre=j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength+j.roomSize.z*.5f));
                 player.Teleport(centre,j.Root.rotation);player.view.rotation=Quaternion.LookRotation(Vector3.down,j.Root.forward);player.AdoptCurrentView();
                 yield return Until(()=>e.outdoor.Transitioning,"native fall activates passage");
                 Check(e.board.Panel.InputBlocked&&player.CinematicLocked,"passage owns input");
+                var overlay=(RectTransform)e.outdoor.transform.Find("Passage cinematic");
+                var upper=(RectTransform)overlay.Find("Top");
+                var lower=(RectTransform)overlay.Find("Bottom");
+                yield return Until(()=>upper.rect.height>1,"letterbox visible during fall");
+                var screenRect=overlay.GetComponent<Canvas>().rootCanvas.pixelRect;
+                var corners=new Vector3[4];
+                upper.GetWorldCorners(corners);
+                Check(Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[1]),new Vector2(screenRect.xMin,screenRect.yMax))<1 &&
+                    Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[2]),screenRect.max)<1,"top bar spans the screen's upper edge");
+                lower.GetWorldCorners(corners);
+                Check(Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[0]),screenRect.min)<1 &&
+                    Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[3]),new Vector2(screenRect.xMax,screenRect.yMin))<1,"bottom bar spans the screen's lower edge");
                 yield return Until(()=>e.outdoor.IsOutside&&!e.outdoor.Transitioning,"horizontal exit");
+                Check(!upper.gameObject.activeSelf&&!lower.gameObject.activeSelf&&!overlay.Find("Transition").gameObject.activeSelf,"cinematic overlay clears after exit");
                 var w=e.outdoor.World;
-                Check(e.outdoor.TransitionCount==1&&w.field.ActiveCount==0,"single transition, no initial lamps");
+                Check(e.outdoor.TransitionCount==1&&w.field.ActiveCount==e.outdoor.TransferredLamps,"single transition retains the transferred lamps");
                 Check(w.door.GetComponentsInChildren<Renderer>().All(r=>r.enabled),"exit frame visible without V4 reveal event");
                 Check(player.transform.position.x>1000&&w.door.transform.position.x>1000,"player and physical frame are in the outdoor scene space");
-                Check(e.outdoor.LastExitVelocity.z>10&&Mathf.Abs(player.view.forward.y)<.01f,"horizontal launch and level view");
+                Check(e.outdoor.LastExitVelocity.z>0&&e.outdoor.LastExitVelocity.z<=e.outdoor.exitSpeed&&Mathf.Abs(player.view.forward.y)<.01f,"horizontal launch and level view");
                 Check(!player.CinematicLocked&&!player.MovementLocked&&!e.board.Panel.InputBlocked,"control restored");
                 Check(state.Knows("floor")&&state.Knows("light"),"vocabulary preserved");
                 Check(w.Audio&&w.GetComponents<AudioSource>().Any(a=>a.isPlaying&&a.loop&&a.clip==w.music.clip&&Mathf.Abs(a.volume-.45f)<.001f),"V4 BGM actually playing");
@@ -93,20 +121,20 @@ namespace PuzzleApple.V5.Editor
                 var library=UnityEngine.Object.FindFirstObjectByType<WordLibrary>();
                 var tile=library.GetComponentsInChildren<LibraryDrag>(true).First(t=>t.name=="Vocabulary light");
                 Drag(tile.gameObject,screen);
-                Check(w.field.ActiveCount==1,"library drag creates lamp");
-                var first=w.field.ActiveLamps.First();Check(first.RevealAmount<1,"lamp starts faded");
+                Check(w.field.ActiveCount==e.outdoor.TransferredLamps+1,"library drag creates lamp");
+                var first=w.field.ActiveLamps.First(l=>l.RevealAmount<1);Check(first.RevealAmount<1,"lamp starts faded");
                 yield return Until(()=>first.RevealAmount>=1,"lamp fades in at V4 configured duration");
                 state.TryAcquireSentence("outdoor.drag.sentence","light move");yield return null;yield return null;
                 var group=state.Groups.First(g=>g.RuleId=="light.move");
                 var handle=e.board.GroupRect(group.Id).GetComponentsInChildren<CognitionDragHandle>().First(h=>h.WordId==group.Words[0].Id);
                 Drag(handle.gameObject,new Vector2(Screen.width*.68f,Screen.height*.48f),true);
-                Check(w.field.ActiveCount==2,"sentence token drag creates lamp");
+                Check(w.field.ActiveCount==e.outdoor.TransferredLamps+2,"sentence token drag creates lamp");
                 Check(!state.HasEffect(CognitionSignal.LightMove),"drag detaches sentence token");
                 state.ClearWorkspace();state.TryAcquireSentence("outdoor.motion","light move");yield return null;yield return null;
                 var before=w.field.ActiveLamps.ToDictionary(l=>l,l=>l.transform.position);yield return new WaitForSeconds(.35f);
                 Check(before.All(p=>Vector3.Distance(p.Key.transform.position,p.Value)>.1f),"all created lamps move");
                 Drag(tile.gameObject,new Vector2(Screen.width*.87f,Screen.height*.45f));
-                Check(w.field.ActiveCount==3,"new lamp while moving");
+                Check(w.field.ActiveCount==e.outdoor.TransferredLamps+3,"new lamp while moving");
                 var newest=w.field.ActiveLamps.First(l=>!before.ContainsKey(l));var newPosition=newest.transform.position;yield return new WaitForSeconds(.3f);
                 Check(Vector3.Distance(newest.transform.position,newPosition)>.08f,"new lamp inherits movement");
                 state.ClearWorkspace();yield return null;yield return null;
@@ -129,7 +157,7 @@ namespace PuzzleApple.V5.Editor
                 Check(e.board.Panel.IsOpen&&!player.CinematicLocked,"cutscene restores editing");
                 e.sentenceRuntime.presentation.enabledShots=false;
                 yield return MotionAndPlacement(e);
-                Result="PASS: menu pointer click; dark/lit collection in all V5 spaces; real fall, cinematic, horizontal impulse and landing; retained vocabulary and playing V4 BGM; both UI drag sources; fade; all/new lamps move; split; day/night without V4 progression; cutscene application/interruption.";
+                Result="PASS: direct indoor entry; live outdoor window and lamp transfer; dark/lit collection in all V5 spaces; real fall, cinematic, horizontal impulse and landing; retained vocabulary and playing V4 BGM; both UI drag sources; fade; all/new lamps move; split; day/night without V4 progression; cutscene application/interruption.";
             }
             finally{e.sentenceRuntime.presentation.enabledShots=shots;Application.runInBackground=background;}
         }

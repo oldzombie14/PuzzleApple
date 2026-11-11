@@ -22,8 +22,7 @@ namespace PuzzleApple.V5.Editor
             var renderers=source.walls.Select(w=>w.GetComponent<Renderer>()).ToArray();var colliders=source.walls.Select(w=>w.GetComponent<Collider>()).ToArray();
             var renderStates=renderers.Select(r=>r.enabled).ToArray();var collisionStates=colliders.Select(c=>c.enabled).ToArray();
             GameObject testWall=null,testPassage=null,testJourney=null;
-            bool isolated=false;
-            var originalIsolation=journey.GetComponent<ChamberViewIsolation>();
+            bool isolated=false; var lighting=UnityEngine.Object.FindFirstObjectByType<RoomLighting>();
             try
             {
                 e.EnterWorld();yield return Until(()=>e.Entered);e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
@@ -39,7 +38,6 @@ namespace PuzzleApple.V5.Editor
                 Check(e.chamberLight.TryCollect(),"collection starts");Check(!e.chamberLight.reticle.activeSelf&&!e.chamberLight.hoverEye.gameObject.activeSelf,"collection hides cursor");
                 yield return Until(()=>!e.chamberLight.Collecting);yield return null;Check(e.chamberLight.hoverEye.color.a<.4f,"known-word eye subdued");
                 source.enabled=false;source.Entrance.parent.gameObject.SetActive(false);journey.enabled=false;journey.Root.gameObject.SetActive(false);p.journey=null;p.enabled=false;isolated=true;
-                originalIsolation.enabled=false;
                 foreach(var r in renderers)r.enabled=false;foreach(var c in colliders)c.enabled=false;
                 for(int wall=0;wall<4;wall++)
                 {
@@ -48,7 +46,7 @@ namespace PuzzleApple.V5.Editor
                     testJourney=new GameObject("Temporary passage test journey");var j=testJourney.AddComponent<PassageJourney>();j.enabled=false;j.entry=e;j.whitePath=journey.whitePath;j.blackSurround=journey.blackSurround;j.roomMaterial=journey.roomMaterial;j.lampMaterial=journey.lampMaterial;
                     testPassage=new GameObject("Temporary passage test");var h=testPassage.AddComponent<WallPassage>();h.lamp=e.chamberLight;h.journey=j;h.walls=new[]{testWall.transform};h.width=source.width;h.height=source.height;h.sillHeight=source.sillHeight;h.edgeMaterial=source.edgeMaterial;
                     yield return null;yield return null;
-                    e.journey=j;j.enabled=true;
+                    e.journey=j;lighting.journey=j;j.enabled=true;
                     Check(Mathf.Abs(h.Entrance.localPosition.x)<.001f,"centred opening on wall "+wall);
                     var path=j.Root.Find("White path");var floor=j.Root.Find("Room floor");float thickness=Mathf.Min(original.lossyScale.x,original.lossyScale.z);
                     var lintel=j.Root.Find("Door lintel");
@@ -72,44 +70,58 @@ namespace PuzzleApple.V5.Editor
                         p.transform.rotation=h.Entrance.rotation*Quaternion.Euler(0,180,0);Walk(p,200);yield return new WaitForEndOfFrame();
                         Check(h.Entrance.InverseTransformPoint(p.transform.position).z<-.3f&&!j.BeyondChamber,"return crosses visual cover without collision");
                     }
-                    var back=j.Root.Find("One-way black threshold");Check(back.localPosition.z>thickness*.5f,"return plane is outside wall back face");
                     foreach(float z in new[]{-.19f,.01f,.3f,3f,j.pathLength-.8f})foreach(float yaw in new[]{-65f,0f,65f})
                     {
                         p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,z)),j.Root.rotation);
                         p.view.rotation=j.Root.rotation*Quaternion.Euler(0,180+yaw,0);p.AdoptCurrentView();
-                        yield return Until(()=>j.ViewBeyondChamber&&j.EntryFadeAlpha==0);
+                        yield return Until(()=>j.ViewBeyondChamber);
                         yield return new WaitForEndOfFrame();yield return new WaitForEndOfFrame();
-                        Check(j.BeyondChamber&&testWall.GetComponent<Renderer>().forceRenderingOff,"original wall hidden at entry/near clip/doorway");
-                        Check(UpperViewIsBlack(p.view.GetComponent<Camera>(),j.Root.forward),"back view is black on wall "+wall+" z="+z+" yaw="+yaw);
+                        Check(j.BeyondChamber&&!testWall.GetComponent<Renderer>().enabled,"corridor sees the opening through the chamber wall");
+                        Check(ExteriorIsBlack(p.view.GetComponent<Camera>(),h),"exterior stays black outside the opening on wall "+wall+" z="+z+" yaw="+yaw);
                     }
                     p.Teleport(j.Root.TransformPoint(new Vector3(0,-h.sillHeight+.08f,-1)),j.Root.rotation);yield return new WaitForEndOfFrame();
                     Check(!testWall.GetComponent<Renderer>().forceRenderingOff,"return restores original wall rendering");
                     UnityEngine.Object.Destroy(testPassage);UnityEngine.Object.Destroy(testJourney);UnityEngine.Object.Destroy(testWall);yield return null;
                 }
-                Result="PASS: four centred enlarged entries; lit cover and open dark doorway; jump and physical return; corrected back plane; black GPU back-view samples near threshold, middle and door at three angles; restored chamber; collection cursor states";
+                Result="PASS: four centred enlarged entries; lit cover and open dark doorway; jump and physical return; open return aperture; black exterior GPU samples near threshold, middle and door at three angles; restored chamber; collection cursor states";
             }
             finally
             {
                 if(testPassage)UnityEngine.Object.Destroy(testPassage);if(testJourney)UnityEngine.Object.Destroy(testJourney);if(testWall)UnityEngine.Object.Destroy(testWall);
                 if(isolated){for(int i=0;i<renderers.Length;i++){renderers[i].enabled=renderStates[i];colliders[i].enabled=collisionStates[i];}source.Entrance.parent.gameObject.SetActive(true);source.enabled=true;journey.Root.gameObject.SetActive(true);journey.enabled=true;}
-                e.journey=journey;originalIsolation.enabled=true;p.journey=journey;p.Teleport(new Vector3(0,.08f,0),Quaternion.identity);p.enabled=true;journey.RefreshCollisionExclusions();Application.runInBackground=background;
+                e.journey=journey;lighting.journey=journey;p.journey=journey;p.Teleport(new Vector3(0,.08f,0),Quaternion.identity);p.enabled=true;journey.RefreshCollisionExclusions();Application.runInBackground=background;
             }
         }
-        static bool UpperViewIsBlack(Camera camera,Vector3 passageForward)
+        static bool ExteriorIsBlack(Camera camera,WallPassage passage)
         {
             var frame=camera.targetTexture;var previous=RenderTexture.active;
             var pixels=new Texture2D(frame.width,frame.height,TextureFormat.RGB24,false);
             try
             {
                 RenderTexture.active=frame;pixels.ReadPixels(new Rect(0,0,frame.width,frame.height),0,0);pixels.Apply();
+                Vector3 origin=passage.Entrance.InverseTransformPoint(camera.transform.position);
+                float thickness=Mathf.Min(passage.walls[0].lossyScale.x,passage.walls[0].lossyScale.z);
                 for(int y=frame.height*3/5;y<frame.height-2;y+=13)for(int x=2;x<frame.width-2;x+=13)
                 {
                     // A wide-FOV oblique view near the door also includes forward rays.
-                    // Those may legitimately see the white door; only return-facing rays
-                    // must conceal the original chamber.
+                    // Only return-facing rays outside the aperture should see black.
+
                     var ray=camera.ViewportPointToRay(new Vector3((x+.5f)/frame.width,(y+.5f)/frame.height,0));
-                    if(Vector3.Dot(ray.direction,passageForward)>=0)continue;
-                    var c=pixels.GetPixel(x,y);if(Mathf.Max(c.r,Mathf.Max(c.g,c.b))>.02f)return false;
+
+                    Vector3 direction=passage.Entrance.InverseTransformDirection(ray.direction);
+                    if(direction.z>=-.001f)continue;
+
+                    var atWall=origin+direction*((-thickness*.5f-origin.z)/direction.z);
+                    if(Mathf.Abs(atWall.x)<passage.width*.5f+.2f&&atWall.y>-.2f&&atWall.y<passage.height+.2f)continue;
+                    // The return outline sits on the corridor side of the thick wall.
+                    var atOutline=origin+direction*((thickness*.5f+.07f-origin.z)/direction.z);
+                    if(Mathf.Abs(atOutline.x)<passage.width*.5f+.2f&&atOutline.y>-.2f&&atOutline.y<passage.height+.2f)continue;
+                    var c=pixels.GetPixel(x,y);
+                    if(Mathf.Max(c.r,Mathf.Max(c.g,c.b))>.02f)
+                    {
+                        Debug.LogWarning("Exterior sample "+c+" at inner wall "+atWall+" outer outline "+atOutline);
+                        return false;
+                    }
                 }
                 return true;
             }

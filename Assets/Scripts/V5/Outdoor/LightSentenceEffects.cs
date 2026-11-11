@@ -27,12 +27,12 @@ namespace PuzzleApple.V5.Outdoor
         float nextRefresh;
 
 
-        public void Apply(CognitionState state)
+        public void Apply(System.Func<CognitionSignal,bool> hasEffect)
         {
-            var motion = state.HasEffect(CognitionSignal.LightMove) ? CognitionSignal.LightMove :
-                state.HasEffect(CognitionSignal.LightWorldMove) ? CognitionSignal.LightWorldMove :
-                state.HasEffect(CognitionSignal.LightDoorMove) ? CognitionSignal.LightDoorMove :
-                state.HasEffect(CognitionSignal.LightLightMove) ? CognitionSignal.LightLightMove : CognitionSignal.Empty;
+            var motion = hasEffect(CognitionSignal.LightMove) ? CognitionSignal.LightMove :
+                hasEffect(CognitionSignal.LightWorldMove) ? CognitionSignal.LightWorldMove :
+                hasEffect(CognitionSignal.LightDoorMove) ? CognitionSignal.LightDoorMove :
+                hasEffect(CognitionSignal.LightLightMove) ? CognitionSignal.LightLightMove : CognitionSignal.Empty;
             if (motion != Motion) neighbours.Clear();
             Motion = motion;
             if (field) field.SetMoving(CanOperate && Motion == CognitionSignal.LightMove);
@@ -106,7 +106,7 @@ namespace PuzzleApple.V5.Outdoor
             if (!CanOperate || Motion == CognitionSignal.Empty || Motion == CognitionSignal.LightMove) return;
             foreach (var lamp in lamps)
             {
-                if (!lamp || !lamp.isActiveAndEnabled) continue;
+                if (!lamp || !lamp.isActiveAndEnabled || lamp.GetComponent<LightMotion>().Launched) continue;
                 if (Motion != CognitionSignal.LightWorldMove && !InRange(lamp)) continue;
                 var body = lamp.GetComponent<Rigidbody>(); var collider = lamp.GetComponent<Collider>();
                 if (!body || !collider) continue;

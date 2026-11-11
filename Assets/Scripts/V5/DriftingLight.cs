@@ -12,9 +12,12 @@ namespace PuzzleApple.V5
         Rigidbody body;
         RoomLightGathering gathering;
         Collider[] motionColliders;
+        SphereCollider sphere;
+        bool fallingThrough;
         public int BounceCount {get;private set;}
         void Awake()
         {
+            sphere=GetComponent<SphereCollider>();
             motionColliders=GetComponentsInChildren<Collider>();body=GetComponent<Rigidbody>();body.useGravity=false;body.constraints=RigidbodyConstraints.FreezeRotation;
             body.interpolation=RigidbodyInterpolation.Interpolate;body.collisionDetectionMode=CollisionDetectionMode.ContinuousDynamic;
         }
@@ -28,6 +31,25 @@ namespace PuzzleApple.V5
         void FixedUpdate()
         {
             if(!journey||!journey.Root)return;
+            var floor=journey.floorSurface;
+            var passage=journey.entry.outdoor;
+            if(passage&&floor&&floor.HoleProgress>0)
+            {
+                var position=journey.Root.InverseTransformPoint(body.position);
+                if(!fallingThrough&&floor.FitsOpening(position,sphere.bounds.extents.x))
+                {
+                    fallingThrough=true;body.isKinematic=false;
+                    body.linearVelocity=Vector3.zero;body.useGravity=true;
+                }
+                if(fallingThrough)
+                {
+                    if(position.y<=OutdoorPassage.TransferDepth&&passage.TransferLamp(this,position,-body.linearVelocity.y))
+                    {
+                        journey.RemoveLamp(this);gameObject.SetActive(false);Destroy(gameObject);
+                    }
+                    return;
+                }
+            }
             if(gathering&&gathering.Step(this,body,motionColliders))return;
             if(journey.floorMotion && journey.floorMotion.Active){journey.floorMotion.Step(this,body,motionColliders);return;}
             if(!journey.LampsMoving){if(!body.isKinematic){body.linearVelocity=Vector3.zero;body.isKinematic=true;}return;}

@@ -27,7 +27,7 @@ Shader "PuzzleApple/V5/MemoryPrint"
    v2f vert(appdata v){v2f o;o.vertex=UnityObjectToClipPos(v.vertex);o.uv=v.uv;o.color=v.color;o.localPosition=v.vertex.xy;return o;}
    fixed4 frag(v2f i):SV_Target
    {
-    float3 source=tex2D(_MainTex,i.uv).rgb;
+    float3 source=tex2D(_MainTex,i.uv).rgb*i.color.rgb;
     float luma=dot(source,float3(.2126,.7152,.0722));
     float3 c=lerp(luma.xxx,source,_Saturation);
     // Map perceptual brightness without lifting black objects into gray fog.
@@ -42,7 +42,7 @@ Shader "PuzzleApple/V5/MemoryPrint"
     #ifdef UNITY_UI_CLIP_RECT
     alpha*=UnityGet2DClipping(i.localPosition,_ClipRect);
     #endif
-    return fixed4(saturate(c)*i.color.rgb,alpha);
+    return fixed4(saturate(c),alpha);
    }
    ENDCG
   }

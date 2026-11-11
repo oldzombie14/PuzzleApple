@@ -20,7 +20,7 @@ namespace PuzzleApple.V5
         [Range(0,1)] public float unfoldedSpotContribution=.25f;
         [Range(0,1)] public float unfoldedAmbientLift=.15f;
         public Color openAmbient=new Color(.24f,.24f,.24f);
-        [Range(0,.15f)] public float offAmbient=.045f;
+        [Range(0,.15f)] public float offAmbient=.055f;
         void LateUpdate()
         {
             // Indoor lighting must not inherit the outdoor scene's coloured gradient.
@@ -37,14 +37,22 @@ namespace PuzzleApple.V5
             {
                 interiorFill.enabled=false;
             }
-            if(chamberBloom)chamberBloom.weight=journey&&journey.ViewBeyondChamber?0:blend;
-            Color outside=journey&&journey.ViewBeyondChamber?Color.black:Color.Lerp(Color.white*offAmbient,openAmbient+new Color(unfoldedAmbientLift,unfoldedAmbientLift,unfoldedAmbientLift,0),lamp);
-            if(journey&&journey.ViewBeyondChamber)outside=Color.white*(journey.DoorwayLighting*Mathf.Lerp(offAmbient,journey.ambientIntensity,Mathf.SmoothStep(0,1,journey.Brightness)));
+            float corridor=journey?journey.CorridorBlend:0;
+            if(chamberBloom)chamberBloom.weight=blend*(1-corridor);
+            Color dim=Color.white*offAmbient;
+            Color outside=Color.Lerp(dim,openAmbient+Color.white*unfoldedAmbientLift,lamp);
+            if(journey)
+            {
+                float roomLight=Mathf.SmoothStep(0,1,journey.Brightness);
+                Color farRoom=Color.Lerp(dim,Color.white*journey.ambientIntensity,roomLight);
+                float visibleRoom=Mathf.Lerp(.9f*journey.DoorProgress,1,journey.DoorwayLighting);
+                outside=Color.Lerp(outside,Color.Lerp(dim,farRoom,visibleRoom),corridor);
+            }
             RenderSettings.ambientLight=Color.Lerp(closedAmbient,outside,blend);
             // Keep the fog shader variant ready from the initial menu frame.
             RenderSettings.fog=true;RenderSettings.fogColor=Color.black;RenderSettings.fogMode=FogMode.ExponentialSquared;
             RenderSettings.fogDensity=journey&&journey.ViewBeyondChamber&&room.Opened?
-                Mathf.Lerp(journey.corridorFogDensity,journey.fogDensity,journey.DoorwayLighting):0;
+                corridor*Mathf.Lerp(journey.corridorFogDensity,journey.fogDensity*journey.Brightness,journey.DoorwayLighting):0;
         }
     }
 }

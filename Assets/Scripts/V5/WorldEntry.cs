@@ -22,7 +22,7 @@ namespace PuzzleApple.V5
         public PortableClosure portableClosure;
         public SentenceRuntime sentenceRuntime;
         public OutdoorPassage outdoor;
-        [Min(0)] public float symbolFadeDuration = .4f, blackFadeDuration = .8f;
+        [Min(0)] public float blackFadeDuration = .8f;
         [Min(0)] public float closedPauseDuration = .65f, dialogFadeDuration = .5f;
         public bool Entered { get; private set; }
         public bool Busy { get; private set; }
@@ -37,12 +37,8 @@ namespace PuzzleApple.V5
 
         void Start()
         {
-            player.enabled = false;
-            Cursor.lockState = CursorLockMode.None; Cursor.visible = false;
-            // All world controls share subdued idle ink and bright hover/focus ink.
-            foreach (var option in new[] { enterButton, exitButton, confirmButton, cancelButton })
+            foreach (var option in new[] { exitButton, confirmButton, cancelButton })
             {
-                // A fresh title screen must not inherit a disabled transition state.
                 option.interactable = true;
                 var palette = option.colors;
                 palette.normalColor = new Color(.65f, .65f, .65f);
@@ -50,7 +46,7 @@ namespace PuzzleApple.V5
                 option.colors = palette;
             }
             dialog.SetActive(false);
-            enterButton.onClick.AddListener(EnterWorld);
+            enterButton.gameObject.SetActive(false);
             exitButton.onClick.AddListener(RequestExit);
             confirmButton.onClick.AddListener(ConfirmExit);
             cancelButton.onClick.AddListener(CancelExit);
@@ -61,6 +57,7 @@ namespace PuzzleApple.V5
             if(!outdoor)outdoor=gameObject.AddComponent<OutdoorPassage>();
             outdoor.entry=this;
             board.State.Changed+=OnSentences;
+            EnterWorld();
         }
         void OnDestroy(){if(board && board.State!=null)board.State.Changed-=OnSentences;}
         void OnSentences(CognitionChange change)=>sentenceRuntime.Refresh(change);
@@ -74,27 +71,30 @@ namespace PuzzleApple.V5
             if (ConfirmingExit && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 CancelExit();
         }
-        public void EnterWorld() { if(!Busy && !Entered && !ConfirmingExit) StartCoroutine(Enter()); }
-        IEnumerator Enter()
+        public void EnterWorld()
         {
-            Busy = true; enterButton.interactable = exitButton.interactable = false;
-            var enterInk = Ink(enterButton.gameObject); var exitInk = Ink(exitButton.gameObject);
-            for(float t=0;t<symbolFadeDuration;t+=Time.unscaledDeltaTime)
-            {
-                enterInk.alpha = exitInk.alpha = 1-Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,symbolFadeDuration));
-                yield return null;
-            }
-            enterButton.gameObject.SetActive(false); exitInk.alpha=0;
-            for(float t=0;t<blackFadeDuration;t+=Time.unscaledDeltaTime)
-            {
-                blackBackground.color=new Color(0,0,0,1-Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,blackFadeDuration)));
-                yield return null;
-            }
-            blackBackground.gameObject.SetActive(false);
+            if(Entered)return;
             foreach(var id in new[]{"positive","negative","world"}) board.State.TryAcquireWord("entry."+id,board.Catalog.Word(id));
             Entered=true; Busy=false; player.enabled=true;
             board.Panel.InputBlocked=false; board.Panel.SetOpen(true);
-            exitInk.alpha=1; exitButton.interactable=true;
+            StartCoroutine(RevealWorld());
+        }
+        IEnumerator RevealWorld()
+        {
+            blackBackground.transform.SetAsLastSibling();
+            blackBackground.color=Color.black;
+            blackBackground.gameObject.SetActive(true);
+            if(blackFadeDuration>0)
+            {
+                yield return null;
+                for(float t=0;t<blackFadeDuration;t+=Time.unscaledDeltaTime)
+                {
+                    if(Exiting)yield break;
+                    blackBackground.color=new Color(0,0,0,1-Mathf.SmoothStep(0,1,t/blackFadeDuration));
+                    yield return null;
+                }
+            }
+            if(!Exiting)blackBackground.gameObject.SetActive(false);
         }
         static CanvasGroup Ink(GameObject target)
         {
@@ -110,16 +110,16 @@ namespace PuzzleApple.V5
         public void OpenWorld(int groupId)
         {
             if(!Entered || Busy || ConfirmingExit) return;
-            if(room.Opened) { if(groupId>=0)feedback.Play(groupId,false); return; }
+            if(room.Opened) { if(groupId>=0){feedback.Play(groupId,false);sentenceRuntime.FinishCommand(groupId);} return; }
             worldGroup=groupId;worldRule="world.on";worldRoutine=StartCoroutine(Open(groupId));
         }
         IEnumerator Open(int groupId)
         {
             Busy=true; board.Panel.InputBlocked=true;
-            if(groupId>=0) {feedback.Play(groupId,true);yield return new WaitForSecondsRealtime(feedback.duration);}
+            if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
             board.Panel.SetOpen(false);
             if(portableClosure)portableClosure.Restore();
-            room.Open();
+            room.Open(player.transform);
             board.Panel.InputBlocked=false;
             while(room.Animating)yield return null;
             Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false;
@@ -144,7 +144,7 @@ namespace PuzzleApple.V5
             Busy=true; player.MovementLocked=true;
             board.CancelDrag(); board.Panel.InputBlocked=true;
             // Showing exit confirmation is a visible effect even when no fold is needed.
-            if(groupId>=0) {feedback.Play(groupId,true);yield return new WaitForSecondsRealtime(feedback.duration);}
+            if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
             wasPanelOpen=board.Panel.IsOpen; board.Panel.SetOpen(false);
             if(portableClosure&&!portableClosure.CanFold)
             {

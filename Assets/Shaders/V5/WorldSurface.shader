@@ -41,6 +41,10 @@ Shader "PuzzleApple/V5/World Surface"
         [HideInInspector] _Surface("Surface type",Float)=0
         [HideInInspector] _BumpScale("Normal scale",Float)=1
         [HideInInspector] _OcclusionStrength("Occlusion",Float)=1
+        [HideInInspector] _LiningShade("Passage lining shade",Range(0,1))=0
+        [HideInInspector] _RoomShellInward("Room interior face",Vector)=(0,0,0,0)
+        [HideInInspector] _PassageCover("Fading aperture cover",Float)=0
+        [HideInInspector] _PassageOpacity("Aperture opacity",Range(0,1))=1
         [HideInInspector] _InteriorNormal("Local inward face",Vector)=(0,1,0,0)
         [HideInInspector] _PanelSize("Panel size",Vector)=(6,.1,6,0)
         [HideInInspector] _InteriorEdgeMin("Visible inner edge minimum",Vector)=(-.5,-.5,-.5,0)
@@ -76,19 +80,35 @@ Shader "PuzzleApple/V5/World Surface"
             #define _ENVIRONMENTREFLECTIONS_OFF
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
-            float4 _InteriorNormal,_PanelSize,_InteriorTint,_InteriorEdgeMin,_InteriorEdgeMax;
+            float4 _RoomShellInward,_InteriorNormal,_PanelSize,_InteriorTint,_InteriorEdgeMin,_InteriorEdgeMax;
             float _ClosedWeight,_DarkLevel,_SeamCore,_CoreWidthPixels;
+            float _P5FloorGlow,_P5DoorGlow,_LiningShade;
             float _EdgeWidth;
             float _UseInkRoomBounds;
+            float _PassageCover,_PassageOpacity;
+            float4 _PassageOrigin,_PassageRight,_PassageUp,_PassageSize;
             float4 _InkRoomMin,_InkRoomMax;
             float4 _InkColor;
             #include "WorldSurfaceEffects.hlsl"
+            #include "BoxImmersionRipple.hlsl"
             void InteriorFragment(Varyings input,out half4 result:SV_Target)
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                if(_PassageCover>.5)
+                {
+                    float3 offset=input.positionWS-_PassageOrigin.xyz;
+                    float x=dot(offset,_PassageRight.xyz),y=dot(offset,_PassageUp.xyz);
+                    clip(min(_PassageSize.x*.5-abs(x),min(y,_PassageSize.y-y)));
+                }
                 float3 p=TransformWorldToObject(input.positionWS);
                 float3 normalOS=TransformWorldToObjectNormal(input.normalWS);
+                // Exterior and thickness faces occlude the interior just like the black corridor surround.
+                if(dot(_RoomShellInward.xyz,_RoomShellInward.xyz)>.5 && dot(normalOS,_RoomShellInward.xyz)<.5)
+                {
+                    result=half4(0,0,0,_PassageCover>.5?_PassageOpacity:1);
+                    return;
+                }
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(input.uv,surface);
                 bool roomFace=_SurfaceMode==1&&_IsDoorLeaf>0&&normalOS.z>.5;
@@ -115,6 +135,8 @@ Shader "PuzzleApple/V5/World Surface"
                 // on the dedicated lamp shaders rather than turning white walls into lamps.
                 float peak=max(result.r,max(result.g,result.b));
                 if(peak>.65)result.rgb*=(.65+.3*(1-exp(-(peak-.65)/.3)))/peak;
+                if(_LiningShade>0)result.rgb=(result.rgb+_P5FloorGlow)*_LiningShade;
+                if(_RoomShellInward.y>.9&&normalOS.y>.9)result.rgb+=_P5FloorGlow;
                 if(_SurfaceMode==2||roomFace)
                 {
                     float luminance=dot(result.rgb,float3(.2126,.7152,.0722));
@@ -129,6 +151,17 @@ Shader "PuzzleApple/V5/World Surface"
                     if(_SurfaceMode==2)result.rgb*=RoomSurfaceEffects(input.positionWS);
                 }
                 if(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5)result.rgb=1;
+                if(_RoundOutline>.5)
+                {
+                    float key=dot(normalize(normalOS),normalize(float3(-.55,.75,-.38)));
+                    // The handle has exactly two tones with a hard light/shadow boundary.
+                    result.rgb=step(0,key);
+                }
+                if(_SurfaceMode==1)
+                {
+                    if(_IsDoorLeaf>.5)result.rgb+=_P5DoorGlow;
+                    else if(normalOS.y>.9)result.rgb+=_P5FloorGlow;
+                }
                 float3 inward=TransformObjectToWorldNormal(_InteriorNormal.xyz);
                 float interior=step(.99,dot(normalize(input.normalWS),normalize(inward)));
                 // Cube object coordinates travel with each folding panel. Distances are metres,
@@ -157,7 +190,7 @@ Shader "PuzzleApple/V5/World Surface"
                 float ink=(_UseInkRoomBounds>.5?saturate(_EdgeWidth*.5+.5-abs(d)/inkPixel):
                     1-smoothstep(0,max(fwidth(d)*_EdgeWidth,.000001),d))*step(.001,_EdgeWidth);
                 if(!roomFace)result.rgb*=lerp(float3(1,1,1),_InkColor.rgb,ink);
-                if(!(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5))result.rgb=MixFog(result.rgb,lighting.fogCoord);
+                if(_RoundOutline<.5&&!(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5))result.rgb=MixFog(result.rgb,lighting.fogCoord);
                 float3 edges=min(p-_InteriorEdgeMin.xyz,_InteriorEdgeMax.xyz-p)*_PanelSize.xyz;
                 float3 axis=abs(_InteriorNormal.xyz);
                 float distance=axis.x>.5?min(edges.y,edges.z):(axis.y>.5?min(edges.x,edges.z):min(edges.x,edges.y));
@@ -171,7 +204,10 @@ Shader "PuzzleApple/V5/World Surface"
                 // Replace interior scene lighting while closed, rather than adding emission
                 // over its existing hard shadow boundaries. The exterior always stays Lit.
                 result.rgb=lerp(result.rgb,localLight,saturate(_ClosedWeight)*interior);
+                if(input.normalWS.y>.9 && abs(input.positionWS.y-_P5BoxWavePhase.y)<.18)
+                    result.rgb=BoxImmersionRipple(result.rgb,input.positionWS.xz);
                 result.a=_SurfaceMode==1?saturate(1-_Dissolve):1;
+                if(_PassageCover>.5)result.a*=_PassageOpacity;
             }
             ENDHLSL
         }

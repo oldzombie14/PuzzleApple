@@ -81,10 +81,6 @@ namespace PuzzleApple.V5.Editor
             var board=ui.GetComponentInChildren<CognitionBoard>(true);
             var panel=ui.GetComponentInChildren<GameplayPanel>(true);
             var serialized=new SerializedObject(panel);serialized.FindProperty("player").objectReferenceValue=controller;serialized.ApplyModifiedPropertiesWithoutUndo();
-            var library=ui.GetComponentInChildren<WordLibrary>(true);
-            library.vocabularyImages=new[]{new WordLibrary.VocabularyImage{wordId="positive",image=Load<Texture2D>("Textures","EntryMemory.png")},
-                new WordLibrary.VocabularyImage{wordId="negative",image=Load<Texture2D>("Textures","EntryMemory.png")},
-                new WordLibrary.VocabularyImage{wordId="world",image=Load<Texture2D>("Textures","WorldMemory.png")}};
             var effects=Node("Sentence feedback",null,Vector3.zero).AddComponent<SentenceFeedback>();effects.board=board;
             effects.sparklePrefab=Load<GameObject>("Prefabs","UI/SentenceSparkle.prefab").GetComponent<ParticleSystem>();
             effects.rippleSound=Load<AudioClip>("Audio","SFX/SentenceRipple_E5.wav");
@@ -131,6 +127,7 @@ namespace PuzzleApple.V5.Editor
             entry.confirmButton=Symbols("ON",fill.transform,new Vector2(-100,0),64,"Positive");
             entry.cancelButton=Symbols("OFF",fill.transform,new Vector2(100,0),64,"Negative");
             entry.dialog.SetActive(false);
+            entry.blackBackground.transform.SetAsLastSibling();
         }
     }
 }

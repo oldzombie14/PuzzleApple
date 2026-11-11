@@ -6,6 +6,8 @@ namespace PuzzleApple.V5.Outdoor
     public sealed class LightMotion : MonoBehaviour
     {
         public float speed = 1.2f;
+        Collider landingSurface;
+        public bool Launched {get;private set;}
         public bool Moving { get; private set; }
         Rigidbody body;
         Vector3 direction;
@@ -24,14 +26,32 @@ namespace PuzzleApple.V5.Outdoor
         {
             if (Moving == value) return;
             Moving = value;
+            if(Launched)return;
             if (value) { direction = Random.onUnitSphere; body.isKinematic = false; }
             else { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; body.isKinematic = true; }
         }
-        void FixedUpdate() { if (Moving) body.linearVelocity = direction * speed; }
+        public void Launch(Vector3 velocity,Collider ground)
+        {
+            landingSurface=ground;Launched=true;body.isKinematic=false;body.useGravity=true;body.linearVelocity=velocity;
+        }
+        void FixedUpdate() { if (Moving&&!Launched) body.linearVelocity = direction * speed; }
         void OnCollisionEnter(Collision collision) => Reflect(collision);
         void OnCollisionStay(Collision collision) => Reflect(collision);
         void Reflect(Collision collision)
         {
+            if(Launched)
+            {
+                if(collision.collider!=landingSurface)return;
+                for(int i=0;i<collision.contactCount;i++)
+                {
+                    if(collision.GetContact(i).normal.y<.65f)continue;
+                    Launched=false;body.useGravity=false;body.linearVelocity=Vector3.zero;
+                    body.isKinematic=!Moving;
+                    if(Moving)direction=Random.onUnitSphere;
+                    break;
+                }
+                return;
+            }
             if (!Moving) return;
             for (int i = 0; i < collision.contactCount; i++)
             {

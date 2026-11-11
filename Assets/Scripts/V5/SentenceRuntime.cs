@@ -14,21 +14,25 @@ namespace PuzzleApple.V5
         public SentencePresentation presentation;
         readonly Dictionary<int,string> previous=new Dictionary<int,string>();
         readonly Dictionary<int,string> conflicts=new Dictionary<int,string>();
+        readonly Dictionary<int,string> pendingTakeovers=new Dictionary<int,string>();
         readonly HashSet<CognitionSignal> applied=new HashSet<CognitionSignal>();
         int lightGroup=-1,doorGroup=-1,revision;
-        bool secondLight,outdoorLight;
+        bool outdoorLight;
+        IlluminationEffects illumination;
         public void EnterOutdoor()
         {
             // A retained room command does not re-fire merely because the player arrived.
             var light=entry.board.State.Groups.Where(g=>g.Effective).OrderBy(g=>g.Established)
                 .FirstOrDefault(g=>g.Signals.Contains(CognitionSignal.LightOn)||g.Signals.Contains(CognitionSignal.LightOff));
-            lightGroup=light==null?-1:light.Id;doorGroup=-1;outdoorLight=true;secondLight=false;
+            lightGroup=light==null?-1:light.Id;doorGroup=-1;outdoorLight=true;
+            illumination.Apply(this);
         }
         bool observationTransferred;
         public bool HasEffect(CognitionSignal effect)=>applied.Contains(effect);
         public void Initialize(WorldEntry owner)
         {
             entry=owner;
+            illumination=gameObject.AddComponent<IlluminationEffects>();
             if(!presentation)presentation=GetComponent<SentencePresentation>();
             if(!presentation)presentation=gameObject.AddComponent<SentencePresentation>();
             presentation.runtime=this;
@@ -43,7 +47,10 @@ namespace PuzzleApple.V5
             var groups=entry.board.State.Groups.Where(g=>g.Effective).OrderBy(g=>g.Established).ToArray();
             var added=groups.Where(g=>!previous.TryGetValue(g.Id,out var rule)||rule!=g.RuleId).ToArray();
             var newConflicts=entry.board.State.Groups.Where(g=>g.Conflicted&&(!conflicts.TryGetValue(g.Id,out var rule)||rule!=g.RuleId)).Select(g=>g.Id).ToArray();
-            previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
+            foreach(var g in added)
+                if(conflicts.TryGetValue(g.Id,out var oldRule)&&oldRule==g.RuleId)pendingTakeovers[g.Id]=g.RuleId;
+            foreach(var id in pendingTakeovers.Keys.ToArray())
+                if(!groups.Any(g=>g.Id==id&&g.RuleId==pendingTakeovers[id]))pendingTakeovers.Remove(id);
             conflicts.Clear();foreach(var g in entry.board.State.Groups.Where(g=>g.Conflicted))conflicts[g.Id]=g.RuleId;
             int version=++revision;
             presentation.Cancel();
@@ -53,6 +60,15 @@ namespace PuzzleApple.V5
             if(granted)observationTransferred=true;
             foreach(var id in newConflicts)StartCoroutine(ConflictPulse(id,version));
             // A world-close sequence owns the exit UI; it monitors its own sentence.
+            if(pendingTakeovers.Count>0&&!entry.ConfirmingExit)
+            {
+                // Stop the displaced effects at their current values while the new sentence is shown.
+                var retained=groups.Where(g=>!pendingTakeovers.ContainsKey(g.Id)&&!added.Contains(g)).ToArray();
+                Commit(retained,System.Array.Empty<CognitionState.Group>(),kind);
+                var announce=groups.Where(g=>pendingTakeovers.ContainsKey(g.Id)||added.Contains(g)).ToArray();
+                StartCoroutine(Present(groups,announce,kind,version));
+                return;
+            }
             if(kind==CognitionChange.Split||granted){Commit(groups,added,kind);return;}
             if(entry.ConfirmingExit)return;
             StartCoroutine(Present(groups,added,kind,version));
@@ -67,20 +83,23 @@ namespace PuzzleApple.V5
             // Board views are rebuilt after the state event, as in V4 IntroPresentation.
             yield return null;
             if(version!=revision)yield break;
+            while(pendingTakeovers.Count>0&&entry.Busy&&version==revision)yield return null;
+            if(version!=revision)yield break;
             CognitionState.Group shot=null;
             foreach(var g in added)
             {
-                bool changed=VisibleChange(g);
+                bool changed=pendingTakeovers.ContainsKey(g.Id)||VisibleChange(g);
                 if(g.RuleId!="world.on"&&g.RuleId!="world.off")entry.feedback.Play(g.Id,changed);
                 if(changed&&shot==null&&presentation.HasShot(g.RuleId))shot=g;
             }
             if(shot!=null&&!entry.Busy)
-                yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind);});
+                yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind,shot.Id);},IsSwitch(shot)?shot.Id:-1);
             else Commit(groups,added,kind);
         }
         bool VisibleChange(CognitionState.Group g)
         {
             if(g.Signals.All(s=>applied.Contains(s)))return false;
+            if(g.Signals.Any(s=>s==CognitionSignal.IlluminateWorld||s==CognitionSignal.IlluminateDoor||s==CognitionSignal.IlluminateFloor))return true;
             var j=entry.journey;
             if(entry.outdoor&&entry.outdoor.IsOutside)
             {
@@ -102,8 +121,8 @@ namespace PuzzleApple.V5
             }
             switch(g.RuleId)
             {
-                case "light.on":return (j&&j.InSecondRoom?j.Brightness:entry.chamberLight.Brightness)<.999f;
-                case "light.off":return (j&&j.InSecondRoom?j.Brightness:entry.chamberLight.Brightness)>.001f;
+                case "light.on":return entry.chamberLight.Brightness<.999f || (j&&j.Brightness<.999f);
+                case "light.off":return entry.chamberLight.Brightness>.001f || (j&&j.Brightness>.001f);
                 case "door.on":return j&&j.DoorProgress<.999f;
                 case "door.off":return j&&j.DoorProgress>.001f;
                 case "light.move":return j&&j.InSecondRoom?j.Lamps.Count>0:entry.chamberLight&&(!j||!j.BeyondChamber);
@@ -112,31 +131,81 @@ namespace PuzzleApple.V5
                 default:return false;
             }
         }
-        void Commit(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind)
+        static bool IsSwitch(CognitionState.Group group) =>
+            group.RuleId=="light.on" || group.RuleId=="light.off" || group.RuleId=="door.on" || group.RuleId=="door.off";
+
+        public void FinishCommand(int id,bool alreadyFaded=false)
         {
+            var group=entry.board.State.Find(id);
+            if(group!=null)StartCoroutine(Retire(group,group.Established,alreadyFaded));
+        }
+        IEnumerator Retire(CognitionState.Group group,long established,bool alreadyFaded)
+        {
+            var board=entry.board;
+            float elapsed=0,duration=Mathf.Max(.1f,entry.feedback.duration);
+            yield return null;
+            while(board.State.Find(group.Id)==group && group.Established==established && group.Effective)
+            {
+                elapsed+=Time.unscaledDeltaTime;
+                float opacity=alreadyFaded?0:1-Mathf.SmoothStep(0,1,elapsed/duration);
+                board.SetSentenceOpacity(group.Id,opacity);
+                if(opacity<=0 && !presentation.Playing && !entry.Busy && committedRevision==revision)
+                {
+                    // Let the commanded object finish its transition after its sentence leaves.
+                    if(lightGroup==group.Id)lightGroup=-1;
+                    if(doorGroup==group.Id)
+                    {
+                        doorGroup=-1;
+                        if(entry.outdoor&&entry.outdoor.IsOutside)entry.outdoor.World.doors.ReleaseStateCommand();
+                    }
+                    board.State.ReturnToLibrary(group.Id,0,true);
+                    yield break;
+                }
+                yield return null;
+            }
+        }
+        int committedRevision;
+        void Commit(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind,int fadedGroup=-1)
+        {
+            committedRevision=revision;
+            previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
+            foreach(var g in groups)pendingTakeovers.Remove(g.Id);
             applied.Clear();foreach(var g in groups)foreach(var signal in g.Signals)applied.Add(signal);
+            illumination.Apply(this);
             var light=groups.FirstOrDefault(g=>g.Signals.Contains(CognitionSignal.LightOn)||g.Signals.Contains(CognitionSignal.LightOff));
-            if(light==null)
+            bool changedLight=lightGroup!=(light==null?-1:light.Id)||light!=null&&added.Contains(light);
+            if(changedLight)
             {
-                if(lightGroup>=0){if(outdoorLight&&entry.outdoor.IsOutside)entry.outdoor.World.stateSource.HoldCurrentState();else if(secondLight)entry.journey.HoldLights();else entry.chamberLight.HoldCurrentState();}
-                lightGroup=-1;
+                if(lightGroup>=0)
+                {
+                    if(outdoorLight)entry.outdoor.World.stateSource.HoldCurrentState();
+                    else
+                    {
+                        entry.chamberLight.HoldCurrentState();
+                        if(entry.journey)entry.journey.HoldLights();
+                    }
+                }
+                lightGroup=light==null?-1:light.Id;
+                if(light!=null)
+                {
+                    outdoorLight=entry.outdoor&&entry.outdoor.IsOutside;
+                    bool on=light.Signals.Contains(CognitionSignal.LightOn);
+                    if(outdoorLight)entry.outdoor.World.stateSource.SetOn(on);
+                    else
+                    {
+                        entry.chamberLight.SetOn(on);
+                        if(entry.journey)entry.journey.SetLights(on);
+                    }
+                }
             }
-            else if(lightGroup!=light.Id||added.Contains(light))
-            {
-                // Keep existing local-space targeting: entering a new room does not
-                // silently replay a command that was applied in the previous room.
-                if(lightGroup>=0){if(outdoorLight&&entry.outdoor.IsOutside)entry.outdoor.World.stateSource.HoldCurrentState();else if(secondLight)entry.journey.HoldLights();else entry.chamberLight.HoldCurrentState();}
-                lightGroup=light.Id;outdoorLight=entry.outdoor&&entry.outdoor.IsOutside;secondLight=!outdoorLight&&entry.journey&&entry.journey.InSecondRoom;
-                bool on=light.Signals.Contains(CognitionSignal.LightOn);
-                if(outdoorLight)entry.outdoor.World.stateSource.SetOn(on);else if(secondLight)entry.journey.SetLights(on);else entry.chamberLight.SetOn(on);
-            }
-            if(entry.outdoor&&entry.outdoor.IsOutside)entry.outdoor.World.ApplyMotion(entry.board.State,kind==CognitionChange.Split);
+            if(entry.outdoor&&entry.outdoor.IsOutside)entry.outdoor.World.ApplyMotion(HasEffect,kind==CognitionChange.Split);
             var door=groups.FirstOrDefault(g=>g.Signals.Contains(CognitionSignal.DoorOn)||g.Signals.Contains(CognitionSignal.DoorOff));
             if(door==null){if(doorGroup>=0&&entry.journey&&(!entry.outdoor||!entry.outdoor.IsOutside))entry.journey.HoldDoor();doorGroup=-1;}
             else if(doorGroup!=door.Id||added.Contains(door)){doorGroup=door.Id;if(entry.journey&&(!entry.outdoor||!entry.outdoor.IsOutside))entry.journey.SetDoor(door.Signals.Contains(CognitionSignal.DoorOn));}
             foreach(var g in added)
             {
-                if(g.RuleId=="world.on")entry.OpenWorld(g.Id);
+                if(IsSwitch(g))FinishCommand(g.Id,g.Id==fadedGroup);
+                else if(g.RuleId=="world.on")entry.OpenWorld(g.Id);
                 else if(g.RuleId=="world.off")entry.CloseWorldFromSentence(g.Id);
             }
         }

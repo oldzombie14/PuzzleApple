@@ -19,6 +19,13 @@ namespace PuzzleApple.V5.Outdoor
         struct Surface { public Renderer renderer; public int index; public Color emission; public MaterialPropertyBlock original; }
         readonly List<Surface> surfaces = new List<Surface>();
         bool initialized;
+        float illuminated;
+        public void SetIlluminated(float value)
+        {
+            if(illuminated==value)return;
+            illuminated=value;
+            if(initialized)ApplyAppearance();
+        }
         void Awake()
         {
             door = GetComponent<ThresholdDoor>();
@@ -65,9 +72,9 @@ namespace PuzzleApple.V5.Outdoor
             foreach(var surface in surfaces)
             {
                 if(!surface.renderer) continue;
-                if (Brightness>=1) { surface.renderer.SetPropertyBlock(surface.original,surface.index); continue; }
+                if (Brightness>=1&&illuminated==0) { surface.renderer.SetPropertyBlock(surface.original,surface.index); continue; }
                 var block=new MaterialPropertyBlock(); surface.renderer.GetPropertyBlock(block,surface.index);
-                block.SetColor("_EmissionColor",surface.emission*intensity);
+                block.SetColor("_EmissionColor",surface.emission*intensity+Color.white*(2f*illuminated));
                 surface.renderer.SetPropertyBlock(block,surface.index);
             }
         }

@@ -28,7 +28,7 @@ namespace PuzzleApple.V5.Outdoor
                 motion.SetMoving(value);if(direction.sqrMagnitude>.001f)motion.RestoreDirection(direction);
             }
         }
-        public OpeningLight Spawn(Vector3 position)
+        public OpeningLight Spawn(Vector3 position,float transferredScale=0)
         {
             if(!stateSource||!stateSource.AppearanceMaterial)return null;
             if(!revealMaterial)
@@ -42,13 +42,13 @@ namespace PuzzleApple.V5.Outdoor
             var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name="Created light";go.SetActive(false);
             go.transform.SetParent(transform,false);go.transform.position=position;
             go.transform.rotation=Quaternion.FromToRotation(new Vector3(1,-1,1),Vector3.down);
-            go.transform.localScale=Vector3.one*Random.Range(scaleRange.x,scaleRange.y);
+            go.transform.localScale=Vector3.one*(transferredScale>0?transferredScale:Random.Range(scaleRange.x,scaleRange.y));
             var renderer=go.GetComponent<Renderer>();renderer.shadowCastingMode=ShadowCastingMode.Off;
             var lamp=go.AddComponent<OpeningLight>();lamp.surface=renderer;lamp.appearanceSource=stateSource;
             var glow=new GameObject("Local glow",typeof(Light));glow.transform.SetParent(go.transform,false);
             lamp.glow=glow.GetComponent<Light>();lamp.glow.type=LightType.Point;lamp.glow.range=2.5f;lamp.glow.intensity=.7f;lamp.glow.shadows=LightShadows.None;
             var motion=go.AddComponent<LightMotion>();motion.speed=moveSpeed;
-            lamp.BeginReveal(revealMaterial,Time.unscaledTime,revealDuration);
+            if(transferredScale<=0)lamp.BeginReveal(revealMaterial,Time.unscaledTime,revealDuration);
             go.SetActive(true);motion.SetMoving(moving);
             if(moving){var d=motion.Direction;d.y=Mathf.Max(.25f,Mathf.Abs(d.y));motion.RestoreDirection(d);}
             if(observer)Physics.IgnoreCollision(go.GetComponent<Collider>(),observer.GetComponentInParent<CharacterController>(),true);

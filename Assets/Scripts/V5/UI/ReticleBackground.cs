@@ -17,17 +17,16 @@ namespace PuzzleApple.V5
         RawImage pointerDot;
         Material pointerInk,solidPointerInk;
         GameplayPanel gameplayPanel;
+        WorldEntry entry;
         Vector2 lastPointerPosition;
         float lastPointerMotion;
         public Material Contrast { get; private set; }
         RenderTexture frame, previousTarget;
         GameObject output;
         RawImage image;
-        PassageJourney journey;
         public float WorldVisibility=>image?image.color.a:1;
         void OnEnable()
         {
-            journey=FindFirstObjectByType<PassageJourney>();
             previousTarget=worldCamera.targetTexture;
             Contrast=new Material(eye.material);
             eye.material=Contrast;
@@ -60,6 +59,7 @@ namespace PuzzleApple.V5
             solidPointerInk.SetFloat("_ScreenPointer",2);
             solidPointerInk.SetInt("_SrcBlend",(int)UnityEngine.Rendering.BlendMode.One);
             gameplayPanel=FindFirstObjectByType<GameplayPanel>();
+            entry=FindFirstObjectByType<WorldEntry>();
             pointerDot=new GameObject("Pointer dot",typeof(RectTransform),typeof(RawImage)).GetComponent<RawImage>();
             pointerDot.transform.SetParent(pointerCanvas.transform,false);
             pointerDot.material=pointerInk;pointerDot.raycastTarget=false;
@@ -73,6 +73,8 @@ namespace PuzzleApple.V5
             pointerDot.enabled=mouse!=null&&Application.isFocused&&Cursor.lockState!=CursorLockMode.Locked&&
                 new Rect(0,0,Screen.width,Screen.height).Contains(pos);
             if(!pointerDot.enabled){lastPointerPosition=pos;lastPointerMotion=float.NegativeInfinity;return;}
+            var curtain=entry?entry.blackBackground:null;
+            pointerDot.canvasRenderer.SetAlpha(curtain && curtain.isActiveAndEnabled ? 1-curtain.color.a : 1);
             if(pos!=lastPointerPosition)lastPointerMotion=Time.unscaledTime;
             lastPointerPosition=pos;
             bool moving=Time.unscaledTime-lastPointerMotion<.08f;
@@ -100,9 +102,6 @@ namespace PuzzleApple.V5
         {
             UpdatePointer();
             if(frame&&(frame.width!=Screen.width||frame.height!=Screen.height))Resize();
-            // Fade the whole rendered world (path, door, outlines and background) together.
-            // The haze and gameplay UI live on separate canvases and remain independent.
-            if(image)image.color=new Color(1,1,1,journey&&journey.enabled?journey.EntrySceneVisibility:1);
         }
         void OnDisable()
         {

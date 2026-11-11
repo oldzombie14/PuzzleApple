@@ -12,8 +12,23 @@ namespace PuzzleApple.V5
             [Min(0)] public float durationOverride;
         }
         public Panel[] panels;
+        public Transform floorPanel;
+        [Min(.1f)] public float floorFinishDuration = 3;
+        public float FloorFinishProgress { get; private set; }
+        const float sinkStart = .85f;
+        internal const float WallBackFoldDegrees=11f;
+        public float PanelCoverage
+        {
+            get
+            {
+                float t=Mathf.Clamp01(FloorFinishProgress/sinkStart);
+                // Start advancing on contact, then settle to zero speed at the feet.
+                return (1-t)*(1-t)*(1+.95f*t);
+            }
+        }
         public Collider[] movingColliders;
         [Min(.1f)] public float duration = 4;
+        [Min(.1f)] public float openingSpeed = 1.2f;
         [Min(0)] public float sinkDepth = .35f;
         public float closedOffset = -.08f;
         [Tooltip("Contain the full player capsule while closed, independently of panel collision seams.")]
@@ -27,7 +42,11 @@ namespace PuzzleApple.V5
         float target;
         Vector3 anchor;
         Bounds closedInterior;
-        void Awake() { anchor = transform.position - Vector3.up * closedOffset; Apply(); MeasureClosedInterior(); }
+        void Awake()
+        {
+            anchor = transform.position - Vector3.up * closedOffset;
+            Apply(); MeasureClosedInterior();
+        }
         void MeasureClosedInterior()
         {
             var min=new Vector3(-3,-closedOffset,-3);var max=new Vector3(3,6-closedOffset,3);
@@ -64,10 +83,18 @@ namespace PuzzleApple.V5
             for(int axis=0;axis<3;axis++)desired[axis]=Mathf.Clamp(desired[axis],min[axis],Mathf.Max(min[axis],max[axis]));
             return transform.TransformPoint(desired)-centre;
         }
-        public void Open() { target = 1; SetCollision(false); }
+        public Transform SinkFocus {get; private set;}
+        public Vector3 SinkCentre {get; private set;}
+        public void Open(Transform player=null)
+        {
+            SinkFocus=player;
+            target=1;
+            SetCollision(false);
+        }
         public void HoldCurrentPose(){target=Progress;SetCollision(Progress<=0);}
         public void CloseAt(Vector3 feet)
         {
+            if (Opened) { SinkFocus=null; SinkCentre=feet; }
             // Reposition only while hidden below the floor; never teleport the player.
             if (Progress >= 1) anchor = PortablePlacement?feet:new Vector3(Mathf.Clamp(feet.x,centreMin.x,centreMax.x),
                 feet.y,Mathf.Clamp(feet.z,centreMin.y,centreMax.y));
@@ -76,12 +103,14 @@ namespace PuzzleApple.V5
         void Update()
         {
             if (!Animating) return;
-            Progress = Mathf.MoveTowards(Progress, target, Time.deltaTime / TotalDuration());
+            float speed = target > Progress ? openingSpeed : 1f;
+            Progress = Mathf.MoveTowards(Progress, target, speed * Time.deltaTime / TotalDuration());
             if (!Animating) Progress = target;
             Apply();
             if (!Animating) SetCollision(Progress <= 0);
         }
-        float TotalDuration()
+        float TotalDuration() => HingeDuration() + (floorPanel ? floorFinishDuration : 0);
+        float HingeDuration()
         {
             float total = Mathf.Max(.1f, duration);
             foreach (var p in panels) total = Mathf.Max(total, p.durationOverride);
@@ -89,15 +118,33 @@ namespace PuzzleApple.V5
         }
         void Apply()
         {
-            float time = Progress * TotalDuration();
+            if (FloorFinishProgress==0) SinkCentre=SinkFocus?SinkFocus.position:transform.position;
+            float hingeDuration=HingeDuration();
+            float finishDuration=floorPanel?floorFinishDuration:0;
+            float time=Progress*(hingeDuration+finishDuration);
+            FloorFinishProgress=Mathf.InverseLerp(hingeDuration,hingeDuration+finishDuration,time);
+            float immersion=1-PanelCoverage;
             foreach (var p in panels)
             {
                 if (!p.hinge) continue;
-                float t = Mathf.SmoothStep(0, 1, time / Mathf.Max(.1f, p.durationOverride > 0 ? p.durationOverride : duration));
-                float eased = 1 - (1-t)*(1-t);
-                p.hinge.localRotation = Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(p.openEuler), eased);
+                // Wall hinges attach to the base; the lid hinge travels with its supporting wall.
+                bool wall=p.hinge.parent==transform;
+                float span=Mathf.Max(.1f,p.durationOverride>0?p.durationOverride:duration);
+                float t=Mathf.InverseLerp(wall?.16f*span:0,wall?span:.72f*span,time);
+                float eased;
+                if(wall) eased=t*t*(2.4f-1.4f*t);
+                else
+                {
+                    float remaining=1-Mathf.SmoothStep(0,1,t);
+                    eased=1-remaining*remaining;
+                }
+                // The lid follows its supporting wall so their world-space tilt agrees.
+                float backFold=wall?immersion*WallBackFoldDegrees:0;
+                p.hinge.localRotation = Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(p.openEuler), eased)
+                    * Quaternion.AngleAxis(backFold,p.openEuler.normalized);
             }
-            transform.position = anchor + Vector3.up * (closedOffset - sinkDepth * Mathf.SmoothStep(0, 1, Progress));
+            float drop=floorPanel?Mathf.InverseLerp(sinkStart,1,FloorFinishProgress):Progress;
+            transform.position=anchor+Vector3.up*(closedOffset-sinkDepth*Mathf.SmoothStep(0,1,drop));
         }
         void SetCollision(bool value) { foreach (var c in movingColliders) if(c) c.enabled = value; }
     }

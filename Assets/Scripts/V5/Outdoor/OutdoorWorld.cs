@@ -27,6 +27,21 @@ namespace PuzzleApple.V5.Outdoor
         public SessionAudio Audio {get;private set;}
         public bool Active {get;private set;}
         bool ownsMaterials;
+        Material groundMaterial, luminousGround;
+        public void SetFloorIlluminated(float value)
+        {
+            if(value==0&&!luminousGround)return;
+            var surface=ground.GetComponent<Renderer>();
+            if(!luminousGround)
+            {
+                groundMaterial=surface.sharedMaterial;
+                luminousGround=new Material(groundMaterial);
+                luminousGround.EnableKeyword("_EMISSION");
+
+            }
+            luminousGround.SetColor("_EmissionColor",Color.white*(.85f*value));
+            surface.sharedMaterial=value>0?luminousGround:groundMaterial;
+        }
         public void PrepareResources()
         {
             if(ownsMaterials)return;
@@ -47,14 +62,16 @@ namespace PuzzleApple.V5.Outdoor
             Audio=gameObject.AddComponent<SessionAudio>();Audio.Play(music);
             // Keep one board, its acquisition IDs, notes and sentences across the passage.
             foreach(var id in new[]{"light","floor"})if(!entry.board.State.Knows(id))entry.board.State.TryAcquireWord("outdoor.previous."+id,entry.board.Catalog.Word(id));
-            ApplyMotion(entry.board.State,false);
+            ApplyMotion(entry.board.State.HasEffect,false);
         }
-        public void ApplyMotion(CognitionState state,bool split)
+        public void ApplyMotion(System.Func<CognitionSignal,bool> hasEffect,bool split)
         {
-            lights.Apply(state);doors.Apply(state,split);world.Apply(state);
+            lights.Apply(hasEffect);doors.Apply(hasEffect,split);world.Apply(hasEffect);
         }
-        public string LookedAtWord(Ray ray)
+        public string LookedAtWord(Ray ray)=>LookedAtWord(ray,out _);
+        public string LookedAtWord(Ray ray,out Renderer emitter)
         {
+            emitter=null;
             if(!Active)return null;
             var camera=Entry.player.view.GetComponent<Camera>();
             var hits=Physics.RaycastAll(ray,camera.farClipPlane,~0,QueryTriggerInteraction.Ignore);
@@ -63,7 +80,7 @@ namespace PuzzleApple.V5.Outdoor
             {
                 if(hit.collider==ground&&hit.distance<=7)return "floor";
                 var lamp=hit.collider.GetComponentInParent<OpeningLight>();
-                if(lamp&&lamp!=stateSource&&lamp.TargetOn&&lamp.Brightness>=.999f&&lamp.RevealAmount>=.99f&&hit.distance<=7)return "light";
+                if(lamp&&lamp!=stateSource&&lamp.TargetOn&&lamp.Brightness>=.999f&&lamp.RevealAmount>=.99f&&hit.distance<=7){emitter=lamp.surface;return "light";}
                 if(hit.collider.GetComponentInParent<ThresholdDoor>()==door&&hit.distance<=door.collectionDistance)return "door";
                 return null;
             }
@@ -108,6 +125,7 @@ namespace PuzzleApple.V5.Outdoor
         }
         void OnDestroy()
         {
+            if(luminousGround)Destroy(luminousGround);
             if(ownsMaterials&&clouds&&clouds.cloudPlane)Destroy(clouds.cloudPlane.sharedMaterial);
             if(ownsMaterials&&environment&&environment.daySky)Destroy(environment.daySky);
         }

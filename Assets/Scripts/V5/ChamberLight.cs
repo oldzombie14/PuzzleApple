@@ -97,11 +97,13 @@ namespace PuzzleApple.V5
         {
             return LookedAtWord()=="light";
         }
-        string LookedAtWord()
+        string LookedAtWord()=>LookedAtWord(out _);
+        string LookedAtWord(out Renderer emitter)
         {
+            emitter=null;
             if(!entry.Entered||entry.Busy||entry.ConfirmingExit||Collecting||!entry.room.Opened||!entry.player.CanInteractWithWorld)return null;
             var view=entry.player.view;
-            if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.LookedAtWord(new Ray(view.position,view.forward));
+            if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.LookedAtWord(new Ray(view.position,view.forward),out emitter);
             int count=Physics.RaycastNonAlloc(view.position,view.forward,collectionHits,collectionDistance,~0,QueryTriggerInteraction.Ignore);
             var hits=count==collectionHits.Length?Physics.RaycastAll(view.position,view.forward,collectionDistance,~0,QueryTriggerInteraction.Ignore):collectionHits;
             if(hits!=collectionHits)count=hits.Length;
@@ -110,8 +112,9 @@ namespace PuzzleApple.V5
                 if(!hits[i].collider.transform.IsChildOf(entry.player.transform)&&hits[i].distance<closest)
                 {hit=hits[i];closest=hits[i].distance;}
             if(!hit.collider)return null;
-            if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null)return word;}
-            return (!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this?"light":null;
+            if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null){if(word=="light")emitter=hit.collider.GetComponent<Renderer>();return word;}}
+            if((!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
+            return null;
         }
         void Update()
         {
@@ -155,16 +158,46 @@ namespace PuzzleApple.V5
         }
         public bool TryCollect()
         {
-            string word=LookedAtWord();if(word==null)return false;
+            string word=LookedAtWord(out var emitter);if(word==null)return false;
             if(knownFeedback!=null){StopCoroutine(knownFeedback);knownFeedback=null;knownSymbol.gameObject.SetActive(false);}
             if(entry.board.State.Knows(word)){ShowKnownVocabulary(word);return true;}
             if(word=="light")
             {
                 var library=entry.board.GetComponentInChildren<WordLibrary>(true);
                 if(!library)library=FindFirstObjectByType<WordLibrary>();
-                if(library)library.Remember(word,entry.player.view.GetComponent<Camera>().targetTexture);
+                if(library)CaptureLight(library,emitter);
             }
             StartCoroutine(Collect(word));return true;
+        }
+        void CaptureLight(WordLibrary library,Renderer emitter)
+        {
+            var camera=entry.player.view.GetComponent<Camera>();
+            var original=camera.targetTexture;
+            if(!emitter||!original){library.Remember("light",original);return;}
+            var saved=new MaterialPropertyBlock();
+            var print=new MaterialPropertyBlock();
+            emitter.GetPropertyBlock(saved);
+            emitter.GetPropertyBlock(print);
+            const float capturePeak=1.15f;
+            var emission=print.HasColor("_EmissionColor")?print.GetColor("_EmissionColor"):emitter.sharedMaterial.GetColor("_EmissionColor");
+            float peak=emission.maxColorComponent;
+            print.SetColor("_EmissionColor",emission*(capturePeak/Mathf.Max(capturePeak,peak)));
+            var frame=RenderTexture.GetTemporary(original.descriptor);
+            var active=RenderTexture.active;
+            try
+            {
+                emitter.SetPropertyBlock(print);
+                camera.targetTexture=frame;
+                camera.Render();
+                library.Remember("light",frame);
+            }
+            finally
+            {
+                camera.targetTexture=original;
+                emitter.SetPropertyBlock(saved.isEmpty?null:saved);
+                RenderTexture.active=active;
+                RenderTexture.ReleaseTemporary(frame);
+            }
         }
         public void ShowKnownVocabulary(string id)
         {
@@ -211,6 +244,7 @@ namespace PuzzleApple.V5
             Cognition.CognitionState.Group acquired=null;
             if(lesson)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
             else entry.board.State.TryAcquireWord("collect."+id,word);
+            if(acquired!=null)entry.board.PlaceAcquiredSentence(acquired.Id);
             p.MovementLocked=locked;entry.board.Panel.InputBlocked=false;Collecting=false;
             if(acquired!=null)
             {

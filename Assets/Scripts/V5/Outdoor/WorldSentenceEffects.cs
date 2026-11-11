@@ -17,11 +17,11 @@ namespace PuzzleApple.V5.Outdoor
         CognitionSignal motion;
         float nextCheck, targetHeight;
         readonly RaycastHit[] hits=new RaycastHit[64];
-        public void Apply(CognitionState state)
+        public void Apply(System.Func<CognitionSignal,bool> hasEffect)
         {
-            motion=state.HasEffect(CognitionSignal.WorldLightMove)?CognitionSignal.WorldLightMove:
-                state.HasEffect(CognitionSignal.WorldDoorMove)?CognitionSignal.WorldDoorMove:CognitionSignal.Empty;
-            if(environment) environment.WorldMoving=state.HasEffect(CognitionSignal.WorldMove);
+            motion=hasEffect(CognitionSignal.WorldLightMove)?CognitionSignal.WorldLightMove:
+                hasEffect(CognitionSignal.WorldDoorMove)?CognitionSignal.WorldDoorMove:CognitionSignal.Empty;
+            if(environment) environment.WorldMoving=hasEffect(CognitionSignal.WorldMove);
             nextCheck=0; Waiting=false;
         }
         public bool CanRise(CognitionSignal requested)

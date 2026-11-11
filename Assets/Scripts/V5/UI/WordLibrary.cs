@@ -15,14 +15,16 @@ namespace PuzzleApple.V5
         [UnityEngine.Serialization.FormerlySerializedAs("memoryPresets")]
         public VocabularyImage[] vocabularyImages=new VocabularyImage[0];
         public SnapshotSequence moveMemory;
+        Material memoryPrint;
         float playbackStart;
+        Vector2? dismissPress;
         [Header("Prefab references — edit appearance on the UI components")]
         [SerializeField] ScrollRect scroll;
-        [SerializeField] RectTransform column,details;
+        [SerializeField] RectTransform column,details,sidebarDivider;
         [SerializeField] Image entryPrefab;
         [SerializeField] RawImage snapshot;
         [SerializeField] AspectRatioFitter snapshotAspect;
-        [SerializeField] SnapshotPlaceholder emptySnapshot;
+        [SerializeField] GameObject snapshotFrame, gapBeforeSnapshot, gapBeforeNote;
         [SerializeField] InputField note;
         [SerializeField] Button saveNote,closeMemory;
         [SerializeField] RectTransform tooltip;
@@ -35,7 +37,7 @@ namespace PuzzleApple.V5
         public string Selected => selected;
         public InputField NoteField => note;
         public string SavedNote(string id) => savedNotes.TryGetValue(id,out var value)?value:"";
-        readonly Dictionary<string,string> savedNotes=new Dictionary<string,string>();
+        readonly Dictionary<string,string> savedNotes=new Dictionary<string,string> { ["world"]="game" };
         string selected;
         int draggedGroup=-1;
         readonly Dictionary<string,string> drafts=new Dictionary<string,string>();
@@ -45,6 +47,7 @@ namespace PuzzleApple.V5
         readonly List<RaycastResult> hoverHits=new List<RaycastResult>();
         void Start()
         {
+            memoryPrint=snapshot.material;
             note.lineType=InputField.LineType.SingleLine;
             note.caretBlinkRate=.85f;
             note.caretWidth=2;
@@ -63,13 +66,21 @@ namespace PuzzleApple.V5
         public void Show(bool value)
         {
             tooltip.gameObject.SetActive(false);
+            dismissPress=null;
             IsOpen=value;details.gameObject.SetActive(value);
             board.Surface.gameObject.SetActive(!value);
             if(value)
             {
                 note.Select();
                 note.ActivateInputField();
+                if(selected=="world")StartCoroutine(PlaceWorldCaret());
             }
+        }
+        System.Collections.IEnumerator PlaceWorldCaret()
+        {
+            // InputField selects all text when it processes activation in LateUpdate.
+            yield return null;
+            if(IsOpen&&selected=="world"&&note.isFocused)note.MoveTextEnd(false);
         }
         void Refresh(CognitionChange change)
         {
@@ -104,7 +115,7 @@ namespace PuzzleApple.V5
             if(HasPhoto(id))foreach(var preset in vocabularyImages)if(preset.wordId==id){photo=preset.image;break;}
             photos[id]=photo;if(selected==id)UpdatePhoto();
         }
-        static bool HasPhoto(string id)=>id!="move";
+        static bool HasPhoto(string id)=>id!="move"&&id!="positive"&&id!="negative";
         public void Remember(string id,RenderTexture frame)
         {
             if(photos.ContainsKey(id))return;
@@ -135,7 +146,7 @@ namespace PuzzleApple.V5
         }
         void UpdatePhoto()
         {
-            snapshotAspect.aspectMode=selected=="positive"||selected=="negative"||selected=="world"||selected=="mirror"
+            snapshotAspect.aspectMode=selected=="world"||selected=="mirror"
                 ?AspectRatioFitter.AspectMode.FitInParent:AspectRatioFitter.AspectMode.EnvelopeParent;
             snapshot.uvRect=new Rect(0,0,1,1);
             snapshot.texture=photos.TryGetValue(selected,out var photo)?photo:null;
@@ -144,8 +155,26 @@ namespace PuzzleApple.V5
                 snapshot.texture=moveMemory.atlas;
                 snapshot.uvRect=moveMemory.Frame(Time.unscaledTime-playbackStart);
             }
+            snapshot.material=selected=="light"?null:memoryPrint;
             snapshot.enabled=snapshot.texture;
-            if(emptySnapshot)emptySnapshot.gameObject.SetActive(!snapshot.texture);
+            if(snapshotFrame.activeSelf!=snapshot.enabled)
+            {
+                // The save row and its gap occupy 58 units below the note; the close row occupies 40 above.
+                var stack=(RectTransform)snapshotFrame.transform.parent;
+                stack.anchoredPosition=new Vector2(stack.anchoredPosition.x,snapshot.enabled?0f:-9f);
+                snapshotFrame.SetActive(snapshot.enabled);
+            }
+            gapBeforeSnapshot.SetActive(snapshot.enabled);
+            gapBeforeNote.SetActive(snapshot.enabled);
+            float exposure=selected=="door"?.76f:1f;
+            float opacity=1f;
+            if(selected=="move"&&moveMemory&&moveMemory.framesPerSecond>0)
+            {
+                float duration=moveMemory.frames/moveMemory.framesPerSecond;
+                float time=Mathf.Repeat(Time.unscaledTime-playbackStart,duration);
+                opacity=Mathf.SmoothStep(0f,1f,Mathf.Min(time,duration-time)/.16f);
+            }
+            snapshot.color=new Color(exposure,exposure,exposure,opacity);
             if(snapshot.texture)snapshotAspect.aspectRatio=selected=="move"&&moveMemory?moveMemory.aspect:(float)snapshot.texture.width/snapshot.texture.height;
         }
         void UpdateSaveButton(){saveNote.interactable=selected!=null&&note.text.Trim()!=SavedNote(selected);}
@@ -156,7 +185,57 @@ namespace PuzzleApple.V5
             if(value.Length==0)savedNotes.Remove(selected);else savedNotes[selected]=value;
             drafts.Remove(selected);note.SetTextWithoutNotify(value);UpdateSaveButton();
         }
-        void LateUpdate(){UpdateTooltip();if(IsOpen&&selected=="move")UpdatePhoto();}
+        void LateUpdate()
+        {
+            UpdateTooltip();
+            if(!IsOpen)return;
+            CheckPanelClick();
+            if(IsOpen&&selected=="move")UpdatePhoto();
+        }
+
+        void CheckPanelClick()
+        {
+            var mouse=Mouse.current;
+            if(board.Panel.InputBlocked||mouse==null||!EventSystem.current)
+            {
+                dismissPress=null;
+                return;
+            }
+            var position=mouse.position.ReadValue();
+            if(mouse.leftButton.wasPressedThisFrame)
+                dismissPress=IsDismissArea(position)?position:(Vector2?)null;
+            if(!dismissPress.HasValue)return;
+            float threshold=EventSystem.current.pixelDragThreshold;
+            if((position-dismissPress.Value).sqrMagnitude>threshold*threshold)
+                dismissPress=null;
+            if(mouse.leftButton.wasReleasedThisFrame)
+            {
+                if(dismissPress.HasValue&&IsDismissArea(position))CloseMemory();
+                dismissPress=null;
+            }
+        }
+
+        bool IsDismissArea(Vector2 screen)
+        {
+            var panel=(RectTransform)board.Panel.ContentRoot.parent;
+            if(!RectTransformUtility.RectangleContainsScreenPoint(panel,screen))return false;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(sidebarDivider,screen,null,out var side);
+            if(side.x<=sidebarDivider.rect.xMax)return false;
+
+            // Protect the continuous photo-to-note rectangle, including its gutter and a small outer margin.
+            var field=(RectTransform)note.transform;
+            var bounds=field.rect;
+            if(snapshotFrame.activeSelf)
+            {
+                var frame=(RectTransform)snapshotFrame.transform;
+                bounds.max=Vector2.Max(bounds.max,field.InverseTransformPoint(frame.TransformPoint(frame.rect.max)));
+                bounds.min=Vector2.Min(bounds.min,field.InverseTransformPoint(frame.TransformPoint(frame.rect.min)));
+            }
+            bounds.min-=Vector2.one*10;
+            bounds.max+=Vector2.one*10;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(field,screen,null,out var local);
+            return !bounds.Contains(local);
+        }
         void UpdateTooltip()
         {
             tooltip.gameObject.SetActive(false);
@@ -177,12 +256,19 @@ namespace PuzzleApple.V5
             tooltipTextLayout.preferredWidth=tooltipText.preferredWidth>limit?limit:-1;
             tooltip.gameObject.SetActive(true);LayoutRebuilder.ForceRebuildLayoutImmediate(tooltip);
             float width=tooltip.rect.width,height=tooltip.rect.height;
-            var symbol=target.GetComponentInChildren<CenteredSymbolImage>();
-            var glyph=symbol?symbol.rectTransform:(RectTransform)target.transform;
-            var ink=symbol?SymbolUI.InkRect(symbol):glyph.rect;
-            var p=root.InverseTransformPoint(glyph.TransformPoint(new Vector3(ink.center.x,ink.yMax,0)));
-            float x=Mathf.Clamp(p.x-width*.5f+tooltipOffset.x,root.rect.xMin+8,root.rect.xMax-width-8);
-            float y=Mathf.Clamp(p.y+tooltipOffset.y+height,root.rect.yMin+height+8,root.rect.yMax-8);
+            var anchor=(RectTransform)target.transform;
+            var bounds=anchor.rect;
+            float gap=tooltipOffset.y;
+            bool isTile=target.TryGetComponent<LibraryDrag>(out _);
+            if(isTile)gap=-6f;
+            else if(target.TryGetComponent<CenteredSymbolImage>(out var symbol))
+                bounds=SymbolUI.InkRect(symbol);
+            var top=root.InverseTransformPoint(anchor.TransformPoint(new Vector3(bounds.center.x,bounds.yMax)));
+            float x=Mathf.Clamp(top.x-width*.5f+tooltipOffset.x,root.rect.xMin+8,root.rect.xMax-width-8);
+            float y=top.y+gap+height;
+            if(isTile&&y>root.rect.yMax-8)
+                y=root.InverseTransformPoint(anchor.TransformPoint(new Vector3(bounds.center.x,bounds.yMin))).y-gap;
+            y=Mathf.Clamp(y,root.rect.yMin+height+8,root.rect.yMax-8);
             tooltip.localPosition=new Vector3(x,y,0);tooltip.SetAsLastSibling();
         }
         public void BeginLibraryDrag(WordDefinition word,Vector2 screen)

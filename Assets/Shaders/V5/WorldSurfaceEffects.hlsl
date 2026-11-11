@@ -22,8 +22,12 @@ float RoomPerimeterDistance(float3 positionWS)
     float3 local=mul(_WorldToFloor,float4(positionWS,1)).xyz;
     float3 edge=float3(_RoomBounds.x-abs(local.x),min(local.y,_RoomBounds.y-local.y),
         min(local.z-_RoomBounds.z,_RoomBounds.z+_RoomBounds.w-local.z));
-    if(_Plane<.5&&local.y<.5&&abs(local.x)<_RoomOpeningWidth*.5)
-        edge.z=_RoomBounds.z+_RoomBounds.w-local.z;
+    if(_Plane<.5&&local.y<.5)
+    {
+        // Distance to the two front-wall segments, including their doorway endpoints.
+        float front=length(float2(max(0,_RoomOpeningWidth*.5-abs(local.x)),local.z-_RoomBounds.z));
+        edge.z=min(front,_RoomBounds.z+_RoomBounds.w-local.z);
+    }
     return _Plane<.5?min(edge.x,edge.z):(_Plane<1.5?min(edge.x,edge.y):min(edge.z,edge.y));
 }
 float HintDepth(float slot,float2 uv)
@@ -44,17 +48,21 @@ float3 RoomSurfaceEffects(float3 positionWS)
         float age=_Time.y-_Impacts[n].w;
         if(age<0||age>_RippleDuration)continue;
         float distance=length(local-_Impacts[n].xyz);
+        float pixelWidth=max(.0001,fwidth(distance));
+        float fade=1-smoothstep(.35*_RippleDuration,_RippleDuration,age);
         for(int ring=0;ring<4;ring++)
         {
             if(ring>=_RingCount)break;
             float radius=age*_RippleSpeed-ring*_RingSpacing;
             if(radius<0)continue;
-            float edge=abs(distance-radius);
             float taper=smoothstep(_RippleTaper.x,_RippleTaper.x+max(.01,_RippleTaper.y),radius);
-            float width=_RingWidth*lerp(1,_RippleTaper.z,taper);
-            float aa=max(.0001,fwidth(distance));
-            float band=(1-smoothstep(width*.5,width+aa,edge))*saturate(width/aa);
-            ink=max(ink,band*(1-smoothstep(.35*_RippleDuration,_RippleDuration,age)));
+            float width=_RingWidth*lerp(1,_RippleTaper.z,taper)/(1+.15*ring);
+            // Fraction of the radial pixel footprint covered by this stroke.
+            float offset=distance-radius;
+            float outer=saturate(.5+(.5*width-offset)/pixelWidth);
+            float inner=saturate(.5+(-.5*width-offset)/pixelWidth);
+            float onset=smoothstep(0,.07,radius);
+            ink=max(ink,(outer-inner)*onset*fade/(1+.35*ring));
         }
     }
     float carving=1;

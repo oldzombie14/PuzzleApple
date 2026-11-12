@@ -22,6 +22,7 @@ Shader "PuzzleApple/V5/Folding Panel"
         // Shared by the entire net: feet (XZ), farthest corner, remaining radius.
         float4 _PanelSink;
         float _PanelGroundY;
+        float _PreserveMeshDepth;
         float4 _InteriorNormal;
         float4 _InteriorFaceCentre;
         float4 VisibleFace(float4 cs,float3 normalOS)
@@ -47,6 +48,7 @@ Shader "PuzzleApple/V5/Folding Panel"
         // Preserve its projected silhouette and its occlusion by objects above ground.
         float4 GroundDepth(float4 cs,float3 ws)
         {
+            if(_PreserveMeshDepth>.5)return cs;
             float below=_PanelGroundY+.075-ws.y;
             if(below>0)
             {

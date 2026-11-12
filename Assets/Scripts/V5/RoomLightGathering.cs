@@ -17,7 +17,7 @@ namespace PuzzleApple.V5
         bool InRange(DriftingLight lamp)=>lamp&&(lamp.transform.position-journey.entry.player.transform.position).sqrMagnitude<=influenceRadius*influenceRadius;
         public bool Step(DriftingLight lamp,Rigidbody body,Collider[] colliders)
         {
-            if(!journey||!journey.entry.sentenceRuntime)return false;
+            if(!journey||journey.Brightness<=0||!journey.entry.sentenceRuntime)return false;
             var motion=Motion;
             if(motion!=previous){neighbours.Clear();previous=motion;}
             if(motion==CognitionSignal.Empty)return false;

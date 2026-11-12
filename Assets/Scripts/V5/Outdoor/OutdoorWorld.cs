@@ -18,7 +18,7 @@ namespace PuzzleApple.V5.Outdoor
         public DoorSentenceEffects doors;
         public WorldSentenceEffects world;
         public MusicTrack music;
-        public Transform exit;
+        public Transform exit, chapterFrame;
         [Min(1)] public float airSpawnDistance=8;
         [Min(0)] public float spawnSearchRadius=2,minimumLampSpacing=1.2f;
         [Range(1,64)] public int spawnAttempts=32;
@@ -79,6 +79,7 @@ namespace PuzzleApple.V5.Outdoor
             if(hit.collider)
             {
                 if(hit.collider==ground&&hit.distance<=7)return "floor";
+                if(chapterFrame&&hit.collider.transform.IsChildOf(chapterFrame)&&hit.distance<=7)return "door";
                 var lamp=hit.collider.GetComponentInParent<OpeningLight>();
                 if(lamp&&lamp!=stateSource&&lamp.TargetOn&&lamp.Brightness>=.999f&&lamp.RevealAmount>=.99f&&hit.distance<=7){emitter=lamp.surface;return "light";}
                 if(hit.collider.GetComponentInParent<ThresholdDoor>()==door&&hit.distance<=door.collectionDistance)return "door";

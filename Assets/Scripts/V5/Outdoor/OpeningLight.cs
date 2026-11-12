@@ -85,7 +85,7 @@ namespace PuzzleApple.V5.Outdoor
             {
                 if(revealing)
                 {
-                    RevealAmount=Mathf.SmoothStep(0,1,Mathf.Clamp01((Time.unscaledTime-revealStart)/revealDuration));
+                    RevealAmount=Mathf.SmoothStep(0,1,Mathf.Clamp01((Time.time-revealStart)/revealDuration));
                     ApplyReveal();
                     if(RevealAmount>=1)
                     {

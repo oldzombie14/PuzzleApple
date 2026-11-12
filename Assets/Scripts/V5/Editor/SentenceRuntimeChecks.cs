@@ -29,6 +29,14 @@ namespace PuzzleApple.V5.Editor
                 presentation.enabledShots=false;
                 e.EnterWorld();yield return Until(()=>e.Entered);e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
                 var state=e.board.State;var j=e.journey;
+                Check(e.chamberLight.Brightness==1&&j.Brightness==0,"opening has a lit floor lamp and dark remote room");
+                presentation.enabledShots=true;
+                int openingShots=presentation.PlayCount;
+                state.TryAcquireSentence("check.opening.on","positive light");
+                yield return Until(()=>!state.Groups.Any(g=>g.RuleId=="light.on"));
+                Check(presentation.PlayCount==openingShots,"ON at the already lit floor lamp must not start a shot");
+                yield return Until(()=>j.Brightness==1);
+                presentation.enabledShots=false;
                 state.TryAcquireSentence("check.off","negative light");
                 yield return new WaitForSeconds(.2f);
                 float brightness=e.chamberLight.Brightness;
@@ -65,7 +73,7 @@ namespace PuzzleApple.V5.Editor
                 Check(Mathf.Abs(j.Door.position.y-doorPosition.y)<.001f,"swing stays level");
                 state.Join(token.Id,doorOn.Id,false);yield return Until(()=>j.DoorProgress>=1);
                 Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled,"open leaf remains solid and visible");
-                Check(Mathf.Abs(Vector3.Dot(j.Door.forward,j.Root.forward))<.001f,"fully open leaf is perpendicular to doorway");
+                Check(Mathf.Abs(Vector3.Angle(j.Root.forward,j.Door.forward)-j.openAngle)<.05f,"fully open leaf reaches its configured swing angle");
                 yield return Until(()=>state.Find(doorOn.Id)==null);
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength)),j.Root.rotation);
                 state.TryAcquireSentence("check.door.off","negative door");
@@ -74,7 +82,7 @@ namespace PuzzleApple.V5.Editor
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength+4)),j.Root.rotation);yield return Until(()=>j.DoorProgress<=0);
                 Check(j.DoorProgress==0,"off door closes after doorway clears");
                 Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled&&j.Door.position==doorPosition,"off restores stationary white leaf and collision");
-                Check(!j.Root.GetComponentsInChildren<Renderer>().Any(r=>r.name.Contains("door")&&r.name.Contains("filaments")&&r.enabled),"closed room side hides all doorway outlines");
+                Check(!j.Root.GetComponentsInChildren<Renderer>().Any(r=>r.name.Contains("door")&&r.name.Contains("filaments")&&r.transform.localPosition.z>j.pathLength&&r.enabled),"closed door conceals the room-side outline");
                 Check(j.WordAt(j.Door.GetComponent<Collider>(),1)==null,"closed rear door does not reveal itself through collection hint");
                 state.ClearWorkspace();j.SetLights(true);yield return Until(()=>j.Brightness>=1);
                 yield return null;j.Door.GetComponent<Renderer>().GetPropertyBlock(surface);
@@ -199,7 +207,7 @@ namespace PuzzleApple.V5.Editor
                 {
                     // Include follow as well as static focus, normal completion and interruption.
                     e.board.Panel.SetOpen(true);
-                    string rule=pass==0?"light.floor.move":"light.on";
+                    string rule=pass==0?"light.move.floor":"light.on";
                     var position=p.transform.position;var camera=p.view.position;
                     var roll=p.view.eulerAngles.z;bool applied=false;
                     e.StartCoroutine(presentation.Play(rule,()=>applied=true));

@@ -7,6 +7,7 @@ namespace PuzzleApple.V5
     public sealed class SnapshotSequence : ScriptableObject
     {
         public Texture2D atlas;
+        public Texture2D unlitAtlas;
         public int columns=8, rows=8, frames=64;
         public float framesPerSecond=12, aspect=16f/9;
         public Rect Frame(float seconds)

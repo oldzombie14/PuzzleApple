@@ -67,6 +67,12 @@ namespace PuzzleApple.V5.Outdoor
             }
         }
 
+        public void ResumeTrack()
+        {
+            foreach(var voice in voices)
+                if(voice.track&&voice.track==current&&!voice.source.isPlaying)voice.source.Play();
+        }
+
         public void Play(MusicTrack track)
         {
             if (track && !track.clip) track = null;

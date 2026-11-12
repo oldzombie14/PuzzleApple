@@ -110,18 +110,20 @@ namespace PuzzleApple.V5
         public void OpenWorld(int groupId)
         {
             if(!Entered || Busy || ConfirmingExit) return;
-            if(room.Opened) { if(groupId>=0){feedback.Play(groupId,false);sentenceRuntime.FinishCommand(groupId);} return; }
+            if(CurrentOpeningBox.Opened) { if(groupId>=0){feedback.Play(groupId,false);sentenceRuntime.FinishCommand(groupId);} return; }
             worldGroup=groupId;worldRule="world.on";worldRoutine=StartCoroutine(Open(groupId));
         }
+        FoldingRoom CurrentOpeningBox=>outdoor&&outdoor.InChapter&&room.Opened?outdoor.Chapter.box:room;
         IEnumerator Open(int groupId)
         {
             Busy=true; board.Panel.InputBlocked=true;
             if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
             board.Panel.SetOpen(false);
             if(portableClosure)portableClosure.Restore();
-            room.Open(player.transform);
+            var opening=CurrentOpeningBox;
+            opening.Open(player.transform);
             board.Panel.InputBlocked=false;
-            while(room.Animating)yield return null;
+            while(opening.Animating)yield return null;
             Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false;
         }
         public void CloseWorldFromSentence(int groupId)
@@ -134,7 +136,7 @@ namespace PuzzleApple.V5
             var group=board.State.Find(worldGroup);
             if(group!=null&&group.Effective&&group.RuleId==worldRule)return;
             if(worldRoutine!=null)StopCoroutine(worldRoutine);
-            room.HoldCurrentPose();worldGroup=-1;Busy=false;
+            (worldRule=="world.on"?CurrentOpeningBox:room).HoldCurrentPose();worldGroup=-1;Busy=false;
             board.Panel.InputBlocked=false;board.Panel.SetOpen(true);
             // A half-closed portable box still owns the frozen position. Opening it
             // releases the lock; view and editing remain available while paused.

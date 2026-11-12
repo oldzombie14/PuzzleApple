@@ -82,7 +82,7 @@ Shader "PuzzleApple/V5/World Surface"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
             float4 _RoomShellInward,_InteriorNormal,_PanelSize,_InteriorTint,_InteriorEdgeMin,_InteriorEdgeMax;
             float _ClosedWeight,_DarkLevel,_SeamCore,_CoreWidthPixels;
-            float _P5FloorGlow,_P5DoorGlow,_LiningShade;
+            float _P5FloorGlow,_P5DoorGlow,_LiningShade,_PlayableFloor;
             float _EdgeWidth;
             float _UseInkRoomBounds;
             float _PassageCover,_PassageOpacity;
@@ -136,7 +136,7 @@ Shader "PuzzleApple/V5/World Surface"
                 float peak=max(result.r,max(result.g,result.b));
                 if(peak>.65)result.rgb*=(.65+.3*(1-exp(-(peak-.65)/.3)))/peak;
                 if(_LiningShade>0)result.rgb=(result.rgb+_P5FloorGlow)*_LiningShade;
-                if(_RoomShellInward.y>.9&&normalOS.y>.9)result.rgb+=_P5FloorGlow;
+                if((_RoomShellInward.y>.9&&normalOS.y>.9)||(_PlayableFloor>.5&&input.normalWS.y>.9))result.rgb+=_P5FloorGlow;
                 if(_SurfaceMode==2||roomFace)
                 {
                     float luminance=dot(result.rgb,float3(.2126,.7152,.0722));

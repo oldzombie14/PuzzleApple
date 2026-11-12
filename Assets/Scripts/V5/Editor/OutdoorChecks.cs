@@ -35,12 +35,12 @@ namespace PuzzleApple.V5.Editor
             {
                 var old=new PuzzleApple.V4.Cognition.CognitionState(v4);var current=new CognitionState(v5);
                 old.TryAcquireSentence("a",Text(a));old.TryAcquireSentence("b",Text(b));
-                current.TryAcquireSentence("a",Text(a).Replace("ground","floor"));current.TryAcquireSentence("b",Text(b).Replace("ground","floor"));
+                current.TryAcquireSentence("a",string.Join(" ",OutdoorSetup.V5Words(a)));current.TryAcquireSentence("b",string.Join(" ",OutdoorSetup.V5Words(b)));
                 Check(old.Groups.Select(g=>g.Effective).SequenceEqual(current.Groups.Select(g=>g.Effective)),"priority parity "+a.Id+" / "+b.Id);
                 current.ReturnToLibrary(current.Groups[0].Id,0,true);old.ReturnToLibrary(old.Groups[0].Id,0,true);
                 Check(old.Groups.Select(g=>g.Effective).SequenceEqual(current.Groups.Select(g=>g.Effective)),"split takeover parity");
             }
-            foreach(var invalid in new[]{"world move","light world move","door door move","floor floor move","door move floor","light positive","positive light move","negative light floor move","light move move","light door floor"})
+            foreach(var invalid in new[]{"light floor move","world move","light world move","door door move","floor floor move","door move floor","light positive","positive light move","negative light move floor","light move move","light door floor"})
             {var state=new CognitionState(v5);state.TryAcquireSentence("invalid",invalid);Check(!state.Groups.Single().Recognized,"invalid syntax "+invalid);}
             return "PASS: four illumination sentences, duplicate and split behavior, all 16 V4 sentences, all ordered rule pairs, conflict takeover and invalid combinations (ground maps to floor).";
         }
@@ -87,28 +87,16 @@ namespace PuzzleApple.V5.Editor
                 Check(e.outdoor.RenderingWarmed&&!e.outdoor.IsOutside,"outdoor window rendered before travel");
                 player.MovementLocked=false;
                 var centre=j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength+j.roomSize.z*.5f));
-                player.Teleport(centre,j.Root.rotation);player.view.rotation=Quaternion.LookRotation(Vector3.down,j.Root.forward);player.AdoptCurrentView();
-                yield return Until(()=>e.outdoor.Transitioning,"native fall activates passage");
-                Check(e.board.Panel.InputBlocked&&player.CinematicLocked,"passage owns input");
-                var overlay=(RectTransform)e.outdoor.transform.Find("Passage cinematic");
-                var upper=(RectTransform)overlay.Find("Top");
-                var lower=(RectTransform)overlay.Find("Bottom");
-                yield return Until(()=>upper.rect.height>1,"letterbox visible during fall");
-                var screenRect=overlay.GetComponent<Canvas>().rootCanvas.pixelRect;
-                var corners=new Vector3[4];
-                upper.GetWorldCorners(corners);
-                Check(Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[1]),new Vector2(screenRect.xMin,screenRect.yMax))<1 &&
-                    Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[2]),screenRect.max)<1,"top bar spans the screen's upper edge");
-                lower.GetWorldCorners(corners);
-                Check(Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[0]),screenRect.min)<1 &&
-                    Vector2.Distance(RectTransformUtility.WorldToScreenPoint(null,corners[3]),new Vector2(screenRect.xMax,screenRect.yMin))<1,"bottom bar spans the screen's lower edge");
-                yield return Until(()=>e.outdoor.IsOutside&&!e.outdoor.Transitioning,"horizontal exit");
-                Check(!upper.gameObject.activeSelf&&!lower.gameObject.activeSelf&&!overlay.Find("Transition").gameObject.activeSelf,"cinematic overlay clears after exit");
+                player.Teleport(centre+j.Root.right*.45f+j.Root.forward*.2f,j.Root.rotation);
+                player.view.rotation=j.Root.rotation*Quaternion.Euler(68,24,0);player.AdoptCurrentView();
+                var mappedDirection=Quaternion.Euler(-90,0,0)*j.Root.InverseTransformDirection(player.view.forward);
+                yield return Until(()=>e.outdoor.IsOutside&&!e.outdoor.Transitioning,"continuous fall through the portal");
+                Check(!e.outdoor.transform.Find("Passage cinematic"),"portal crossing leaves the world view unobstructed");
                 var w=e.outdoor.World;
                 Check(e.outdoor.TransitionCount==1&&w.field.ActiveCount==e.outdoor.TransferredLamps,"single transition retains the transferred lamps");
                 Check(w.door.GetComponentsInChildren<Renderer>().All(r=>r.enabled),"exit frame visible without V4 reveal event");
                 Check(player.transform.position.x>1000&&w.door.transform.position.x>1000,"player and physical frame are in the outdoor scene space");
-                Check(e.outdoor.LastExitVelocity.z>0&&e.outdoor.LastExitVelocity.z<=e.outdoor.exitSpeed&&Mathf.Abs(player.view.forward.y)<.01f,"horizontal launch and level view");
+                Check(e.outdoor.LastExitVelocity.z>0&&e.outdoor.LastExitVelocity.z<=e.outdoor.exitSpeed&&Vector3.Angle(player.view.forward,w.exit.TransformDirection(mappedDirection))<.25f,"horizontal launch preserves oblique sightline");
                 Check(!player.CinematicLocked&&!player.MovementLocked&&!e.board.Panel.InputBlocked,"control restored");
                 Check(state.Knows("floor")&&state.Knows("light"),"vocabulary preserved");
                 Check(w.Audio&&w.GetComponents<AudioSource>().Any(a=>a.isPlaying&&a.loop&&a.clip==w.music.clip&&Mathf.Abs(a.volume-.45f)<.001f),"V4 BGM actually playing");
@@ -157,7 +145,7 @@ namespace PuzzleApple.V5.Editor
                 Check(e.board.Panel.IsOpen&&!player.CinematicLocked,"cutscene restores editing");
                 e.sentenceRuntime.presentation.enabledShots=false;
                 yield return MotionAndPlacement(e);
-                Result="PASS: direct indoor entry; live outdoor window and lamp transfer; dark/lit collection in all V5 spaces; real fall, cinematic, horizontal impulse and landing; retained vocabulary and playing V4 BGM; both UI drag sources; fade; all/new lamps move; split; day/night without V4 progression; cutscene application/interruption.";
+                Result="PASS: direct indoor entry; live outdoor window and lamp transfer; dark/lit collection in all V5 spaces; real fall, portal crossing, horizontal impulse and landing; retained vocabulary and playing V4 BGM; both UI drag sources; fade; all/new lamps move; split; day/night without V4 progression; cutscene application/interruption.";
             }
             finally{e.sentenceRuntime.presentation.enabledShots=shots;Application.runInBackground=background;}
         }
@@ -188,7 +176,7 @@ namespace PuzzleApple.V5.Editor
             doorBefore=doorBody.position;s.TryAcquireSentence("physical.door.free","door move");yield return new WaitForSeconds(.4f);
             Check(Vector3.Distance(doorBefore,doorBody.position)>.5f,"door free movement");
             s.ClearWorkspace();yield return null;yield return null;
-            float lampY=lamps[0].transform.position.y;s.TryAcquireSentence("physical.light.floor","light floor move");yield return new WaitForSeconds(.4f);
+            float lampY=lamps[0].transform.position.y;s.TryAcquireSentence("physical.light.floor","light move floor");yield return new WaitForSeconds(.4f);
             Check(lamps[0].transform.position.y<lampY-.3f,"created lights descend toward ground");
             s.ClearWorkspace();yield return null;yield return null;
             s.TryAcquireSentence("physical.sky.move","floor move");yield return null;yield return null;yield return null;

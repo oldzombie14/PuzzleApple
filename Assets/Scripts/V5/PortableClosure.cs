@@ -19,14 +19,17 @@ namespace PuzzleApple.V5
         }
         public bool CanFold
         {
-            get{var region=Region();return region?region.allowBox:!entry.journey||!entry.journey.InCorridor||entry.journey.allowCorridorClosure;}
+            get{if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.Chapter.box.Opened;
+                var region=Region();return region?region.allowBox:!entry.journey||!entry.journey.InCorridor||entry.journey.allowCorridorClosure;}
         }
         public void Prepare()
         {
             var region=Region();
-            bool isolate=region?region.isolateEnvironment:entry.journey&&entry.journey.BeyondChamber;
+            bool chapter=entry.outdoor&&entry.outdoor.InChapter;
+            bool isolate=chapter||(region?region.isolateEnvironment:entry.journey&&entry.journey.BeyondChamber);
             if(Isolated||!isolate)return;
             Isolated=true;entry.room.PortablePlacement=true;
+            if(chapter)SetChapterInterior(false);
             foreach(var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
                 if(!r.transform.IsChildOf(entry.room.transform)&&!r.transform.IsChildOf(entry.player.transform)&&r is MeshRenderer)
                 {renderers[r]=r.forceRenderingOff;r.forceRenderingOff=true;}
@@ -47,6 +50,12 @@ namespace PuzzleApple.V5
             foreach(var pair in lights)if(pair.Key)pair.Key.cullingMask=pair.Value;
             renderers.Clear();lights.Clear();support.enabled=false;
             Isolated=false;entry.room.PortablePlacement=false;
+            if(entry.outdoor&&entry.outdoor.InChapter)SetChapterInterior(true);
+        }
+        void SetChapterInterior(bool chapter)
+        {
+            entry.room.GetComponent<FoldingInterior>().enabled=!chapter;
+            entry.outdoor.Chapter.box.GetComponent<FoldingInterior>().enabled=chapter;
         }
         void OnDestroy(){Restore();}
     }

@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f936b4fc28ab47899e1d89c6f99e1d2a, type: 3}
   m_Name: LightFloorMove
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.CognitionRule
-  id: light.floor.move
+  id: light.move.floor
   words:
   - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
-  - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
   - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+  - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
   effect: 12
   additionalEffects: 
   trigger: 0

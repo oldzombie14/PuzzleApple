@@ -41,7 +41,7 @@ namespace PuzzleApple.V5.Outdoor
             for(int i=0;i<count;i++)
             {
                 var hit=hits[i];
-                if(hit.collider==ground || hit.collider.transform.IsChildOf(player.transform)) continue;
+                if(hit.collider.transform.IsChildOf(ground.transform) || hit.collider.transform.IsChildOf(player.transform)) continue;
                 // Ignore initial side contacts; only bodies above the surface can block ascent.
                 if(hit.collider.bounds.max.y<=top+.001f) continue;
                 travel=Mathf.Min(travel,Mathf.Max(0,hit.collider.bounds.min.y-top-.015f));

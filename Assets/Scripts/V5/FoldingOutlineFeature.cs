@@ -32,6 +32,8 @@ namespace PuzzleApple.V5
             {
                 var resources=frame.Get<UniversalResourceData>();
                 var camera=frame.Get<UniversalCameraData>();
+                // The screen-space outline uses the intermediate game color and depth pair.
+                if(resources.isActiveTargetBackBuffer||camera.camera.cameraType==CameraType.Reflection)return;
                 var desc=graph.GetTextureDesc(resources.activeColorTexture);
                 desc.name="Visible folding box";
                 desc.colorFormat=GraphicsFormat.R8G8B8A8_UNorm;

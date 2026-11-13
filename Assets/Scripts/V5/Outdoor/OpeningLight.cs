@@ -98,7 +98,7 @@ namespace PuzzleApple.V5.Outdoor
                     // Nearby-light budget changes must fade too, even after the body is revealed.
                     localGlowAmount=Mathf.MoveTowards(localGlowAmount,illuminate?1:0,
                         Time.unscaledDeltaTime/LocalGlowFadeDuration);
-                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f * RevealAmount
+                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f * RevealAmount * appearanceSource.lampMultiplier
                         * Mathf.SmoothStep(0,1,localGlowAmount);
                     glow.enabled = glow.intensity>0;
                 }
@@ -114,13 +114,20 @@ namespace PuzzleApple.V5.Outdoor
                 ? Mathf.MoveTowards(brightness, target, Time.unscaledDeltaTime / transitionDuration) : target;
             ApplyAppearance();
         }
+        float lampMultiplier=1;
+        public void SetLampMultiplier(float value)
+        {
+            if(lampMultiplier==value)return;
+            lampMultiplier=value;
+            ApplyAppearance();
+        }
         void ApplyAppearance()
         {
             float eased = Mathf.SmoothStep(0, 1, brightness);
-            runtimeMaterial.SetColor("_EmissionColor", Color.Lerp(Color.black, emission, eased));
+            runtimeMaterial.SetColor("_EmissionColor", Color.Lerp(Color.black, emission, eased)*lampMultiplier);
             runtimeMaterial.SetColor("_BaseColor", Color.Lerp(offColor, onColor, eased));
             runtimeMaterial.SetColor("_SpecColor", new Color(.04f, .04f, .04f, 1) * eased);
-            if (glow) { glow.intensity = onLightIntensity * eased; glow.enabled = brightness > 0; }
+            if (glow) { glow.intensity = onLightIntensity * eased * lampMultiplier; glow.enabled = brightness > 0; }
         }
         void OnDestroy() { if (runtimeMaterial) Destroy(runtimeMaterial); }
     }

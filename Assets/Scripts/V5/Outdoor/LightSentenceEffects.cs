@@ -101,6 +101,49 @@ namespace PuzzleApple.V5.Outdoor
             float r = Mathf.Lerp(gatheringRadius.x, gatheringRadius.y, (id % 997) / 997f);
             return new Vector3(Mathf.Cos(a)*ring, y, Mathf.Sin(a)*ring)*r;
         }
+        public bool CanMove(CognitionSignal motion)
+        {
+            if(!CanOperate)return false;
+            foreach(var lamp in lamps)
+            {
+                if(!lamp || !lamp.isActiveAndEnabled)continue;
+                if(motion==CognitionSignal.LightMove)return true;
+                if(lamp.GetComponent<LightMotion>().Launched || (motion!=CognitionSignal.LightFloorMove&&!InRange(lamp)))continue;
+                if(TryTarget(lamp,lamp.GetComponent<Rigidbody>(),lamp.GetComponent<Collider>(),motion,false,out _,out _))return true;
+            }
+            return false;
+        }
+        bool TryTarget(OpeningLight lamp,Rigidbody body,Collider collider,CognitionSignal motion,bool remember,out Vector3 delta,out float stopDistance)
+        {
+            delta=Vector3.zero;
+            Vector3 target = body.position;
+            stopDistance = .04f;
+            if (motion == CognitionSignal.LightWorldMove)
+            {
+                if (!ground) return false;
+                target.y = ground.bounds.max.y + (body.position.y - collider.bounds.min.y) + .025f;
+                if (target.y >= body.position.y) return false;
+            }
+            else if (motion == CognitionSignal.LightDoorMove)
+            {
+                if (!door || !door.Revealed) return false;
+                target = door.transform.TransformPoint(new Vector3(0,3,0)) + GatherOffset(lamp);
+                if (ground) target.y = Mathf.Max(target.y, ground.bounds.max.y + collider.bounds.extents.y + .1f);
+                stopDistance = .16f;
+            }
+            else
+            {
+                neighbours.TryGetValue(lamp, out var old);
+                var nearest = Nearest(body.position, old, lamp);
+                if(remember)neighbours[lamp] = nearest;
+                if (!nearest) return false;
+                target = nearest.transform.position;
+                stopDistance = spacing + collider.bounds.extents.magnitude + nearest.GetComponent<Collider>().bounds.extents.magnitude;
+            }
+            delta = target - body.position;
+            
+            return delta.magnitude > stopDistance;
+        }
         void FixedUpdate()
         {
             if (!CanOperate || Motion == CognitionSignal.Empty || Motion == CognitionSignal.LightMove) return;
@@ -110,33 +153,8 @@ namespace PuzzleApple.V5.Outdoor
                 if (Motion != CognitionSignal.LightWorldMove && !InRange(lamp)) continue;
                 var body = lamp.GetComponent<Rigidbody>(); var collider = lamp.GetComponent<Collider>();
                 if (!body || !collider) continue;
-                Vector3 target = body.position;
-                float stopDistance = .04f;
-                if (Motion == CognitionSignal.LightWorldMove)
-                {
-                    if (!ground) continue;
-                    target.y = ground.bounds.max.y + (body.position.y - collider.bounds.min.y) + .025f;
-                    if (target.y >= body.position.y) continue;
-                }
-                else if (Motion == CognitionSignal.LightDoorMove)
-                {
-                    if (!door || !door.Revealed) continue;
-                    target = door.transform.TransformPoint(new Vector3(0,3,0)) + GatherOffset(lamp);
-                    if (ground) target.y = Mathf.Max(target.y, ground.bounds.max.y + collider.bounds.extents.y + .1f);
-                    stopDistance = .16f;
-                }
-                else
-                {
-                    neighbours.TryGetValue(lamp, out var old);
-                    var nearest = Nearest(body.position, old, lamp);
-                    neighbours[lamp] = nearest;
-                    if (!nearest) continue;
-                    target = nearest.transform.position;
-                    stopDistance = spacing + collider.bounds.extents.magnitude + nearest.GetComponent<Collider>().bounds.extents.magnitude;
-                }
-                var delta = target - body.position;
-                float distance = delta.magnitude;
-                if (distance <= stopDistance) continue;
+                if(!TryTarget(lamp,body,collider,Motion,true,out var delta,out var stopDistance))continue;
+                float distance=delta.magnitude;
                 var direction = delta / distance;
                 if (Motion != CognitionSignal.LightWorldMove)
                 {

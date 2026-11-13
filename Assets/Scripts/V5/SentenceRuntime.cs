@@ -28,10 +28,12 @@ namespace PuzzleApple.V5
             illumination.Apply(this);
         }
         bool observationTransferred;
+        public float LampMultiplier => illumination ? illumination.LampMultiplier : 1;
         public bool HasEffect(CognitionSignal effect)=>applied.Contains(effect);
         public void Initialize(WorldEntry owner)
         {
             entry=owner;
+            entry.feedback.runtime=this;
             illumination=gameObject.AddComponent<IlluminationEffects>();
             if(!presentation)presentation=GetComponent<SentencePresentation>();
             if(!presentation)presentation=gameObject.AddComponent<SentencePresentation>();
@@ -88,19 +90,42 @@ namespace PuzzleApple.V5
             CognitionState.Group shot=null;
             foreach(var g in added)
             {
-                bool changed=pendingTakeovers.ContainsKey(g.Id)||VisibleChange(g);
+                bool changed=VisibleChange(g);
                 if(g.RuleId!="world.on"&&g.RuleId!="world.off")entry.feedback.Play(g.Id,changed);
                 if(changed&&shot==null&&presentation.HasShot(g.RuleId))shot=g;
             }
             if(shot!=null&&!entry.Busy)
-                yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind,shot.Id);},IsSwitch(shot)?shot.Id:-1);
+                yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind);},IsSwitch(shot)?shot:null);
             else Commit(groups,added,kind);
         }
         bool VisibleChange(CognitionState.Group g)
         {
             if(g.Signals.All(s=>applied.Contains(s)))return false;
-            if(g.Signals.Any(s=>s==CognitionSignal.IlluminateWorld||s==CognitionSignal.IlluminateDoor||s==CognitionSignal.IlluminateFloor))return true;
+            return HasSceneEffect(g);
+        }
+
+        public bool SustainsFeedback(CognitionState.Group g)
+        {
+            if(!g.Effective || !entry.Entered)return false;
+            if(g.RuleId=="world.on"||g.RuleId=="world.off")return entry.RunningWorldCommand(g.Id);
+            if(!previous.TryGetValue(g.Id,out var rule)||rule!=g.RuleId||g.Signals.Count==0)return false;
+            // One applied effect has one feedback owner. A surviving duplicate can take over.
+            foreach(var other in entry.board.State.Groups)
+                if(other.Effective && other.RuleId==rule && other.Established<g.Established)return false;
+            return HasSceneEffect(g);
+        }
+        bool HasSceneEffect(CognitionState.Group g)
+        {
             var j=entry.journey;
+            switch(g.Signal)
+            {
+                case CognitionSignal.IlluminateLight:
+                    if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.stateSource.Brightness>0;
+                    return j&&j.InSecondRoom?j.Brightness>0:entry.chamberLight.Brightness>0;
+                case CognitionSignal.IlluminateWorld:
+                case CognitionSignal.IlluminateDoor:
+                case CognitionSignal.IlluminateFloor:return true;
+            }
             if(entry.outdoor&&entry.outdoor.IsOutside)
             {
                 var w=entry.outdoor.World;
@@ -108,46 +133,57 @@ namespace PuzzleApple.V5
                 {
                     case "light.on":return w.stateSource.Brightness<.999f||w.environment.NightBlend>.001f;
                     case "light.off":return w.stateSource.Brightness>.001f||w.environment.NightBlend<.999f;
-                    case "door.on":return w.doors.appearance.Brightness<.999f;
-                    case "door.off":return w.doors.appearance.Brightness>.001f;
-                    case "light.move":case "light.floor.move":case "light.door.move":return w.lights.CanOperate&&w.field.ActiveCount>0;
-                    case "light.light.move":return w.lights.CanOperate&&w.field.ActiveCount>1;
-                    case "door.light.move":return w.doors.CanPursue(w.lights.Nearest(w.door.transform.position));
+                    case "door.on":return w.door.Revealed&&w.doors.appearance.Brightness<.999f;
+                    case "door.off":return w.door.Revealed&&w.doors.appearance.Brightness>.001f;
+                    case "light.move":case "light.floor.move":case "light.door.move":case "light.light.move":return w.lights.CanMove(g.Signal);
+                    case "door.light.move":return w.door.Revealed&&w.doors.CanPursue(w.lights.Nearest(w.door.transform.position));
                     case "floor.light.move":return w.world.CanRise(CognitionSignal.WorldLightMove);
                     case "floor.door.move":return w.world.CanRise(CognitionSignal.WorldDoorMove);
-                    case "door.floor.move":return !w.door.Landed;
-                    case "door.move":case "floor.move":return true;
+                    case "door.floor.move":return w.door.Revealed&&!w.door.Landed;
+                    case "door.move":return w.door.Revealed;
+                    case "floor.move":return true;
                 }
             }
             switch(g.RuleId)
             {
-                case "light.on":return entry.chamberLight.Brightness<.999f || (j&&j.Brightness<.999f);
-                case "light.off":return entry.chamberLight.Brightness>.001f || (j&&j.Brightness>.001f);
+                case "light.on":case "light.off":
+                    float target=g.RuleId=="light.on"?1:0;
+                    bool chamber=Mathf.Abs(entry.chamberLight.Brightness-target)>.001f;
+                    if(!j||!j.BeyondChamber||(entry.portableClosure&&entry.portableClosure.Isolated))return chamber;
+                    bool farRoom=Mathf.Abs(j.Brightness-target)>.001f;
+                    return j.InCorridor?(chamber||farRoom||Mathf.Abs(j.CorridorBrightness-target)>.001f):farRoom;
                 case "door.on":return j&&j.DoorProgress<.999f;
                 case "door.off":return j&&j.DoorProgress>.001f;
-                case "light.move":return j&&j.InSecondRoom?j.Lamps.Count>0:entry.chamberLight&&(!j||!j.BeyondChamber);
-                case "light.door.move":case "light.light.move":return j&&j.InSecondRoom&&j.Lamps.Count>0;
-                case "light.floor.move":return j&&j.floorMotion&&j.Lamps.Any(l=>!j.floorMotion.IsArrived(l));
+                case "light.move":return j&&j.InSecondRoom?j.Lamps.Count>0:entry.chamberLight&&entry.room.Opened&&(!j||!j.BeyondChamber)&&(!entry.portableClosure||!entry.portableClosure.Isolated);
+                case "light.door.move":case "light.light.move":
+                    return j&&j.InSecondRoom&&j.TryGetComponent<RoomLightGathering>(out var gathering)&&gathering.CanMove(g.Signal);
+                case "light.floor.move":return j&&j.InSecondRoom&&j.floorMotion&&j.Lamps.Any(l=>!j.floorMotion.IsArrived(l));
                 default:return false;
             }
         }
         static bool IsSwitch(CognitionState.Group group) =>
             group.RuleId=="light.on" || group.RuleId=="light.off" || group.RuleId=="door.on" || group.RuleId=="door.off";
 
-        public void FinishCommand(int id,bool alreadyFaded=false)
+        public void FinishCommand(int id)
         {
             var group=entry.board.State.Find(id);
-            if(group!=null)StartCoroutine(Retire(group,group.Established,alreadyFaded));
+            if(group!=null)StartCoroutine(Retire(group,group.Established));
         }
-        IEnumerator Retire(CognitionState.Group group,long established,bool alreadyFaded)
+        IEnumerator Retire(CognitionState.Group group,long established)
         {
             var board=entry.board;
             float elapsed=0,duration=Mathf.Max(.1f,entry.feedback.duration);
             yield return null;
             while(board.State.Find(group.Id)==group && group.Established==established && group.Effective)
             {
+                bool indoorLight=(group.RuleId=="light.on"||group.RuleId=="light.off")&&(!entry.outdoor||!entry.outdoor.IsOutside);
+                float target=group.RuleId=="light.on"?1:0;
+                bool lightChanging=indoorLight&&(entry.chamberLight.Brightness!=target||
+                    (entry.journey&&entry.journey.Root&&(entry.journey.Brightness!=target||
+                    entry.journey.CorridorLightChanging)));
+                if(lightChanging||SustainsFeedback(group)){yield return null;continue;}
                 elapsed+=Time.unscaledDeltaTime;
-                float opacity=alreadyFaded?0:1-Mathf.SmoothStep(0,1,elapsed/duration);
+                float opacity=1-Mathf.SmoothStep(0,1,elapsed/duration);
                 board.SetSentenceOpacity(group.Id,opacity);
                 if(opacity<=0 && !presentation.Playing && !entry.Busy && committedRevision==revision)
                 {
@@ -165,7 +201,7 @@ namespace PuzzleApple.V5
             }
         }
         int committedRevision;
-        void Commit(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind,int fadedGroup=-1)
+        void Commit(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind)
         {
             committedRevision=revision;
             previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
@@ -204,7 +240,7 @@ namespace PuzzleApple.V5
             else if(doorGroup!=door.Id||added.Contains(door)){doorGroup=door.Id;if(entry.journey&&(!entry.outdoor||!entry.outdoor.IsOutside))entry.journey.SetDoor(door.Signals.Contains(CognitionSignal.DoorOn));}
             foreach(var g in added)
             {
-                if(IsSwitch(g))FinishCommand(g.Id,g.Id==fadedGroup);
+                if(IsSwitch(g))FinishCommand(g.Id);
                 else if(g.RuleId=="world.on")entry.OpenWorld(g.Id);
                 else if(g.RuleId=="world.off")entry.CloseWorldFromSentence(g.Id);
             }

@@ -23,7 +23,7 @@ namespace PuzzleApple.V5.Editor
                 lit.TryAcquireSentence("illuminate."+target,"light "+target);
                 Check(lit.Groups.Last().Effective,"valid illumination target "+target);
             }
-            Check(lit.Groups.All(g=>g.Effective)&&lit.Groups.Last().Signals.Count==0,"illumination sentences coexist and light light is inert");
+            Check(lit.Groups.All(g=>g.Effective)&&lit.HasEffect(CognitionSignal.IlluminateLight),"illumination sentences coexist and light light boosts lamps");
             lit.TryAcquireSentence("duplicate","light floor");
             lit.ReturnToLibrary(lit.Groups.Last().Id,0,true);
             Check(lit.HasEffect(CognitionSignal.IlluminateFloor),"remaining copy sustains floor emission");

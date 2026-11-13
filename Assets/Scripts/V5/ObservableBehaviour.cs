@@ -8,7 +8,7 @@ namespace PuzzleApple.V5
     {
         public ObservationLesson lesson;
         [Range(0,3)] public float aimToleranceDegrees=1.5f;
-        public SphereCollider[] members=new SphereCollider[0];
+        public Collider[] members=new Collider[0];
         public bool Available {get;set;}=true;
         CognitionState initialState;
         // The demonstration and player-owned example use the same rule evaluator.
@@ -28,7 +28,7 @@ namespace PuzzleApple.V5
         {
             if(!isActiveAndEnabled||!Available||!lesson)return null;
             if(Physics.Raycast(ray,out var direct,reach,~0,QueryTriggerInteraction.Ignore)&&
-               direct.collider is SphereCollider sphere&&System.Array.IndexOf(members,sphere)>=0)return direct.collider;
+               System.Array.IndexOf(members,direct.collider)>=0)return direct.collider;
             Collider best=null;
             float bestMiss=Mathf.Tan(aimToleranceDegrees*Mathf.Deg2Rad);
             foreach(var member in members)

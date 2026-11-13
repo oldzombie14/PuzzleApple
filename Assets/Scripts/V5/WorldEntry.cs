@@ -32,7 +32,11 @@ namespace PuzzleApple.V5
         bool wasPanelOpen;
         Coroutine worldRoutine;
         int worldGroup=-1;
+        public bool RunningWorldCommand(int id)=>worldGroup==id;
         string worldRule;
+        CanvasGroup foldCaption;
+        [Min(.1f)] public float worldLevelDuration=1.2f;
+        bool leveling,previousCameraLock;
 
 
         void Start()
@@ -118,10 +122,11 @@ namespace PuzzleApple.V5
             Busy=true; board.Panel.InputBlocked=true;
             if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
             board.Panel.SetOpen(false);
+            if(groupId>=0)yield return LevelWorldView(groupId);
             if(portableClosure)portableClosure.Restore();
             room.Open(player.transform);
             board.Panel.InputBlocked=false;
-            while(room.Animating)yield return null;
+            yield return ShowFold(groupId,true);
             Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false;
         }
         public void CloseWorldFromSentence(int groupId)
@@ -134,6 +139,7 @@ namespace PuzzleApple.V5
             var group=board.State.Find(worldGroup);
             if(group!=null&&group.Effective&&group.RuleId==worldRule)return;
             if(worldRoutine!=null)StopCoroutine(worldRoutine);
+            EndWorldShot();
             room.HoldCurrentPose();worldGroup=-1;Busy=false;
             board.Panel.InputBlocked=false;board.Panel.SetOpen(true);
             // A half-closed portable box still owns the frozen position. Opening it
@@ -146,17 +152,84 @@ namespace PuzzleApple.V5
             // Showing exit confirmation is a visible effect even when no fold is needed.
             if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
             wasPanelOpen=board.Panel.IsOpen; board.Panel.SetOpen(false);
+            if(groupId>=0)yield return LevelWorldView(groupId);
             if(portableClosure&&!portableClosure.CanFold)
             {
+                yield return FadeWorldShot();
                 worldGroup=-1;ShowDialog();yield break;
             }
             if(portableClosure)portableClosure.Prepare();
             room.CloseAt(player.transform.position);
             board.Panel.InputBlocked=false;
-            while(room.Animating) yield return null;
+            yield return ShowFold(groupId,false);
             yield return new WaitForSecondsRealtime(closedPauseDuration);
             worldGroup=-1;
             ShowDialog();
+        }
+        IEnumerator ShowFold(int groupId,bool opening)
+        {
+            if(!room.Animating&&foldCaption){yield return FadeWorldShot();yield break;}
+            while(room.Animating)
+            {
+                if(foldCaption)
+                {
+                    float remaining=opening?1-room.Progress:room.Progress;
+                    SetWorldShotVisibility(board.Panel.IsOpen?0:Mathf.SmoothStep(0,1,remaining/.18f));
+                }
+                yield return null;
+            }
+            EndWorldShot();
+        }
+        IEnumerator LevelWorldView(int groupId)
+        {
+            if(!sentenceRuntime.presentation.enabledShots)yield break;
+            foldCaption=SentenceCaption.Show(transform,board.State.Find(groupId));
+            previousCameraLock=player.CinematicLocked;
+            player.CinematicLocked=true;
+            leveling=true;
+            var view=player.view;
+            var start=view.rotation;
+            var goal=Quaternion.Euler(0,view.eulerAngles.y,0);
+            for(float t=0;t<worldLevelDuration;t+=Time.unscaledDeltaTime)
+            {
+                float u=Mathf.SmoothStep(0,1,t/worldLevelDuration);
+                view.rotation=Quaternion.Slerp(start,goal,u);
+                SetWorldShotVisibility(u);
+                yield return null;
+            }
+            view.rotation=goal;
+            SetWorldShotVisibility(1);
+            ReleaseWorldCamera();
+        }
+        void ReleaseWorldCamera()
+        {
+            if(!leveling)return;
+            leveling=false;
+            player.AdoptCurrentView();
+            player.CinematicLocked=previousCameraLock;
+            player.RestoreGameplayCursor();
+        }
+        void SetWorldShotVisibility(float amount)
+        {
+            if(!foldCaption)return;
+            foldCaption.alpha=amount;
+            sentenceRuntime.presentation.SetBarsHeight(.09f*amount);
+        }
+        IEnumerator FadeWorldShot()
+        {
+            if(!foldCaption)yield break;
+            for(float t=0;t<.4f;t+=Time.unscaledDeltaTime)
+            {
+                SetWorldShotVisibility(1-Mathf.SmoothStep(0,1,t/.4f));
+                yield return null;
+            }
+            EndWorldShot();
+        }
+        void EndWorldShot()
+        {
+            ReleaseWorldCamera();
+            SetWorldShotVisibility(0);
+            SentenceCaption.Clear(ref foldCaption);
         }
         void ShowDialog()
         {

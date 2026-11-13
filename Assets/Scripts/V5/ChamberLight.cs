@@ -27,6 +27,8 @@ namespace PuzzleApple.V5
         public bool Collecting {get;private set;}
         [Min(0)] public float moveSpeed=1.2f;
         Rigidbody motionBody;
+        OuterRoomEdges edges;
+        ObservableBehaviour cubeMotion;
         Vector3 moveDirection,roomMin,roomMax;
         public bool Moving=>entry&&entry.Entered&&entry.room.Opened&&entry.sentenceRuntime&&
             entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)&&
@@ -46,6 +48,17 @@ namespace PuzzleApple.V5
         void Start()
         {
             InitializeMotion();
+            var example=entry.journey?entry.journey.movementObservation:null;
+            if(observer&&example&&example.lesson)
+            {
+                cubeMotion=gameObject.AddComponent<ObservableBehaviour>();
+                cubeMotion.lesson=example.lesson;
+                cubeMotion.aimToleranceDegrees=example.aimToleranceDegrees;
+                cubeMotion.members=new[]{GetComponent<Collider>()};
+                cubeMotion.Available=false;
+                System.Array.Resize(ref observer.targets,observer.targets.Length+1);
+                observer.targets[observer.targets.Length-1]=cubeMotion;
+            }
             eyeColor=hoverEye.color;
             collectionSymbol.material=hoverEye.material;
             knownSymbol=Instantiate(collectionSymbol,collectionSymbol.transform.parent);
@@ -60,7 +73,7 @@ namespace PuzzleApple.V5
             var own=GetComponent<Collider>();if(own)Physics.IgnoreCollision(own,entry.player.GetComponent<CharacterController>());
             moveDirection=new Vector3(.6f,.65f,.45f).normalized;
             roomMin=new Vector3(-14,0,-14);roomMax=new Vector3(14,15.92f,14);
-            var edges=FindFirstObjectByType<OuterRoomEdges>();
+            edges=FindFirstObjectByType<OuterRoomEdges>();
             if(edges&&edges.surfaces!=null)
             {
                 foreach(var wall in edges.surfaces)
@@ -81,15 +94,36 @@ namespace PuzzleApple.V5
             for(int axis=0;axis<3;axis++)
             {
                 float lo=roomMin[axis]+extent[axis],hi=roomMax[axis]-extent[axis];
-                if(position[axis]<lo){position[axis]=lo;moveDirection[axis]=Mathf.Abs(moveDirection[axis]);}
-                if(position[axis]>hi){position[axis]=hi;moveDirection[axis]=-Mathf.Abs(moveDirection[axis]);}
+                if(position[axis]>=lo&&position[axis]<=hi)continue;
+                bool low=position[axis]<lo;
+                position[axis]=low?lo:hi;
+                var normal=Vector3.zero;
+                normal[axis]=low?1:-1;
+                var point=position;
+                point[axis]=low?roomMin[axis]:roomMax[axis];
+                Bounce(normal,point,true);
             }
             motionBody.position=position;motionBody.linearVelocity=moveDirection.normalized*moveSpeed;
         }
         void OnCollisionEnter(Collision collision)
         {
-            foreach(var contact in collision.contacts)if(Vector3.Dot(moveDirection,contact.normal)<0)
-                moveDirection=Vector3.Reflect(moveDirection,contact.normal).normalized;
+            if(!Moving)return;
+            foreach(var contact in collision.contacts)
+            {
+                var point=contact.point;
+                bool shell=false;
+                for(int axis=0;axis<3;axis++)
+                    if(Mathf.Abs(contact.normal[axis])>.95f&&
+                        Mathf.Min(Mathf.Abs(point[axis]-roomMin[axis]),Mathf.Abs(point[axis]-roomMax[axis]))<.08f)shell=true;
+                Bounce(contact.normal,point,shell);
+            }
+        }
+        void Bounce(Vector3 normal,Vector3 point,bool shell)
+        {
+            if(Vector3.Dot(moveDirection,normal)>=0)return;
+            moveDirection=Vector3.Reflect(moveDirection,normal).normalized;
+            if(shell&&Brightness>.001f&&edges&&entry.journey&&entry.journey.floorSurface)
+                edges.Impact(point,normal,entry.journey.floorSurface);
         }
         public void SetOn(bool value){TargetOn=value;TransitionEnabled=true;}
         public void HoldCurrentState()=>TransitionEnabled=false;
@@ -107,10 +141,18 @@ namespace PuzzleApple.V5
             int count=Physics.RaycastNonAlloc(view.position,view.forward,collectionHits,collectionDistance,~0,QueryTriggerInteraction.Ignore);
             var hits=count==collectionHits.Length?Physics.RaycastAll(view.position,view.forward,collectionDistance,~0,QueryTriggerInteraction.Ignore):collectionHits;
             if(hits!=collectionHits)count=hits.Length;
-            RaycastHit hit=default;float closest=float.PositiveInfinity;
+            RaycastHit hit=default;float closest=float.PositiveInfinity,starReach=collectionDistance;
             for(int i=0;i<count;i++)
-                if(!hits[i].collider.transform.IsChildOf(entry.player.transform)&&hits[i].distance<closest)
-                {hit=hits[i];closest=hits[i].distance;}
+            {
+                if(hits[i].collider.transform.IsChildOf(entry.player.transform))continue;
+                if(hits[i].distance<closest){hit=hits[i];closest=hits[i].distance;}
+                if(entry.journey&&!entry.journey.IsRail(hits[i].collider))starReach=Mathf.Min(starReach,hits[i].distance);
+            }
+            if(entry.journey&&entry.journey.Stars)
+            {
+                emitter=entry.journey.Stars.Pick(new Ray(view.position,view.forward),starReach);
+                if(emitter)return "light";
+            }
             if(!hit.collider)return null;
             if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null){if(word=="light")emitter=hit.collider.GetComponent<Renderer>();return word;}}
             if((!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
@@ -119,8 +161,9 @@ namespace PuzzleApple.V5
         void Update()
         {
             if(TransitionEnabled)Brightness=Mathf.MoveTowards(Brightness,TargetOn?1:0,Time.deltaTime/Mathf.Max(.01f,fadeDuration));
-            material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness));
+            material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness)*entry.sentenceRuntime.LampMultiplier);
             material.SetColor("_BaseColor",Color.Lerp(new Color(.015f,.015f,.015f),onColor,Brightness));
+            if(cubeMotion)cubeMotion.Available=Moving&&TargetOn&&Brightness>=.999f;
             var mouse=Mouse.current;
             AdvancePointer(mouse!=null&&mouse.leftButton.wasPressedThisFrame,
                 mouse!=null&&mouse.leftButton.isPressed,mouse!=null&&mouse.leftButton.wasReleasedThisFrame,Time.unscaledDeltaTime);
@@ -252,7 +295,7 @@ namespace PuzzleApple.V5
                 panel.SetOpen(true);
                 while(panel.IsOpen&&!panel.FullyOpen)yield return null;
                 if(panel.FullyOpen&&entry.board.State.Find(acquired.Id)==acquired&&acquired.Recognized)
-                    entry.feedback.Play(acquired.Id,acquired.Effective);
+                    entry.feedback.Play(acquired.Id,entry.sentenceRuntime.SustainsFeedback(acquired));
             }
         }
         void OnDisable()

@@ -29,6 +29,14 @@ namespace PuzzleApple.V5.Editor
                 presentation.enabledShots=false;
                 e.EnterWorld();yield return Until(()=>e.Entered);e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
                 var state=e.board.State;var j=e.journey;
+                e.board.Panel.SetOpen(true);
+                int strongBefore=e.feedback.StrongCount,weakBefore=e.feedback.WeakCount;
+                Check(e.chamberLight.Brightness==1&&j.Brightness==0,"bright chamber and dark far room");
+                state.TryAcquireSentence("check.already.on","positive light");
+                yield return Until(()=>e.feedback.WeakCount>weakBefore);
+                var redundant=state.Groups.First(g=>g.RuleId=="light.on");
+                Check(e.feedback.StrongCount==strongBefore&&!e.sentenceRuntime.SustainsFeedback(redundant),"remote room change gives no local stars");
+                yield return Until(()=>state.Find(redundant.Id)==null);
                 state.TryAcquireSentence("check.off","negative light");
                 yield return new WaitForSeconds(.2f);
                 float brightness=e.chamberLight.Brightness;

@@ -120,7 +120,9 @@ namespace PuzzleApple.V5
             wallProperties.SetVector("_RoomShellInward",Vector3.back);
             foreach(var segment in segments)segment.SetPropertyBlock(wallProperties);
             cover.enabled=darkness<1;
-            glow.SetFloat("_Visibility",darkness);
+            float corridorGlow=journey?Mathf.Lerp(.09f,1,journey.CorridorBrightness):1;
+            glow.SetFloat("_Visibility",darkness*corridorGlow);
+            if(returnGlow)returnGlow.SetFloat("_Visibility",corridorGlow);
             if(returnOutline)returnOutline.gameObject.SetActive(journey.ViewBeyondChamber);
             var p=Entrance.InverseTransformPoint(lamp.entry.player.transform.position);
             if(!ReachedEntrance&&Mathf.Abs(p.x)<width*.5f&&p.z>.35f&&p.z<entranceDepth&&p.y>-.2f&&p.y<height)

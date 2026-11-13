@@ -149,7 +149,11 @@ namespace PuzzleApple.V5
         }
         void EmitSquares(Vector3 worldPoint,Vector3 normal)
         {
-            if(!contactParticles||journey.Brightness<=.001f)return;
+            if(journey.Brightness>.001f)EmitContactSquares(worldPoint,normal);
+        }
+        public void EmitContactSquares(Vector3 worldPoint,Vector3 normal)
+        {
+            if(!contactParticles||!particles)return;
             if(!particles.isPlaying)particles.Play();
             var orientation=Quaternion.FromToRotation(Vector3.up,normal);
             const float spreadDegrees=55f;

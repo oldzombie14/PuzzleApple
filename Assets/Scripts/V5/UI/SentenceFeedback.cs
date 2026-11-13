@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using PuzzleApple.V5.Cognition;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,6 +17,9 @@ namespace PuzzleApple.V5
         [Range(0,1)] public float rippleVolume=.45f;
         [Range(0,31)] public int effectLayer=31;
         public float duration=.85f;
+        [Min(.3f)] public float repeatDuration=2.4f;
+        internal SentenceRuntime runtime;
+        readonly HashSet<int> pulsing=new HashSet<int>();
         public int StrongCount {get;private set;}
         public int WeakCount {get;private set;}
         Camera effectCamera;
@@ -55,6 +59,10 @@ namespace PuzzleApple.V5
             if(!output)return;
             if(texture.width!=Screen.width||texture.height!=Screen.height)Resize();
             output.enabled=board.Panel.IsOpen&&board.Surface.gameObject.activeInHierarchy;
+            if(!output.enabled || !runtime)return;
+            foreach(var group in board.State.Groups)
+                if(!pulsing.Contains(group.Id) && runtime.SustainsFeedback(group))
+                    StartCoroutine(Pulse(group.Id,true,true));
         }
         public void Play(int groupId,bool strong)
         {
@@ -62,11 +70,14 @@ namespace PuzzleApple.V5
             if(strong)StrongCount++;else WeakCount++;
             StartCoroutine(Pulse(groupId,strong));
         }
-        IEnumerator Pulse(int groupId,bool strong)
+        IEnumerator Pulse(int groupId,bool strong,bool repeat=false)
         {
             var rect=board.GroupRect(groupId);if(!rect)yield break;
             var initialGroup=board.State.Find(groupId);
             if(initialGroup==null||!initialGroup.Recognized||(strong&&!initialGroup.Effective))yield break;
+            if(strong && !pulsing.Add(groupId))yield break;
+            long established=initialGroup.Established;
+            float lifetime=repeat?Mathf.Max(.3f,repeatDuration):duration;
             var content=board.GroupContentBounds(groupId);
             var root=new GameObject(strong?"Sentence effect ripple":"Sentence grammar ripple");root.layer=effectLayer;
             root.transform.SetParent(stage,false);
@@ -85,20 +96,23 @@ namespace PuzzleApple.V5
                 var particles=Instantiate(sparklePrefab,root.transform);
                 var shape=particles.shape;shape.scale=new Vector3(content.width*scale,content.height*scale*.8f,0);
                 var main=particles.main;main.startSize=new ParticleSystem.MinMaxCurve(34*scale,60*scale);
+                if(repeat)main.simulationSpeed*=duration/lifetime;
+                main.useUnscaledTime=true;
                 particles.Play();
             }
             // One cue per pulse, shared by its rings and stars; follows global listener mute.
-            if(rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
-            for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
+            if(!repeat&&rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
+            for(float t=0;t<lifetime;t+=Time.unscaledDeltaTime)
             {
                 var group=board.State.Find(groupId);
-                if(!rect||group==null||!group.Recognized||(strong&&!group.Effective))break;
+                if(!rect||!board.Panel.IsOpen||group==null||group.Established!=established||
+                    !group.Recognized||(strong&&!group.Effective)||(repeat&&!runtime.SustainsFeedback(group)))break;
                 content=board.GroupContentBounds(groupId);
                 Vector2 screen=RectTransformUtility.WorldToScreenPoint(null,rect.TransformPoint(content.center));
                 root.transform.localPosition=new Vector3(screen.x-Screen.width*.5f,screen.y-Screen.height*.5f,5);
                 for(int i=0;i<lines.Length;i++)
                 {
-                    float u=Mathf.Clamp01((t-i*.12f)/(duration-i*.12f));
+                    float u=Mathf.Clamp01((t-i*.12f)/(lifetime-i*.12f));
                     float alpha=(strong?.62f:.25f)*Mathf.Sin(Mathf.PI*Mathf.Pow(u,.55f));
                     lines[i].startColor=lines[i].endColor=new Color(.89f,.94f,1,alpha);
                     // Briefly hold the expanded frame before it resumes spreading and fades.
@@ -113,6 +127,7 @@ namespace PuzzleApple.V5
                 yield return null;
             }
             Destroy(root);
+            if(strong)pulsing.Remove(groupId);
         }
         void OnDestroy(){if(texture){texture.Release();Destroy(texture);}}
     }

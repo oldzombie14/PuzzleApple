@@ -9,6 +9,36 @@ namespace PuzzleApple.V5
         public Renderer[] surfaces;
         MaterialPropertyBlock block;
 
+        readonly Vector4[] hits=new Vector4[16];
+        int nextHit;
+        bool initialized;
+        public void Impact(Vector3 point,Vector3 normal,FloorImpactSurface style)
+        {
+            if(!initialized)
+            {
+                for(int i=0;i<hits.Length;i++)hits[i].w=-1000;
+                initialized=true;
+            }
+            hits[nextHit]=new Vector4(point.x,point.y,point.z,Time.time);
+            nextHit=(nextHit+1)%hits.Length;
+            if(block==null)block=new MaterialPropertyBlock();
+            foreach(var surface in surfaces)
+            {
+                if(!surface)continue;
+                surface.GetPropertyBlock(block);
+                block.SetVectorArray("_Impacts",hits);
+                block.SetFloat("_RippleDuration",style.rippleDuration);
+                block.SetFloat("_RippleSpeed",style.rippleSpeed);
+                block.SetFloat("_RingCount",style.ringCount);
+                block.SetFloat("_RingSpacing",style.ringSpacing);
+                block.SetFloat("_RingWidth",style.ringWidth);
+                block.SetFloat("_RippleStrength",style.rippleStrength);
+                block.SetVector("_RippleTaper",new Vector4(style.thinningStartsAt,style.thinningDistance,style.distantWidth,0));
+                surface.SetPropertyBlock(block);
+            }
+            style.EmitContactSquares(point,normal);
+        }
+
         void LateUpdate()
         {
             if (surfaces == null || surfaces.Length != 6) return;

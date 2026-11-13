@@ -16,6 +16,7 @@ Shader "PuzzleApple/V5/World Surface"
         _InkColor("Edge ink multiplier",Color)=(0,0,0,1)
         [Enum(Scene surface,0,Corridor surface,1,Room effects,2)] _SurfaceMode("Surface effects",Float)=0
         _CorridorFill("Corridor visibility fill",Range(0,1))=.35
+        _CorridorLight("Corridor lighting",Range(0,1))=1
         _CorridorPureWhite("Pure white corridor trial",Range(0,1))=0
         _LightSteps("Room lighting bands",Range(2,8))=4
         _LightStepBlend("Room lighting band strength",Range(0,1))=0
@@ -85,7 +86,7 @@ Shader "PuzzleApple/V5/World Surface"
             float _P5FloorGlow,_P5DoorGlow,_LiningShade;
             float _EdgeWidth;
             float _UseInkRoomBounds;
-            float _PassageCover,_PassageOpacity;
+            float _PassageCover,_PassageOpacity,_CorridorLight;
             float4 _PassageOrigin,_PassageRight,_PassageUp,_PassageSize;
             float4 _InkRoomMin,_InkRoomMax;
             float4 _InkColor;
@@ -181,6 +182,7 @@ Shader "PuzzleApple/V5/World Surface"
                 if(_SurfaceMode==2)d=RoomPerimeterDistance(input.positionWS);
                 if(_UseInkRoomBounds>.5)
                 {
+                    if(_RippleStrength>0)result.rgb*=ContactRipple(input.positionWS);
                     float3 boundary=min(input.positionWS-_InkRoomMin.xyz,_InkRoomMax.xyz-input.positionWS);
                     float3 n=abs(normalize(input.normalWS));
                     d=n.y>.5?min(boundary.x,boundary.z):(n.x>.5?min(boundary.y,boundary.z):min(boundary.x,boundary.y));
@@ -206,6 +208,7 @@ Shader "PuzzleApple/V5/World Surface"
                 result.rgb=lerp(result.rgb,localLight,saturate(_ClosedWeight)*interior);
                 if(input.normalWS.y>.9 && abs(input.positionWS.y-_P5BoxWavePhase.y)<.18)
                     result.rgb=BoxImmersionRipple(result.rgb,input.positionWS.xz);
+                if(_SurfaceMode==1&&!roomFace)result.rgb*=_CorridorLight;
                 result.a=_SurfaceMode==1?saturate(1-_Dissolve):1;
                 if(_PassageCover>.5)result.a*=_PassageOpacity;
             }

@@ -37,11 +37,8 @@ float HintDepth(float slot,float2 uv)
     if(slot>0)return SAMPLE_TEXTURE2D(_HintMove,sampler_HintLight,uv).a;
     return SAMPLE_TEXTURE2D(_HintFloor,sampler_HintLight,uv).a;
 }
-float3 RoomSurfaceEffects(float3 positionWS)
+float ContactRipple(float3 local)
 {
-    float3 local=mul(_WorldToFloor,float4(positionWS,1)).xyz;
-    float2 p=_Plane<.5?local.xz:(_Plane<1.5?local.xy:local.zy);
-    if(_Hole.w>.5)clip(max(abs(p.x-_Hole.x),abs(p.y-_Hole.y))-_Hole.z);
     float ink=0;
     for(int n=0;n<16;n++)
     {
@@ -65,6 +62,13 @@ float3 RoomSurfaceEffects(float3 positionWS)
             ink=max(ink,(outer-inner)*onset*fade/(1+.35*ring));
         }
     }
+    return 1-ink*_RippleStrength;
+}
+float3 RoomSurfaceEffects(float3 positionWS)
+{
+    float3 local=mul(_WorldToFloor,float4(positionWS,1)).xyz;
+    float2 p=_Plane<.5?local.xz:(_Plane<1.5?local.xy:local.zy);
+    if(_Hole.w>.5)clip(max(abs(p.x-_Hole.x),abs(p.y-_Hole.y))-_Hole.z);
     float carving=1;
     if(_MuralEnabled>.5)
     {
@@ -89,5 +93,5 @@ float3 RoomSurfaceEffects(float3 positionWS)
             carving*=saturate(1+(dot(glyphNormal,_MuralLight)-_MuralLight.z)*_MuralRelief-depth*.55*_MuralCavity);
         }
     }
-    return carving*(1-ink*_RippleStrength);
+    return carving*ContactRipple(local);
 }

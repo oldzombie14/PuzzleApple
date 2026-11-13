@@ -15,15 +15,16 @@ namespace PuzzleApple.V5
         CognitionSignal Motion=>journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightDoorMove)?CognitionSignal.LightDoorMove:
             journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightLightMove)?CognitionSignal.LightLightMove:CognitionSignal.Empty;
         bool InRange(DriftingLight lamp)=>lamp&&(lamp.transform.position-journey.entry.player.transform.position).sqrMagnitude<=influenceRadius*influenceRadius;
-        public bool Step(DriftingLight lamp,Rigidbody body,Collider[] colliders)
+        public bool CanMove(CognitionSignal motion)
         {
-            if(!journey||!journey.entry.sentenceRuntime)return false;
-            var motion=Motion;
-            if(motion!=previous){neighbours.Clear();previous=motion;}
-            if(motion==CognitionSignal.Empty)return false;
-            if(!body.isKinematic){body.linearVelocity=Vector3.zero;body.angularVelocity=Vector3.zero;body.isKinematic=true;}
-            if(!InRange(lamp))return true;
-            var collider=lamp.GetComponent<Collider>();Vector3 target;float stop=.16f;
+            foreach(var lamp in journey.Lamps)
+                if(InRange(lamp)&&TryTarget(lamp,lamp.GetComponent<Rigidbody>(),motion,false,out _,out _))return true;
+            return false;
+        }
+        bool TryTarget(DriftingLight lamp,Rigidbody body,CognitionSignal motion,bool remember,out Vector3 delta,out float stop)
+        {
+            delta=Vector3.zero;
+            var collider=lamp.GetComponent<Collider>();Vector3 target;stop=.16f;
             if(motion==CognitionSignal.LightDoorMove)
             {
                 uint id=unchecked((uint)lamp.GetInstanceID()*2654435761u);
@@ -39,10 +40,21 @@ namespace PuzzleApple.V5
                 {float d=(other.transform.position-body.position).sqrMagnitude;if(d<closest){closest=d;best=other;}}
                 neighbours.TryGetValue(lamp,out var old);
                 if(old&&old!=lamp&&InRange(old)&&best!=old&&closest>=(old.transform.position-body.position).sqrMagnitude*targetSwitchRatio*targetSwitchRatio)best=old;
-                neighbours[lamp]=best;if(!best)return true;
+                if(remember)neighbours[lamp]=best;if(!best)return false;
                 target=best.transform.position;stop=spacing+collider.bounds.extents.magnitude+best.GetComponent<Collider>().bounds.extents.magnitude;
             }
-            var delta=target-body.position;float distance=delta.magnitude;if(distance<=stop)return true;
+            delta=target-body.position;return delta.magnitude>stop;
+        }
+        public bool Step(DriftingLight lamp,Rigidbody body,Collider[] colliders)
+        {
+            if(!journey||!journey.entry.sentenceRuntime)return false;
+            var motion=Motion;
+            if(motion!=previous){neighbours.Clear();previous=motion;}
+            if(motion==CognitionSignal.Empty)return false;
+            if(!body.isKinematic){body.linearVelocity=Vector3.zero;body.angularVelocity=Vector3.zero;body.isKinematic=true;}
+            if(!InRange(lamp))return true;
+            if(!TryTarget(lamp,body,motion,true,out var delta,out var stop))return true;
+            float distance=delta.magnitude;
             Vector3 separation=Vector3.zero;
             foreach(var other in journey.Lamps)if(other&&other!=lamp)
             {var away=body.position-other.transform.position;float d=away.magnitude;if(d>.001f&&d<spacing)separation+=away/d*(1-d/spacing);}

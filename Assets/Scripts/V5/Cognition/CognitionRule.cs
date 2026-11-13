@@ -4,7 +4,7 @@ using UnityEngine;
 namespace PuzzleApple.V5.Cognition
 {
     // Effects name the existing world handlers, not the supported sentence combinations.
-    public enum CognitionSignal { Empty = 0, WorldOn = 1, WorldOff = 7, LightOn = 8, LightOff = 9, DoorOn = 10, LightMove = 11, LightFloorMove = 12, DoorOff = 13, LightWorldMove = LightFloorMove, LightDoorMove = 14, LightLightMove = 15, DoorMove = 16, DoorWorldMove = 17, DoorLightMove = 18, WorldMove = 19, WorldLightMove = 20, WorldDoorMove = 21, IlluminateWorld = 22, IlluminateDoor = 23, IlluminateFloor = 24 }
+    public enum CognitionSignal { Empty = 0, WorldOn = 1, WorldOff = 7, LightOn = 8, LightOff = 9, DoorOn = 10, LightMove = 11, LightFloorMove = 12, DoorOff = 13, LightWorldMove = LightFloorMove, LightDoorMove = 14, LightLightMove = 15, DoorMove = 16, DoorWorldMove = 17, DoorLightMove = 18, WorldMove = 19, WorldLightMove = 20, WorldDoorMove = 21, IlluminateWorld = 22, IlluminateDoor = 23, IlluminateFloor = 24, IlluminateLight = 25 }
     public enum TriggerMode { Direct, Interaction }
 
     [CreateAssetMenu(menuName = "PuzzleApple/V5/Cognition/Rule", fileName = "Rule")]

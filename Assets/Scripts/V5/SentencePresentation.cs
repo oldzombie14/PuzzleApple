@@ -34,10 +34,10 @@ namespace PuzzleApple.V5
         public int PlayCount {get;private set;}
         public string LastRule {get;private set;}
         int revision;
-        int fadingGroup=-1;
         bool previousBlocked,previousLock;
         RectTransform top,bottom;
         Shot current;
+        CanvasGroup caption;
         float shotRoll;
         bool roomCut;
         Vector3 returnPosition;
@@ -61,9 +61,8 @@ namespace PuzzleApple.V5
         public void Cancel()
         {
             revision++;
+            SentenceCaption.Clear(ref caption);
             if(!Playing)return;
-            if(fadingGroup>=0)Entry.board.SetSentenceOpacity(fadingGroup,1);
-            fadingGroup=-1;
             Playing=false;CanInterrupt=false;if(top)Bars(0);
             if(!runtime||!Entry||!Entry.player||!Entry.board)return;
             if(roomCut)
@@ -77,7 +76,7 @@ namespace PuzzleApple.V5
             Entry.player.RestoreGameplayCursor();
             Entry.player.SuppressInteractionThisFrame();
         }
-        public IEnumerator Play(string rule,Action apply,int oneShotGroup=-1)
+        public IEnumerator Play(string rule,Action apply,Cognition.CognitionState.Group sentence=null)
         {
             current=Profile(rule);
             if(current==null){apply();yield break;}
@@ -86,14 +85,11 @@ namespace PuzzleApple.V5
             previousBlocked=Entry.board.Panel.InputBlocked;previousLock=Entry.player.CinematicLocked;
             Entry.board.CancelDrag();Entry.board.Panel.InputBlocked=true;Entry.player.CinematicLocked=true;
             float lead=Entry.feedback?Entry.feedback.duration+.2f:1;
-            fadingGroup=oneShotGroup;
             for(float t=0;t<lead&&token==revision;t+=Time.unscaledDeltaTime)
-            {
-                if(fadingGroup>=0)Entry.board.SetSentenceOpacity(fadingGroup,1-Mathf.SmoothStep(0,1,t/lead));
                 yield return null;
-            }
             if(token!=revision)yield break;
             Entry.board.Panel.SetOpen(false);Cursor.lockState=CursorLockMode.None;Cursor.visible=false;
+            caption=SentenceCaption.Show(transform,sentence);
             var view=Entry.player.view;
             shotRoll=view.eulerAngles.z;
             var journey=Entry.journey;
@@ -132,8 +128,6 @@ namespace PuzzleApple.V5
                 for(float t=0;t<.35f&&token==revision;t+=Time.unscaledDeltaTime)yield return null;
                 if(token!=revision)yield break;
             }
-            if(fadingGroup>=0)Entry.board.SetSentenceOpacity(fadingGroup,0);
-            fadingGroup=-1;
             apply();CanInterrupt=true;
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
@@ -146,7 +140,12 @@ namespace PuzzleApple.V5
                 yield return null;
             }
             for(float t=0;t<current.exit&&token==revision;t+=Time.unscaledDeltaTime)
-            {Bars(1-t/Mathf.Max(.001f,current.exit));yield return null;}
+            {
+                float remaining=1-t/Mathf.Max(.001f,current.exit);
+                Bars(remaining);
+                if(caption)caption.alpha=Mathf.SmoothStep(0,1,remaining);
+                yield return null;
+            }
             if(token==revision)Cancel();
         }
         Vector3 Target(Shot shot)
@@ -174,7 +173,8 @@ namespace PuzzleApple.V5
         Quaternion Level(Quaternion q){var e=q.eulerAngles;return Quaternion.Euler(e.x,e.y,shotRoll);}
         static Quaternion Blend(Quaternion a,Quaternion b,float t)
         {var x=a.eulerAngles;var y=b.eulerAngles;return Quaternion.Euler(Mathf.LerpAngle(x.x,y.x,t),Mathf.LerpAngle(x.y,y.y,t),x.z);}
-        void Bars(float amount)
+        void Bars(float amount)=>SetBarsHeight(current==null?0:current.letterbox*amount);
+        internal void SetBarsHeight(float height)
         {
             if(!top)
             {
@@ -184,11 +184,11 @@ namespace PuzzleApple.V5
                 rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;
                 top=Bar(canvas.transform,"Top");bottom=Bar(canvas.transform,"Bottom");
             }
-            float height=(current==null?0:current.letterbox)*amount;
+
             top.anchorMin=new Vector2(0,1-height);top.anchorMax=Vector2.one;
             bottom.anchorMin=Vector2.zero;bottom.anchorMax=new Vector2(1,height);
             top.offsetMin=top.offsetMax=bottom.offsetMin=bottom.offsetMax=Vector2.zero;
-            top.gameObject.SetActive(amount>0);bottom.gameObject.SetActive(amount>0);
+            top.gameObject.SetActive(height>0);bottom.gameObject.SetActive(height>0);
         }
         static RectTransform Bar(Transform parent,string name)
         {

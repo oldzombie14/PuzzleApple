@@ -14,7 +14,8 @@ namespace PuzzleApple.V5
         VolumeProfile bloomProfile;
         Vignette vignette;
         SentenceRuntime source;
-        Vector3 levels, targets;
+        Vector4 levels, targets;
+        public float LampMultiplier => 1 + Mathf.SmoothStep(0,1,levels.w);
         const float FadeSeconds=1.4f;
 
         void Awake()
@@ -48,9 +49,10 @@ namespace PuzzleApple.V5
         public void Apply(SentenceRuntime runtime)
         {
             source=runtime;
-            targets=new Vector3(runtime.HasEffect(CognitionSignal.IlluminateWorld)?1:0,
+            targets=new Vector4(runtime.HasEffect(CognitionSignal.IlluminateWorld)?1:0,
                 runtime.HasEffect(CognitionSignal.IlluminateDoor)?1:0,
-                runtime.HasEffect(CognitionSignal.IlluminateFloor)?1:0);
+                runtime.HasEffect(CognitionSignal.IlluminateFloor)?1:0,
+                runtime.HasEffect(CognitionSignal.IlluminateLight)?1:0);
             RenderLevels();
         }
 
@@ -60,6 +62,7 @@ namespace PuzzleApple.V5
             float step=Time.unscaledDeltaTime/FadeSeconds;
             levels.x=Mathf.MoveTowards(levels.x,targets.x,step);
             levels.y=Mathf.MoveTowards(levels.y,targets.y,step);
+            levels.w=Mathf.MoveTowards(levels.w,targets.w,step);
             levels.z=Mathf.MoveTowards(levels.z,targets.z,step);
             RenderLevels();
         }
@@ -80,6 +83,7 @@ namespace PuzzleApple.V5
             {
                 passage.World.doors.appearance.SetIlluminated(door);
                 passage.World.SetFloorIlluminated(floor);
+                passage.World.stateSource.SetLampMultiplier(LampMultiplier);
             }
         }
         void OnDestroy()

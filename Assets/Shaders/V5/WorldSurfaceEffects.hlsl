@@ -34,7 +34,7 @@ float HintDepth(float slot,float2 uv)
 {
     if(any(uv<0)||any(uv>1))return 0;
     if(slot<0)return SAMPLE_TEXTURE2D(_HintLight,sampler_HintLight,uv).a;
-    if(slot>0)return SAMPLE_TEXTURE2D(_HintMove,sampler_HintLight,uv).a;
+    if(slot==0)return SAMPLE_TEXTURE2D(_HintMove,sampler_HintLight,uv).a;
     return SAMPLE_TEXTURE2D(_HintFloor,sampler_HintLight,uv).a;
 }
 float ContactRipple(float3 local)
@@ -53,13 +53,14 @@ float ContactRipple(float3 local)
             float radius=age*_RippleSpeed-ring*_RingSpacing;
             if(radius<0)continue;
             float taper=smoothstep(_RippleTaper.x,_RippleTaper.x+max(.01,_RippleTaper.y),radius);
-            float width=_RingWidth*lerp(1,_RippleTaper.z,taper)/(1+.15*ring);
+            float innerWeight=_RingCount>1 ? ring/(_RingCount-1) : 1;
+            float width=_RingWidth*lerp(.72,1,innerWeight)*lerp(1,_RippleTaper.z,taper);
             // Fraction of the radial pixel footprint covered by this stroke.
             float offset=distance-radius;
             float outer=saturate(.5+(.5*width-offset)/pixelWidth);
             float inner=saturate(.5+(-.5*width-offset)/pixelWidth);
             float onset=smoothstep(0,.07,radius);
-            ink=max(ink,(outer-inner)*onset*fade/(1+.35*ring));
+            ink=max(ink,(outer-inner)*onset*fade*lerp(.42,1,innerWeight));
         }
     }
     return 1-ink*_RippleStrength;
@@ -82,7 +83,7 @@ float3 RoomSurfaceEffects(float3 positionWS)
         float2 glyph=(p-float2(_MuralRect.x,_MuralRect.y-_MuralRect.w*.5-size*.8))/size;
         float slot=clamp(round(glyph.x/1.2),-1,1);
         float2 symbolUV=glyph-float2(slot*1.2,0)+.5;
-        if(slot==0)symbolUV.y+=_HintFloorUVOffset;
+        if(slot>0)symbolUV.y+=_HintFloorUVOffset;
         if(all(abs(symbolUV-.5)<.53))
         {
             float bevel=.018;

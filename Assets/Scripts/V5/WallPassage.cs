@@ -24,7 +24,6 @@ namespace PuzzleApple.V5
         Material glow;
         Material coverInk;
         public float Reveal=>journey&&journey.ViewBeyondChamber?1:1-Mathf.SmoothStep(0,1,lamp.Brightness);
-        Transform returnOutline;
         Material returnGlow;
         void Start()
         {
@@ -73,12 +72,12 @@ namespace PuzzleApple.V5
             AddOutline(Entrance,glow,-thick*.5f-edgeInset);
             if(journey)
             {
-                returnOutline=new GameObject("Return entrance outline").transform;
+                var returnOutline=new GameObject("Return entrance outline").transform;
                 returnOutline.SetParent(journey.Root,false);
                 returnGlow=new Material(edgeMaterial);returnGlow.SetFloat("_Visibility",1);
                 returnGlow.SetColor("_Color",new Color(2.4f,2.4f,2.4f,1));
                 AddOutline(returnOutline,returnGlow,thick*.5f+.07f);
-                returnOutline.gameObject.SetActive(false);
+                returnGlow.renderQueue=coverInk.renderQueue-1;
             }
         }
         void AddOutline(Transform parent,Material material,float depth)
@@ -123,7 +122,6 @@ namespace PuzzleApple.V5
             float corridorGlow=journey?Mathf.Lerp(.09f,1,journey.CorridorBrightness):1;
             glow.SetFloat("_Visibility",darkness*corridorGlow);
             if(returnGlow)returnGlow.SetFloat("_Visibility",corridorGlow);
-            if(returnOutline)returnOutline.gameObject.SetActive(journey.ViewBeyondChamber);
             var p=Entrance.InverseTransformPoint(lamp.entry.player.transform.position);
             if(!ReachedEntrance&&Mathf.Abs(p.x)<width*.5f&&p.z>.35f&&p.z<entranceDepth&&p.y>-.2f&&p.y<height)
             {ReachedEntrance=true;reachedEntrance.Invoke();}

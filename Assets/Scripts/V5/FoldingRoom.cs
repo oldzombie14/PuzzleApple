@@ -27,6 +27,7 @@ namespace PuzzleApple.V5
             }
         }
         public Collider[] movingColliders;
+        public bool collideWhileOpening;
         [Min(.1f)] public float duration = 4;
         [Min(.1f)] public float openingSpeed = 1.2f;
         [Min(0)] public float sinkDepth = .35f;
@@ -89,9 +90,9 @@ namespace PuzzleApple.V5
         {
             SinkFocus=player;
             target=1;
-            SetCollision(false);
+            SetCollision(collideWhileOpening);
         }
-        public void HoldCurrentPose(){target=Progress;SetCollision(Progress<=0);}
+        public void HoldCurrentPose(){target=Progress;SetCollision(Progress<=0||collideWhileOpening&&!Opened);}
         public void CloseAt(Vector3 feet)
         {
             if (Opened) { SinkFocus=null; SinkCentre=feet; }

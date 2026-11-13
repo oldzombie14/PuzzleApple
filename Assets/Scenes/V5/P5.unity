@@ -1738,12 +1738,13 @@ MonoBehaviour:
   entry: {fileID: 916423647}
   whitePath: {fileID: 2100000, guid: a7af4f6cf4393574292de8593856bbcd, type: 2}
   blackSurround: {fileID: 2100000, guid: 572bbbc86a2876f46bce28b033b11054, type: 2}
+  floorPortalShader: {fileID: 4800000, guid: b45cef647aa34a3488d2342f5755751b, type: 3}
   roomMaterial: {fileID: 2100000, guid: 20ef48b86b4b13a449ed4bd5890dd5de, type: 2}
   lampMaterial: {fileID: 2100000, guid: 57ae126bc1599244883772cf22da026f, type: 2}
   glowVolume: {fileID: 445868993}
   pathLength: 18
   roomSize: {x: 16, y: 8, z: 18}
-  lampCount: 8
+  lampCount: 10
   lampScaleRange: {x: 0.12, y: 0.35}
   localLightIntensity: 1.2
   localLightRange: 8
@@ -1751,7 +1752,8 @@ MonoBehaviour:
   ambientIntensity: 0.5
   lampSpeed: 1.2
   lightFadeDuration: 1.5
-  doorDuration: 1.2
+  doorDuration: 1.65
+  openAngle: 135
   fogDensity: 0.018
   corridorFogDensity: 0.012
   pureWhiteCorridor: 1
@@ -1833,7 +1835,7 @@ MonoBehaviour:
   ringSpacing: 0.34
   ringWidth: 0.03
   rippleStrength: 0.9
-  thinningStartsAt: 0.65
+  thinningStartsAt: 0.05
   thinningDistance: 1.1
   distantWidth: 0.18
   contactParticles: 1

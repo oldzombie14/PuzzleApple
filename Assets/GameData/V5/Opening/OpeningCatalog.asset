@@ -20,6 +20,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
   - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
   - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+  - {fileID: 11400000, guid: 89b148ad03ff7c840b80c6d2ac9119fc, type: 2}
   rules:
   - {fileID: 11400000, guid: c4d7ce4b8d2f4fe7b2140faddd1f15e2, type: 2}
   - {fileID: 11400000, guid: 084a3e378259496cbbbd32fc6a4ebe9d, type: 2}
@@ -42,5 +43,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ac98258c3c9548c391e42613c577fe8a, type: 2}
   - {fileID: 11400000, guid: c0b7fd9052a74da788b4a13191e7f6df, type: 2}
   - {fileID: 11400000, guid: ac8f4e58b73d4664bf8fa9234135ff18, type: 2}
-  - {fileID: 11400000, guid: e7c1fe67651847eab6f6c33808f107ec, type: 2}
+  - {fileID: 11400000, guid: b670d4540942475d82a33eba6ab8b941, type: 2}
   conflicts: []

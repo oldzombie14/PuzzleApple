@@ -58,7 +58,7 @@ MonoBehaviour:
     letterbox: 0.09
     followSpeed: 12
     offset: {x: 0, y: 0, z: 0}
-  - rule: light.floor.move
+  - rule: light.move.floor
     focus: 1
     follow: 1
     enter: 1.3

@@ -7,7 +7,7 @@ namespace PuzzleApple.V5
         public PassageJourney journey;
         [Min(.1f)] public float speed=2.5f;
         [Min(0)] public float surfaceClearance=.025f,stopDistance=.04f;
-        public bool Active => journey && journey.entry && journey.entry.board && journey.entry.board.State != null &&
+        public bool Active => journey && journey.Brightness > 0 && journey.entry && journey.entry.board && journey.entry.board.State != null &&
             (journey.entry.sentenceRuntime ? journey.entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightFloorMove) :
                 journey.entry.board.State.HasEffect(Cognition.CognitionSignal.LightFloorMove));
         public int ArrivedCount {get;private set;}

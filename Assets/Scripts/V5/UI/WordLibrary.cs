@@ -16,6 +16,8 @@ namespace PuzzleApple.V5
         public VocabularyImage[] vocabularyImages=new VocabularyImage[0];
         public SnapshotSequence moveMemory;
         Material memoryPrint;
+        Material movePrint;
+        WorldEntry worldEntry;
         float playbackStart;
         Vector2? dismissPress;
         [Header("Prefab references — edit appearance on the UI components")]
@@ -48,6 +50,13 @@ namespace PuzzleApple.V5
         void Start()
         {
             memoryPrint=snapshot.material;
+            worldEntry=FindFirstObjectByType<WorldEntry>();
+            if(moveMemory&&moveMemory.unlitAtlas)
+            {
+                movePrint=new Material(memoryPrint);
+                movePrint.SetTexture("_UnlitAtlas",moveMemory.unlitAtlas);
+                movePrint.EnableKeyword("MOVE_SNAPSHOT");
+            }
             note.lineType=InputField.LineType.SingleLine;
             note.caretBlinkRate=.85f;
             note.caretWidth=2;
@@ -155,7 +164,7 @@ namespace PuzzleApple.V5
                 snapshot.texture=moveMemory.atlas;
                 snapshot.uvRect=moveMemory.Frame(Time.unscaledTime-playbackStart);
             }
-            snapshot.material=selected=="light"?null:memoryPrint;
+            snapshot.material=selected=="move"?movePrint:selected=="light"?null:memoryPrint;
             snapshot.enabled=snapshot.texture;
             if(snapshotFrame.activeSelf!=snapshot.enabled)
             {
@@ -167,15 +176,27 @@ namespace PuzzleApple.V5
             gapBeforeSnapshot.SetActive(snapshot.enabled);
             gapBeforeNote.SetActive(snapshot.enabled);
             float exposure=selected=="door"?.76f:1f;
-            float opacity=1f;
-            if(selected=="move"&&moveMemory&&moveMemory.framesPerSecond>0)
+            if(selected=="floor"||selected=="move")
             {
-                float duration=moveMemory.frames/moveMemory.framesPerSecond;
-                float time=Mathf.Repeat(Time.unscaledTime-playbackStart,duration);
-                opacity=Mathf.SmoothStep(0f,1f,Mathf.Min(time,duration-time)/.16f);
+                float lighting=SnapshotLighting();
+                if(selected=="floor")
+                {
+                    float glow=worldEntry&&worldEntry.sentenceRuntime?worldEntry.sentenceRuntime.FloorIllumination:0;
+                    exposure=Mathf.Lerp(.012f,1,Mathf.Max(lighting,glow));
+                }
+                else if(movePrint)movePrint.SetFloat("_SnapshotLighting",lighting);
             }
-            snapshot.color=new Color(exposure,exposure,exposure,opacity);
+            snapshot.color=new Color(exposure,exposure,exposure,1f);
             if(snapshot.texture)snapshotAspect.aspectRatio=selected=="move"&&moveMemory?moveMemory.aspect:(float)snapshot.texture.width/snapshot.texture.height;
+        }
+        float SnapshotLighting()
+        {
+            if(!worldEntry)return 1;
+            var outdoor=worldEntry.outdoor;
+            if(outdoor&&outdoor.InChapter)return outdoor.CurrentRoom.Brightness;
+            if(outdoor&&outdoor.IsOutside)return outdoor.World.stateSource.Brightness;
+            var journey=worldEntry.journey;
+            return journey&&journey.BeyondChamber?journey.Brightness:worldEntry.chamberLight.Brightness;
         }
         void UpdateSaveButton(){saveNote.interactable=selected!=null&&note.text.Trim()!=SavedNote(selected);}
         public void SaveNote()
@@ -190,7 +211,7 @@ namespace PuzzleApple.V5
             UpdateTooltip();
             if(!IsOpen)return;
             CheckPanelClick();
-            if(IsOpen&&selected=="move")UpdatePhoto();
+            if(IsOpen&&(selected=="move"||selected=="floor"))UpdatePhoto();
         }
 
         void CheckPanelClick()
@@ -298,6 +319,7 @@ namespace PuzzleApple.V5
         }
         void OnDestroy()
         {
+            if(movePrint)Destroy(movePrint);
             foreach(var photo in capturedPhotos)if(photo)Destroy(photo);
             if(board&&board.State!=null)board.State.Changed-=Refresh;
             if(board&&board.Panel)board.Panel.OpenChanged.RemoveListener(OnPanel);

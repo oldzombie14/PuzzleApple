@@ -53,7 +53,7 @@ namespace PuzzleApple.V5.Outdoor
         float blend;
         Material skyInstance;
         MaterialPropertyBlock cloudProperties;
-        void OnEnable() { blend = !Application.isPlaying && previewNight ? 1 : 0; }
+        void OnEnable() { if(!Application.isPlaying)blend=previewNight?1:0; }
         void LateUpdate()
         {
             if (!sun || !daySky || !nightSky || !clouds) return;
@@ -85,6 +85,7 @@ namespace PuzzleApple.V5.Outdoor
             float cloudRadians=Vector3.Cross(ray,clouds.DriftDirection*clouds.ActualDriftSpeed).magnitude/distance;
             return projectedStar>.001f?cloudRadians/projectedStar*Mathf.Rad2Deg:0;
         }
+        public void ApplyCurrentLighting()=>Apply(blend);
         void Apply(float t)
         {
             if (!skyInstance) skyInstance = new Material(nightSky) { name = "V4 night preview", hideFlags = HideFlags.HideAndDontSave };
@@ -102,7 +103,7 @@ namespace PuzzleApple.V5.Outdoor
             skyInstance.SetFloat("_HazeHeight", nightHazeHeight);
             skyInstance.SetFloat("_HazeEnabled", clouds.fogEnabled ? 1 : 0);
             skyInstance.SetFloat("_TwinkleSpeed", twinkleSpeed); skyInstance.SetFloat("_TwinkleAmount", twinkleAmount);
-            skyInstance.SetFloat("_Clock", Application.isPlaying ? Time.unscaledTime : Time.realtimeSinceStartup);
+            skyInstance.SetFloat("_Clock", Application.isPlaying ? Time.time : Time.realtimeSinceStartup);
             RenderSettings.skybox = t > 0 ? skyInstance : daySky;
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = Color.Lerp(dayAmbientSky, nightAmbientSky, t);

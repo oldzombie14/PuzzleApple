@@ -15,6 +15,7 @@ namespace PuzzleApple.V5
         Vignette vignette;
         SentenceRuntime source;
         Vector4 levels, targets;
+        public float FloorIllumination=>Mathf.SmoothStep(0,1,levels.z);
         public float LampMultiplier => 1 + Mathf.SmoothStep(0,1,levels.w);
         const float FadeSeconds=1.4f;
 
@@ -75,7 +76,7 @@ namespace PuzzleApple.V5
             exposure.active=levels.x>0;
             exposure.postExposure.value=2.4f*Mathf.SmoothStep(0,1,levels.x);
             float door=Mathf.SmoothStep(0,1,levels.y);
-            float floor=Mathf.SmoothStep(0,1,levels.z);
+            float floor=FloorIllumination;
             bloomVolume.weight=outside?0:door;
             Shader.SetGlobalFloat("_P5DoorGlow",door*2.5f);
             Shader.SetGlobalFloat("_P5FloorGlow",floor*.85f);

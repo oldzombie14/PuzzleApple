@@ -10,10 +10,14 @@ namespace PuzzleApple.V5
             public Renderer renderer;
             [Tooltip("Local normal of the inward-facing Cube surface, authored in the closed pose.")]
             public Vector3 inwardNormal;
+            public bool preserveMeshDepth;
+            [Range(0,1)] public float closedShade;
         }
         public FoldingRoom room;
         public Surface[] surfaces;
         public Color tint=Color.white;
+        public bool useSceneLighting;
+        [Range(0,1)] public float closedLightingBlend;
         [Min(0)] public float darkLevel=.0025f;
         [Min(0)] public float coreBrightness=.18f;
         [Tooltip("Total apparent seam width across the two adjoining faces, in screen pixels.")]
@@ -135,8 +139,9 @@ namespace PuzzleApple.V5
                 var face=faces[i];
                 properties.SetVector("_InteriorFaceCentre",face==null?Vector3.zero:
                     (face.corners[0]+face.corners[1]+face.corners[2]+face.corners[3])*.25f);
-                properties.SetColor("_InteriorTint",tint);
-                properties.SetFloat("_ClosedWeight",weight);
+                properties.SetColor("_InteriorTint",tint*(1-surface.closedShade));
+                properties.SetFloat("_ClosedWeight",useSceneLighting?0:weight*(1-closedLightingBlend));
+                properties.SetFloat("_PreserveMeshDepth",surface.preserveMeshDepth?1:0);
                 properties.SetFloat("_PanelOpacity",opacity);
                 properties.SetVector("_PanelSink",sink);
                 properties.SetFloat("_PanelGroundY",groundY);

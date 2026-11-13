@@ -20,6 +20,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/V4/ChapterI_Garden.unity
     guid: 97ac66d1c927c8b47884585ee9a90433
+  - enabled: 1
+    path: Assets/Scenes/V5/ChapterI.unity
+    guid: 2ed01d17df2cf154fa62546e9045e378
+  - enabled: 1
+    path: Assets/Scenes/V5/ChapterI_Garden.unity
+    guid: fbcc5bd9f28c40c40a1f04393475dd09
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

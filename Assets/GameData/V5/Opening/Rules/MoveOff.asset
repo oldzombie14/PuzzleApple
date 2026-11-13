@@ -16,7 +16,7 @@ MonoBehaviour:
   words:
   - {fileID: 11400000, guid: 3200fb36f1e44738ab1c7ee1767519fc, type: 2}
   - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
-  effect: 0
+  effect: 25
   additionalEffects: 
   trigger: 0
   exclusionKey: 

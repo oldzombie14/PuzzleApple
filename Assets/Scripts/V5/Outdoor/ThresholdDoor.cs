@@ -95,7 +95,7 @@ namespace PuzzleApple.V5.Outdoor
             if(Revealed&&facingPlayer)
             {
                 var bearing=Vector3.ProjectOnPlane(body.position-facingPlayer.position,Vector3.up);
-                if(bearing.sqrMagnitude>.0001f)body.MoveRotation(Quaternion.LookRotation(bearing,Vector3.up));
+                if(bearing.sqrMagnitude>9f)body.MoveRotation(Quaternion.LookRotation(bearing,Vector3.up));
             }
             if (ground) groundHeight = ground.bounds.max.y + .02f;
             if (Revealed && Landed && !freeMotion.Moving) CompleteLanding();

@@ -30,7 +30,7 @@ namespace PuzzleApple.V5
         OuterRoomEdges edges;
         ObservableBehaviour cubeMotion;
         Vector3 moveDirection,roomMin,roomMax;
-        public bool Moving=>entry&&entry.Entered&&entry.room.Opened&&entry.sentenceRuntime&&
+        public bool Moving=>Brightness>0&&entry&&entry.Entered&&entry.room.Opened&&entry.sentenceRuntime&&
             entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)&&
             (!entry.journey||!entry.journey.BeyondChamber)&&(!entry.outdoor||!entry.outdoor.IsOutside)&&
             (!entry.portableClosure||!entry.portableClosure.Isolated);
@@ -154,13 +154,14 @@ namespace PuzzleApple.V5
                 if(emitter)return "light";
             }
             if(!hit.collider)return null;
+            if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.CurrentRoom.WordAt(hit.collider,out emitter);
             if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null){if(word=="light")emitter=hit.collider.GetComponent<Renderer>();return word;}}
             if((!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
             return null;
         }
         void Update()
         {
-            if(TransitionEnabled)Brightness=Mathf.MoveTowards(Brightness,TargetOn?1:0,Time.deltaTime/Mathf.Max(.01f,fadeDuration));
+            if(TransitionEnabled)Brightness=Mathf.MoveTowards(Brightness,TargetOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,fadeDuration));
             material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness)*entry.sentenceRuntime.LampMultiplier);
             material.SetColor("_BaseColor",Color.Lerp(new Color(.015f,.015f,.015f),onColor,Brightness));
             if(cubeMotion)cubeMotion.Available=Moving&&TargetOn&&Brightness>=.999f;
@@ -273,6 +274,8 @@ namespace PuzzleApple.V5
             var p=entry.player;bool locked=p.MovementLocked;p.MovementLocked=true;
             entry.board.Panel.InputBlocked=true;
             var word=entry.board.Catalog.Word(id);
+            var journey=entry.journey;
+            bool unlitObservation=lesson&&journey&&journey.movementObservation&&journey.movementObservation.lesson==lesson&&!journey.LampsLit;
             var rect=collectionSymbol.rectTransform;collectionSymbol.sprite=word.Symbol;collectionSymbol.gameObject.SetActive(true);
             float duration=wordDisplayDuration;
             for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
@@ -285,7 +288,7 @@ namespace PuzzleApple.V5
             }
             collectionSymbol.gameObject.SetActive(false);
             Cognition.CognitionState.Group acquired=null;
-            if(lesson)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
+            if(lesson&&!unlitObservation)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
             else entry.board.State.TryAcquireWord("collect."+id,word);
             if(acquired!=null)entry.board.PlaceAcquiredSentence(acquired.Id);
             p.MovementLocked=locked;entry.board.Panel.InputBlocked=false;Collecting=false;

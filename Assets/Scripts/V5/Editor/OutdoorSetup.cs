@@ -152,6 +152,15 @@ namespace PuzzleApple.V5.Editor
                 if(original.IsValid()&&original.isLoaded)SceneManager.SetActiveScene(original);
             }
         }
+        internal static string[] V5Words(PuzzleApple.V4.Cognition.CognitionRule rule)
+        {
+            if(rule.Id=="light.ground.move")return new[]{"light","move","floor"};
+            return rule.Words.Select(w=>w.Id=="ground"?"floor":w.Id).ToArray();
+        }
+
+        static string V5RuleId(PuzzleApple.V4.Cognition.CognitionRule rule)=>
+            rule.Id=="light.ground.move"?"light.move.floor":rule.Id.Replace("ground","floor");
+
         public static void MigrateGrammar()
         {
             var target=AssetDatabase.LoadAssetAtPath<CognitionCatalog>("Assets/GameData/V5/Opening/OpeningCatalog.asset");
@@ -159,10 +168,10 @@ namespace PuzzleApple.V5.Editor
             var rules=target.Rules.ToList();
             foreach(var old in source.Rules)
             {
-                var ids=old.Words.Select(w=>w.Id=="ground"?"floor":w.Id).ToArray();
+                var ids=V5Words(old);
                 if(rules.Any(r=>r.Words.Select(w=>w.Id).SequenceEqual(ids)))continue;
                 var rule=ScriptableObject.CreateInstance<CognitionRule>();var so=new SerializedObject(rule);
-                so.FindProperty("id").stringValue=old.Id.Replace("ground","floor");
+                so.FindProperty("id").stringValue=V5RuleId(old);
                 var words=so.FindProperty("words");words.arraySize=ids.Length;for(int i=0;i<ids.Length;i++)words.GetArrayElementAtIndex(i).objectReferenceValue=target.Word(ids[i]);
                 var effect=(CognitionSignal)Enum.Parse(typeof(CognitionSignal),old.Effect.ToString());so.FindProperty("effect").intValue=(int)effect;
                 so.FindProperty("exclusionKey").stringValue=old.ExclusionKey;so.ApplyModifiedPropertiesWithoutUndo();
@@ -174,7 +183,7 @@ namespace PuzzleApple.V5.Editor
             foreach(var old in AssetDatabase.FindAssets("t:IntroShotProfile",new[]{"Assets/GameData/V4/Opening/IntroShots"})
                 .Select(g=>AssetDatabase.LoadAssetAtPath<PuzzleApple.V4.IntroShotProfile>(AssetDatabase.GUIDToAssetPath(g))))
             {
-                if(!old||!old.rule)continue;var id=old.rule.Id.Replace("ground","floor");
+                if(!old||!old.rule)continue;var id=V5RuleId(old.rule);
                 if(shots.Any(s=>s.rule==id))continue;
                 var focus=id=="floor.move"?SentencePresentation.Focus.Sky:id.StartsWith("door.")||id=="light.door.move"?SentencePresentation.Focus.Door:
                     id.StartsWith("floor.")?SentencePresentation.Focus.Floor:SentencePresentation.Focus.LightGroup;

@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 namespace PuzzleApple.V5
 {
@@ -10,19 +9,29 @@ namespace PuzzleApple.V5
     {
         public WorldEntry entry;
         public bool automaticTransition=true;
-        [Min(.1f)] public float exitSpeed=4.5f,turnDuration=.85f;
+        [Min(.1f)] public float exitSpeed=4.5f;
         public bool Transitioning {get;private set;}
         public Outdoor.OutdoorWorld World {get;private set;}
-        public bool IsOutside=>World&&World.Active;
+        public bool IsOutside=>outside;
+        bool outside;
+        public ChapterRoom Chapter {get;private set;}
+        public bool InChapter=>Chapter&&Chapter.gameObject.activeInHierarchy;
+        const string ChapterPath="Assets/Scenes/V5/ChapterI.unity";
+        Scene chapterScene, gardenScene;
+        public ChapterRoom Garden {get;private set;}
+        public ChapterRoom CurrentRoom=>InChapter&&Garden&&Vector3.Dot(entry.player.transform.position-Chapter.gardenThreshold.position,Chapter.gardenThreshold.forward)<0?Garden:Chapter;
+        Transform chapterFrame;
+        Vector3 previousFeet;
+        bool tracking;
+        CameraClearFlags indoorClearFlags;
+        float indoorFarClip;
         public int TransitionCount {get;private set;}
         public float LastExitSpeed {get;private set;}
         public Vector3 LastExitVelocity {get;private set;}
         readonly Dictionary<Renderer,bool> hidden=new Dictionary<Renderer,bool>();
         readonly Dictionary<Behaviour,bool> disabled=new Dictionary<Behaviour,bool>();
         Scene outdoorScene;
-        RectTransform top,bottom;
-        RawImage crossingFrame;
-        public const float TransferDepth=-.8f;
+        public const float TransferDepth=-.45f;
         const float WindowDepth=TransferDepth;
         bool tunnelBuilt;
         Renderer window;
@@ -31,7 +40,6 @@ namespace PuzzleApple.V5
         Material windowMaterial;
         readonly Plane[] viewPlanes=new Plane[6];
         readonly List<Behaviour> previewDisabled=new List<Behaviour>();
-        float nextWindowFrame;
         public int TransferredLamps {get;private set;}
         GameObject preparedRoot;
         Outdoor.OutdoorWorld preparedWorld;
@@ -78,10 +86,10 @@ namespace PuzzleApple.V5
             SceneManager.MoveGameObjectToScene(go,outdoorScene);
             windowCamera=go.GetComponent<Camera>();windowCamera.enabled=false;
             windowCamera.clearFlags=CameraClearFlags.Skybox;windowCamera.farClipPlane=1500;
-            windowTexture=new RenderTexture(512,512,24,RenderTextureFormat.ARGB32){name="Floor opening outdoor view"};
+            var playerCamera=entry.player.view.GetComponent<Camera>();
+            windowTexture=new RenderTexture(Mathf.Max(1,playerCamera.pixelWidth),Mathf.Max(1,playerCamera.pixelHeight),24,RenderTextureFormat.ARGB32){name="Floor opening outdoor view"};
             windowTexture.Create();windowCamera.targetTexture=windowTexture;
-            windowMaterial=new Material(entry.journey.blackSurround);
-            windowMaterial.SetColor("_BaseColor",Color.white);
+            windowMaterial=new Material(entry.journey.floorPortalShader);
             windowMaterial.SetTexture("_BaseMap",windowTexture);
             window.sharedMaterial=windowMaterial;
             RenderWindow();
@@ -90,45 +98,68 @@ namespace PuzzleApple.V5
         {
             var floor=entry.journey.floorSurface;
             var centre=preparedWorld.exit.position;
-            centre.y=Mathf.Max(centre.y,preparedWorld.ground.bounds.max.y+floor.HoleWidth*.5f+.15f);
+            centre.y=Mathf.Max(centre.y,preparedWorld.ground.bounds.max.y+floor.HoleWidth*.5f+entry.player.view.localPosition.y+.15f);
             return centre;
+        }
+        // Looking down through the floor corresponds to looking forward out of the door.
+        Quaternion PortalRotation=>preparedWorld.exit.rotation*Quaternion.Euler(-90,0,0)*Quaternion.Inverse(entry.journey.Root.rotation);
+        Vector3 ThroughPortal(Vector3 point)
+        {
+            var j=entry.journey;
+            var centre=j.Root.TransformPoint(new Vector3(0,WindowDepth,j.floorSurface.HoleCentreZ));
+            return OutletCentre()+PortalRotation*(point-centre);
+        }
+        Quaternion OutletView(Transform eye)
+        {
+            var forward=PortalRotation*eye.forward;
+            if(Vector3.Cross(Vector3.up,forward).sqrMagnitude<.000001f)
+                forward=(forward+preparedWorld.exit.forward*.001f).normalized;
+            return Quaternion.LookRotation(forward,Vector3.up);
         }
         void RenderWindow()
         {
-            var j=entry.journey;var floor=j.floorSurface;
-            var eye=j.Root.InverseTransformPoint(entry.player.view.position);
-            float half=floor.HoleWidth*.5f;
-            float x=Mathf.Clamp(eye.x,-half,half);
-            // Limit vertical parallax so the horizon and ground remain visible from the near lip.
-            float y=Mathf.Clamp((eye.z-floor.HoleCentreZ)*.25f,-half*.35f,half*.35f);
-            float depth=Mathf.Clamp(eye.y-WindowDepth,.35f,6);
+            var eye=entry.player.view;
+            var source=eye.GetComponent<Camera>();
             var outlet=preparedWorld.exit;
-            windowCamera.transform.SetPositionAndRotation(OutletCentre()+outlet.right*x+outlet.up*y-outlet.forward*depth,outlet.rotation);
-            windowCamera.nearClipPlane=depth;
-            windowCamera.projectionMatrix=Matrix4x4.Frustum(-half-x,half-x,-half-y,half-y,depth,windowCamera.farClipPlane);
+            windowCamera.transform.SetPositionAndRotation(ThroughPortal(eye.position),OutletView(eye));
+            windowCamera.nearClipPlane=source.nearClipPlane;
+            windowCamera.fieldOfView=source.fieldOfView;
+            windowCamera.aspect=source.aspect;
+            windowCamera.ResetProjectionMatrix();
+            // Clip the world behind the exit, keeping the same screen rays as the player.
+            var view=windowCamera.worldToCameraMatrix;
+            var normal=view.MultiplyVector(outlet.forward);
+            var point=view.MultiplyPoint(OutletCentre());
+            float depth=Vector3.Dot(point,normal);
+            if(depth>source.nearClipPlane)
+                windowCamera.projectionMatrix=windowCamera.CalculateObliqueMatrix(new Vector4(normal.x,normal.y,normal.z,-Vector3.Dot(normal,point)));
+            float approach=Mathf.InverseLerp(1.3f,.5f,depth)*Mathf.InverseLerp(.08f,.45f,depth);
+            windowMaterial.SetFloat("_Shimmer",approach*Mathf.Clamp01(-entry.player.VerticalVelocity/6));
             var previous=SceneManager.GetActiveScene();
             try
             {
                 SceneManager.SetActiveScene(outdoorScene);
                 preparedWorld.sun.enabled=true;
-                RenderSettings.sun=preparedWorld.sun;RenderSettings.skybox=preparedWorld.environment.daySky;
-                RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Trilight;
-                RenderSettings.ambientSkyColor=preparedWorld.environment.dayAmbientSky;
-                RenderSettings.ambientEquatorColor=preparedWorld.environment.dayAmbientEquator;
-                RenderSettings.ambientGroundColor=preparedWorld.environment.dayAmbientGround;
-                preparedWorld.clouds.UpdateProjection();
+                RenderSettings.sun=preparedWorld.sun;
+                preparedWorld.environment.ApplyCurrentLighting();
                 windowCamera.Render();warmed=true;
             }
             finally{preparedWorld.sun.enabled=false;SceneManager.SetActiveScene(previous);}
         }
         void LateUpdate()
         {
-            if(!windowCamera||!window||IsOutside||Time.unscaledTime<nextWindowFrame)return;
+            if(!windowCamera||!window||InChapter||IsOutside)return;
             var j=entry.journey;
             if(!j.InSecondRoom||entry.portableClosure&&entry.portableClosure.Isolated)return;
+            var feet=j.Root.InverseTransformPoint(entry.player.transform.position);
+            var eye=j.Root.InverseTransformPoint(entry.player.view.position);
+            if(automaticTransition&&!Transitioning&&!entry.Busy&&!entry.ConfirmingExit&&eye.y<=WindowDepth+entry.player.view.GetComponent<Camera>().nearClipPlane&&j.floorSurface.FitsOpening(feet,0))
+            {
+                Travel();
+                return;
+            }
             GeometryUtility.CalculateFrustumPlanes(entry.player.view.GetComponent<Camera>(),viewPlanes);
             if(!GeometryUtility.TestPlanesAABB(viewPlanes,window.bounds))return;
-            nextWindowFrame=Time.unscaledTime+1f/24;
             RenderWindow();
         }
         public bool TransferLamp(DriftingLight source,Vector3 local,float fallingSpeed)
@@ -150,20 +181,135 @@ namespace PuzzleApple.V5
         }
         void Update()
         {
-            if(IsOutside||Transitioning||!entry||!entry.journey||!entry.journey.floorSurface)return;
+            if(IsOutside||InChapter)
+            {
+                CheckFrames();
+                return;
+            }
+            if(Transitioning||!entry||!entry.journey||!entry.journey.floorSurface)return;
             var j=entry.journey;
             if(!j.floorSurface.HoleOpen&&j.floorSurface.HoleProgress<=0)return;
             if(!tunnelBuilt)BuildTunnel();
             if(!windowCamera&&preparedWorld)StartWindow();
-            var p=j.Root.InverseTransformPoint(entry.player.transform.position);
-            if(automaticTransition&&!entry.Busy&&!entry.ConfirmingExit&&p.y<TransferDepth&&
-                j.floorSurface.FitsOpening(p,0))StartCoroutine(Travel());
+        }
+        void CheckFrames()
+        {
+            Vector3 feet=entry.player.transform.position;
+            bool ready=entry.room.Opened&&!Transitioning&&!entry.Busy&&!entry.ConfirmingExit&&!entry.chamberLight.Collecting&&!entry.board.Panel.IsOpen;
+            if(ready&&tracking)
+            {
+                if(InChapter&&ReachedMirror(feet))
+                    LeaveChapter();
+                else if(IsOutside&&Crossed(chapterFrame,feet,1.28f,3.65f))
+                    StartCoroutine(EnterChapter());
+                else if(IsOutside&&World.doors.appearance.PassageEnabled&&Crossed(World.door.transform,feet,2.07f,5.92f))
+                    ReturnIndoors();
+            }
+            previousFeet=entry.player.transform.position;
+            tracking=ready;
+        }
+        bool ReachedMirror(Vector3 feet)
+        {
+            var step=Vector3.ProjectOnPlane(feet-previousFeet,Vector3.up);
+            if(step.sqrMagnitude<.000001f)return false;
+            var eyeOffset=entry.player.view.position-feet;
+            var controller=entry.player.GetComponent<CharacterController>();
+            // The physical mirror surround stops the capsule slightly in front of the glass.
+            return Chapter.mirror.Raycast(new Ray(previousFeet+eyeOffset,step.normalized),out _,
+                step.magnitude+controller.radius+controller.skinWidth+.16f);
+        }
+        bool Crossed(Transform frame,Vector3 feet,float halfWidth,float height)
+        {
+            if(!frame)return false;
+            var a=frame.InverseTransformPoint(previousFeet+Vector3.up);
+            var b=frame.InverseTransformPoint(feet+Vector3.up);
+            if((a.z<0)==(b.z<0)||Mathf.Abs(a.z-b.z)<.0001f)return false;
+            var at=Vector3.Lerp(a,b,a.z/(a.z-b.z));
+            return Mathf.Abs(at.x)<halfWidth&&at.y>0&&at.y<height;
+        }
+        IEnumerator EnterChapter()
+        {
+            Transitioning=true;
+            var player=entry.player;
+            player.MovementLocked=true;
+            entry.board.Panel.InputBlocked=true;
+            try
+            {
+                if(!Chapter)
+                {
+                    yield return SceneManager.LoadSceneAsync(ChapterPath,LoadSceneMode.Additive);
+                    chapterScene=SceneManager.GetSceneByPath(ChapterPath);
+                    foreach(var root in chapterScene.GetRootGameObjects())
+                    {
+                        Chapter=root.GetComponentInChildren<ChapterRoom>(true);
+                        if(Chapter)break;
+                    }
+                    if(!Chapter){Debug.LogError("Missing V5 ChapterRoom in "+ChapterPath);yield break;}
+                    const string gardenPath="Assets/Scenes/V5/ChapterI_Garden.unity";
+                    yield return SceneManager.LoadSceneAsync(gardenPath,LoadSceneMode.Additive);
+                    gardenScene=SceneManager.GetSceneByPath(gardenPath);
+                    foreach(var root in gardenScene.GetRootGameObjects())
+                    {
+                        Garden=root.GetComponentInChildren<ChapterRoom>(true);
+                        if(Garden)break;
+                    }
+                    Chapter.Bind(entry);
+                    Garden.Bind(entry);
+                }
+                entry.room.GetComponent<FoldingInterior>().enabled=false;
+                outside=false;
+                SetChapterActive(true);
+                preparedRoot.SetActive(false);
+                SceneManager.SetActiveScene(chapterScene);
+                player.Teleport(Chapter.arrival.position,Chapter.arrival.rotation);
+                entry.sentenceRuntime.ChangeSpace();
+            }
+            finally{entry.board.Panel.InputBlocked=false;player.MovementLocked=false;Transitioning=false;tracking=false;}
+        }
+        void SetChapterActive(bool active)
+        {
+            foreach(var root in chapterScene.GetRootGameObjects())root.SetActive(active);
+            foreach(var root in gardenScene.GetRootGameObjects())root.SetActive(active);
+        }
+        void LeaveChapter()
+        {
+            outside=true;
+            SetChapterActive(false);
+            entry.room.GetComponent<FoldingInterior>().enabled=true;
+            SceneManager.SetActiveScene(outdoorScene);
+            preparedRoot.SetActive(true);
+            entry.player.Teleport(chapterFrame.position-chapterFrame.forward*1.8f,Quaternion.LookRotation(-chapterFrame.forward));
+            World.Audio.ResumeTrack();
+            World.ApplyMotion(entry.sentenceRuntime.HasEffect,false);
+            entry.sentenceRuntime.ChangeSpace();
+        }
+        void ReturnIndoors()
+        {
+            outside=false;
+            preparedRoot.SetActive(false);
+            SceneManager.SetActiveScene(entry.gameObject.scene);
+            foreach(var pair in hidden)if(pair.Key)pair.Key.forceRenderingOff=pair.Value;
+            foreach(var pair in disabled)if(pair.Key)pair.Key.enabled=pair.Value;
+            hidden.Clear();disabled.Clear();
+            entry.journey.enabled=true;
+            if(entry.chamberLight.observer)entry.chamberLight.observer.enabled=true;
+            var camera=entry.player.view.GetComponent<Camera>();
+            camera.clearFlags=indoorClearFlags;camera.farClipPlane=indoorFarClip;
+            var floor=entry.journey.floorSurface;
+            var point=entry.journey.Root.TransformPoint(new Vector3(0,.15f,floor.HoleCentreZ-floor.HoleWidth*.5f-1.2f));
+            entry.player.Teleport(point,entry.journey.Root.rotation*Quaternion.Euler(0,180,0));
+            window.gameObject.SetActive(true);
+            StartWindow();
+            entry.sentenceRuntime.ChangeSpace();
+            tracking=false;
         }
         void BuildTunnel()
         {
             tunnelBuilt=true;var j=entry.journey;float width=j.floorSurface.HoleWidth;
             var root=new GameObject("Downward passage").transform;root.SetParent(j.Root,false);
-            root.localPosition=new Vector3(0,-4.005f,j.floorSurface.HoleCentreZ);
+            // Keep the capsule inside the shaft until its eye crosses the portal.
+            float liningHeight=-WindowDepth+entry.player.GetComponent<CharacterController>().height;
+            root.localPosition=new Vector3(0,-liningHeight*.5f-.005f,j.floorSurface.HoleCentreZ);
             var quad=GameObject.CreatePrimitive(PrimitiveType.Quad);quad.name="View through floor opening";
             quad.transform.SetParent(j.Root,false);
             quad.transform.localPosition=new Vector3(0,WindowDepth,j.floorSurface.HoleCentreZ);
@@ -180,53 +326,33 @@ namespace PuzzleApple.V5
             {
                 var wall=GameObject.CreatePrimitive(PrimitiveType.Cube);wall.name="Passage lining";wall.transform.SetParent(root,false);
                 wall.transform.localPosition=x?new Vector3(side*(width*.5f+.1f),0,0):new Vector3(0,0,side*(width*.5f+.1f));
-                wall.transform.localScale=x?new Vector3(.2f,8,width+.4f):new Vector3(width,.2f*40,.2f);
+                wall.transform.localScale=x?new Vector3(.2f,liningHeight,width+.4f):new Vector3(width,liningHeight,.2f);
                 var renderer=wall.GetComponent<Renderer>();
                 renderer.sharedMaterial=j.floorSurface.floorMaterial;
                 renderer.SetPropertyBlock(lining);
             }
         }
-        IEnumerator Travel()
+        void Travel()
         {
-
             Transitioning=true;TransitionCount++;entry.sentenceRuntime.presentation.Cancel();
             var player=entry.player;var panel=entry.board.Panel;
             bool oldBlocked=panel.InputBlocked,oldMove=player.MovementLocked,oldCinematic=player.CinematicLocked;
-            float falling=Mathf.Abs(player.VerticalVelocity);
+            var motor=player.GetComponent<CharacterController>();
+            var incoming=motor.velocity;
+            incoming.y=player.VerticalVelocity;
             entry.board.CancelDrag();panel.SetOpen(false);panel.InputBlocked=true;player.CinematicLocked=true;player.MovementLocked=true;
-            Cursor.visible=false;Cursor.lockState=CursorLockMode.None;CreateOverlay();
-            RenderTexture lastIndoor=null;
             try
             {
-                var motor=player.GetComponent<CharacterController>();
-                if(!preparedRoot)yield return Prepare();
-                if(prepareFailed){Debug.LogError("V5 outdoor prefab missing. Run OutdoorSetup.Build before playing.");automaticTransition=false;yield break;}
-                if(!windowCamera)StartWindow();
-                for(float elapsed=0;elapsed<.2f;)
-                {
-                    float dt=Mathf.Min(Time.unscaledDeltaTime,.033f);
-                    elapsed+=dt;
-                    // Keep the camera on the visible side of the portal until the handoff.
-                    float clearance=entry.journey.Root.InverseTransformPoint(player.view.position).y-WindowDepth-.18f;
-                    motor.Move(Vector3.down*Mathf.Min(Mathf.Max(0,clearance),falling*dt));
-                    SetBars(Mathf.SmoothStep(0,1,elapsed/.2f));
-                    yield return null;
-                }
-                var worldFrame=player.view.GetComponent<Camera>().targetTexture;
-                if(worldFrame)
-                {
-                    var descriptor=worldFrame.descriptor;
-                    descriptor.depthBufferBits=0;
-                    descriptor.msaaSamples=1;
-                    lastIndoor=RenderTexture.GetTemporary(descriptor);
-                    Graphics.Blit(worldFrame,lastIndoor);
-                    crossingFrame.texture=lastIndoor;
-                    crossingFrame.color=Color.white;
-                    crossingFrame.gameObject.SetActive(true);
-                }
+                var eyePosition=ThroughPortal(player.view.position);
+                var rotation=OutletView(player.view);
+                var exit=preparedWorld.exit;
+                var velocity=PortalRotation*incoming;
+                LastExitSpeed=Mathf.Clamp(Vector3.Dot(velocity,exit.forward),0,exitSpeed);
+                velocity=Vector3.ProjectOnPlane(velocity,exit.forward)+exit.forward*LastExitSpeed;
+                LastExitVelocity=velocity;
                 ReleaseWindow();
                 var activation=System.Diagnostics.Stopwatch.StartNew();
-                preparedRoot.SetActive(true);Physics.SyncTransforms();World=preparedWorld;
+                preparedRoot.SetActive(true);Physics.SyncTransforms();World=preparedWorld;outside=true;
                 // The original rooms and progress stay alive; only their presentation stops.
                 foreach(var r in entry.gameObject.scene.GetRootGameObjects())
                 {
@@ -234,7 +360,7 @@ namespace PuzzleApple.V5
                         if(!renderer.transform.IsChildOf(player.transform)&&!renderer.transform.IsChildOf(entry.room.transform))
                         {hidden[renderer]=renderer.forceRenderingOff;renderer.forceRenderingOff=true;}
                     foreach(var b in r.GetComponentsInChildren<Behaviour>(true))
-                        if(b is RoomLighting||b is UnityEngine.Rendering.Volume||b is Light)
+                        if(b is RoomLighting||b is UnityEngine.Rendering.Volume&&!b.GetComponentInParent<IlluminationEffects>()||b is Light)
                         {disabled[b]=b.enabled;b.enabled=false;}
                 }
                 entry.journey.enabled=false;entry.journey.movementObservation.Available=false;
@@ -242,67 +368,32 @@ namespace PuzzleApple.V5
                 SceneManager.SetActiveScene(outdoorScene);
                 foreach(var behaviour in previewDisabled)if(behaviour)behaviour.enabled=true;
                 previewDisabled.Clear();
-                World.Bind(entry);entry.sentenceRuntime.EnterOutdoor();
-                var exit=World.exit;player.Teleport(exit.position,exit.rotation);
-                ActivationMilliseconds=(float)activation.Elapsed.TotalMilliseconds;
-                var forward=Vector3.ProjectOnPlane(exit.forward,Vector3.up).normalized;
-                LastExitSpeed=exitSpeed*Mathf.Lerp(.8f,1,Mathf.Clamp01(falling/10));
-                Vector3 velocity=forward*LastExitSpeed+Vector3.up*1.4f;
-                LastExitVelocity=velocity;
-                var start=Quaternion.LookRotation(forward+Vector3.down*.45f,Vector3.up);
-                var target=Quaternion.LookRotation(forward,Vector3.up);
-                player.view.rotation=start;
-                // Render the outdoor pose once behind the held portal image.
-                yield return new WaitForEndOfFrame();
-                for(float elapsed=0;elapsed<turnDuration;)
+                var camera=player.view.GetComponent<Camera>();
+                indoorClearFlags=camera.clearFlags;indoorFarClip=camera.farClipPlane;
+                if(!World.Active)
                 {
-                    float dt=Mathf.Min(Time.unscaledDeltaTime,.033f);
-                    elapsed+=dt;
-                    float u=Mathf.Clamp01(elapsed/turnDuration);
-                    velocity+=Vector3.down*20*dt;
-                    var flags=motor.Move(velocity*dt);
-                    if((flags&CollisionFlags.Below)!=0&&velocity.y<0)velocity.y=-2;
-                    float horizontal=Mathf.MoveTowards(Vector3.Dot(velocity,forward),0,4*dt);
-                    velocity=forward*horizontal+Vector3.up*velocity.y;
-                    player.view.rotation=Quaternion.Slerp(start,target,Mathf.SmoothStep(0,1,u));
-                    crossingFrame.color=new Color(1,1,1,1-Mathf.SmoothStep(0,1,elapsed/.18f));
-                    SetBars(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.6f,1,u)));
-                    yield return null;
+                    World.Bind(entry);
+                    chapterFrame=World.chapterFrame;
                 }
-                player.view.rotation=target;player.AdoptCurrentView();player.Launch(velocity);
+                else
+                {
+                    camera.clearFlags=CameraClearFlags.Skybox;camera.farClipPlane=1500;
+                    World.Audio.ResumeTrack();
+                    World.ApplyMotion(entry.sentenceRuntime.HasEffect,false);
+                }
+                entry.sentenceRuntime.ChangeSpace();
+                World.environment.ApplyCurrentLighting();
+                player.Teleport(eyePosition-Vector3.up*player.view.localPosition.y,exit.rotation);
+                player.view.rotation=rotation;player.AdoptCurrentView();
+                player.Launch(velocity);
+                tracking=false;
+                ActivationMilliseconds=(float)activation.Elapsed.TotalMilliseconds;
             }
             finally
             {
-                SetBars(0);
-                crossingFrame.gameObject.SetActive(false);crossingFrame.texture=null;
-                if(lastIndoor)RenderTexture.ReleaseTemporary(lastIndoor);
                 player.CinematicLocked=oldCinematic;player.MovementLocked=oldMove;
                 panel.InputBlocked=oldBlocked;player.SetPanelOpen(false);player.SuppressInteractionThisFrame();Transitioning=false;
             }
-        }
-        void CreateOverlay()
-        {
-            if(top)return;
-            var go=new GameObject("Passage cinematic",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(transform,false);
-            var canvas=go.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=45;
-            var rect=go.GetComponent<RectTransform>();
-            rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;
-            rect.offsetMin=rect.offsetMax=Vector2.zero;
-            top=Image(go.transform,"Top").rectTransform;bottom=Image(go.transform,"Bottom").rectTransform;
-            crossingFrame=new GameObject("Transition",typeof(RectTransform),typeof(RawImage)).GetComponent<RawImage>();
-            crossingFrame.transform.SetParent(go.transform,false);crossingFrame.transform.SetAsFirstSibling();
-            crossingFrame.raycastTarget=false;
-            crossingFrame.rectTransform.anchorMin=Vector2.zero;crossingFrame.rectTransform.anchorMax=Vector2.one;
-            crossingFrame.rectTransform.offsetMin=crossingFrame.rectTransform.offsetMax=Vector2.zero;
-            crossingFrame.gameObject.SetActive(false);
-        }
-        static Image Image(Transform parent,string name)
-        {var go=new GameObject(name,typeof(RectTransform),typeof(Image));go.transform.SetParent(parent,false);var image=go.GetComponent<Image>();image.color=Color.black;image.raycastTarget=false;return image;}
-        void SetBars(float a)
-        {
-            if(!top)return;top.anchorMin=new Vector2(0,1-.09f*a);top.anchorMax=Vector2.one;
-            bottom.anchorMin=Vector2.zero;bottom.anchorMax=new Vector2(1,.09f*a);top.offsetMin=top.offsetMax=bottom.offsetMin=bottom.offsetMax=Vector2.zero;
-            top.gameObject.SetActive(a>0);bottom.gameObject.SetActive(a>0);
         }
         public bool TryWorldDrop(Cognition.CognitionBoard board,string word,Vector2 screen)
         {
@@ -316,6 +407,8 @@ namespace PuzzleApple.V5
             ReleaseWindow();
             foreach(var pair in hidden)if(pair.Key)pair.Key.forceRenderingOff=pair.Value;
             foreach(var pair in disabled)if(pair.Key)pair.Key.enabled=pair.Value;
+            if(gardenScene.IsValid()&&gardenScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(gardenScene);
+            if(chapterScene.IsValid()&&chapterScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(chapterScene);
             if(outdoorScene.IsValid()&&outdoorScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(outdoorScene);
         }
     }

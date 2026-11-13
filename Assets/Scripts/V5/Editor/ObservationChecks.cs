@@ -23,14 +23,12 @@ namespace PuzzleApple.V5.Editor
                 e.EnterWorld();yield return Until(()=>e.Entered);
                 e.board.State.TryAcquireSentence("observe.check.world","positive world");yield return Until(()=>e.room.Opened&&!e.Busy);
                 var j=e.journey;var p=e.player;
-                e.board.State.TryAcquireWord("observe.check.light",e.board.Catalog.Word("light"));
                 p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.pathLength+2)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
                 var body=j.Lamps[0].GetComponent<Rigidbody>();var before=body.position;yield return new WaitForSeconds(.2f);
                 Check(!j.LightsOn&&Vector3.Distance(before,body.position)>.02f,"unlearned dark lamps keep moving");
                 Check(!e.board.State.HasEffect(Cognition.CognitionSignal.LightMove)&&j.movementObservation.HasEffect(e.board.State,e.board.Catalog,Cognition.CognitionSignal.LightMove),"preset sentence drives movement before ownership transfer");
                 Check(!j.movementObservation.HasEffect(e.board.State,e.board.Catalog,Cognition.CognitionSignal.LightOff),"preset evaluates its actual rule effects");
-                Check(o.FindTarget()==null,"dark behaviour unavailable");
-                e.board.State.TryAcquireSentence("observe.check.on","positive light");yield return Until(()=>j.Brightness==1&&!e.sentenceRuntime.presentation.Playing);
+                Check(j.Lamps.All(l=>l.GetComponent<Renderer>().enabled&&l.glow.intensity==0),"dark lamp bodies remain visible without point lighting");
                 Cursor.lockState=CursorLockMode.Locked;
                 for(int i=0;i<j.Lamps.Count;i++)
                 {
@@ -46,6 +44,9 @@ namespace PuzzleApple.V5.Editor
                 Check(o.FindTarget()==j.movementObservation,"near-edge tolerance");
                 p.view.LookAt(body.position);p.AdoptCurrentView();yield return null;
                 Check(o.FindTarget()==j.movementObservation,"ray finds moving lamp");
+                e.chamberLight.AdvancePointer(true,true,false,.03f);
+                e.chamberLight.AdvancePointer(false,false,true,.03f);
+                Check(!e.chamberLight.LookingAtLight()&&!e.chamberLight.ShowingKnown&&!e.chamberLight.Collecting,"short click on an unlit moving lamp cannot collect light");
                 yield return new WaitForEndOfFrame();
                 Canvas.ForceUpdateCanvases();
                 Check(o.ring.gameObject.activeInHierarchy&&o.ring.canvasRenderer&&o.ring.canvasRenderer.GetMesh().vertexCount>0,"ring submits actual UI geometry");
@@ -67,8 +68,18 @@ namespace PuzzleApple.V5.Editor
                 o.Advance(true,1);
                 yield return Until(()=>!e.chamberLight.Collecting);
                 o.Advance(false,0);yield return null;
-                var s=e.board.State;Check(s.Knows("move")&&s.HasEffect(Cognition.CognitionSignal.LightMove)&&e.board.Panel.IsOpen,"learned verb, effective example and automatic panel");
-                Check(j.LampsMoving,"learned example sustains movement");
+                var s=e.board.State;
+                Check(s.Knows("move")&&!s.Knows("light")&&!s.Groups.Any(g=>g.RuleId=="light.move")&&!e.board.Panel.IsOpen,"dark observation grants only the verb");
+                Check(j.LampsMoving,"demonstration continues in the dark");
+                p.view.LookAt(body.position);p.AdoptCurrentView();o.Advance(false,0);o.Advance(true,1);
+                Check(e.chamberLight.KnownFeedbackWord=="move"&&!e.chamberLight.Collecting,"repeat in darkness shows the known verb");
+                yield return Until(()=>!e.chamberLight.ShowingKnown);o.Advance(false,0);
+                s.TryAcquireSentence("observe.check.on","positive light");yield return Until(()=>j.Brightness==1&&!e.sentenceRuntime.presentation.Playing);
+                Cursor.lockState=CursorLockMode.Locked;
+                body.position=p.view.position+p.view.forward*3;Physics.SyncTransforms();p.view.LookAt(body.position);p.AdoptCurrentView();
+                pulsesBefore=e.feedback.StrongCount;o.Advance(false,0);o.Advance(true,1);
+                yield return Until(()=>!e.chamberLight.Collecting);o.Advance(false,0);
+                Check(s.Knows("light")&&s.HasEffect(Cognition.CognitionSignal.LightMove)&&e.board.Panel.IsOpen,"lit observation grants the example");
                 yield return Until(()=>e.feedback.StrongCount>pulsesBefore);
                 Check(e.board.Panel.FullyOpen&&e.feedback.StrongCount==pulsesBefore+1,"acquired example pulses once after panel opens");
                 var group=s.Groups.Single(g=>g.RuleId=="light.move");
@@ -103,7 +114,15 @@ namespace PuzzleApple.V5.Editor
                 e.chamberLight.AdvancePointer(false,false,true,0);
                 Check(!e.chamberLight.ShowingKnown&&!e.chamberLight.Collecting,"cancelled long hold never falls through to noun");
                 Check(!s.Groups.Any(g=>g.RuleId=="light.on"),"completed light command left the workspace");
-                s.TryAcquireSentence("observe.check.off","negative light");yield return Until(()=>j.Brightness==0);Check(j.LampsMoving&&o.FindTarget()==null,"off light hides observation without stopping effective move");
+                s.TryAcquireSentence("observe.check.off","negative light");yield return Until(()=>j.Brightness==0);
+                body.position=p.view.position+p.view.forward*3;Physics.SyncTransforms();p.view.LookAt(body.position);p.AdoptCurrentView();
+                yield return new WaitForFixedUpdate();
+                before=body.position;
+                yield return new WaitForSeconds(.25f);
+                Check(j.LampsMoving&&!body.isKinematic&&Vector3.Distance(before,body.position)>.02f,"dark cubes drift after learning the example");
+                s.TryAcquireSentence("observe.check.relight","positive light");
+                yield return Until(()=>j.Brightness==1);
+                Check(j.LampsMoving&&Vector3.Distance(before,body.position)>.02f,"same movement sentence resumes after relighting");
                 Result="PASS: dark prelearning motion; group ray; hold/release/look/panel interruption; acquisition and tab; split/rejoin; known observation; noun coexistence; on/off light";
             }
             finally{o.enabled=true;e.sentenceRuntime.presentation.enabledShots=shots;Application.runInBackground=background;}

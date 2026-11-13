@@ -22,6 +22,7 @@ namespace PuzzleApple.V5
         public void Launch(Vector3 velocity){launchVelocity=Vector3.ProjectOnPlane(velocity,Vector3.up);vertical=velocity.y;}
         Quaternion panelRotation;
         float pitch,vertical,idleTime,panelSway,panelPitch;
+
         int closedFrame=-1;
         void Awake()
         {
@@ -80,14 +81,21 @@ namespace PuzzleApple.V5
         internal void AdvanceMovement(Vector2 input,bool controls,float deltaTime,bool jumpPressed=false)
         {
             // Lock includes gravity; orientation remains independent.
-            if(MovementLocked){vertical=0;launchVelocity=Vector3.zero;}
-            else
+            if(deltaTime>0 && MovementLocked){vertical=0;launchVelocity=Vector3.zero;}
+            else if(deltaTime>0)
             {
                 input=Vector2.ClampMagnitude(input,1);
                 if(motor.isGrounded&&vertical<0)vertical=-2;
                 if(controls&&jumpPressed&&motor.isGrounded&&vertical<=0&&jumpHeight>0)
                     vertical=Mathf.Sqrt(40*jumpHeight);
                 vertical-=20*deltaTime;
+                // Keep the short, visible opening traversable for about a second.
+                if(vertical<0&&journey&&journey.enabled&&journey.InSecondRoom&&journey.floorSurface.HoleOpen)
+                {
+                    var feet=journey.Root.InverseTransformPoint(transform.position);
+                    if(feet.y<.2f&&journey.floorSurface.FitsOpening(feet,motor.radius))
+                        vertical=Mathf.Max(vertical,-2f);
+                }
                 var motion=((transform.right*input.x+transform.forward*input.y)*moveSpeed+launchVelocity+Vector3.up*vertical)*deltaTime;
                 launchVelocity=Vector3.MoveTowards(launchVelocity,Vector3.zero,8*deltaTime);
                 if(journey&&journey.enabled)motion=journey.ConstrainMovement(transform.position,motion);
@@ -96,6 +104,7 @@ namespace PuzzleApple.V5
                 if((collisions&CollisionFlags.Above)!=0&&vertical>0)vertical=0;
             }
             float sway=PanelOpen?(Mathf.Sin(idleTime*.5f)*panelSway+Mathf.Sin(idleTime*.37f)*panelPitch)*Mathf.Clamp01(idleTime*.5f):0;
+
             view.localRotation=Quaternion.Euler(pitch+sway,0,0);view.localPosition=normalView;
         }
     }

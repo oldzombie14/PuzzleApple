@@ -20,7 +20,7 @@ namespace PuzzleApple.V5
         [Range(1,4)] public int ringCount=2;
         [Min(.01f)] public float ringSpacing=.34f,ringWidth=.03f;
         [Range(0,1)] public float rippleStrength=.9f;
-        [Min(0)] public float thinningStartsAt=.65f;
+        [Min(0)] public float thinningStartsAt=.05f;
         [Min(.1f)] public float thinningDistance=1.1f;
         [Range(.05f,1)] public float distantWidth=.18f;
         public bool contactParticles=true;

@@ -114,9 +114,10 @@ namespace PuzzleApple.V5
         public void OpenWorld(int groupId)
         {
             if(!Entered || Busy || ConfirmingExit) return;
-            if(room.Opened) { if(groupId>=0){feedback.Play(groupId,false);sentenceRuntime.FinishCommand(groupId);} return; }
+            if(CurrentOpeningBox.Opened) { if(groupId>=0){feedback.Play(groupId,false);sentenceRuntime.FinishCommand(groupId);} return; }
             worldGroup=groupId;worldRule="world.on";worldRoutine=StartCoroutine(Open(groupId));
         }
+        FoldingRoom CurrentOpeningBox=>outdoor&&outdoor.InChapter&&room.Opened?outdoor.Chapter.box:room;
         IEnumerator Open(int groupId)
         {
             Busy=true; board.Panel.InputBlocked=true;
@@ -124,9 +125,10 @@ namespace PuzzleApple.V5
             board.Panel.SetOpen(false);
             if(groupId>=0)yield return LevelWorldView(groupId);
             if(portableClosure)portableClosure.Restore();
-            room.Open(player.transform);
+            var opening=CurrentOpeningBox;
+            opening.Open(player.transform);
             board.Panel.InputBlocked=false;
-            yield return ShowFold(groupId,true);
+            yield return ShowFold(groupId,true,opening);
             Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false;
         }
         public void CloseWorldFromSentence(int groupId)
@@ -140,7 +142,7 @@ namespace PuzzleApple.V5
             if(group!=null&&group.Effective&&group.RuleId==worldRule)return;
             if(worldRoutine!=null)StopCoroutine(worldRoutine);
             EndWorldShot();
-            room.HoldCurrentPose();worldGroup=-1;Busy=false;
+            (worldRule=="world.on"?CurrentOpeningBox:room).HoldCurrentPose();worldGroup=-1;Busy=false;
             board.Panel.InputBlocked=false;board.Panel.SetOpen(true);
             // A half-closed portable box still owns the frozen position. Opening it
             // releases the lock; view and editing remain available while paused.
@@ -161,19 +163,19 @@ namespace PuzzleApple.V5
             if(portableClosure)portableClosure.Prepare();
             room.CloseAt(player.transform.position);
             board.Panel.InputBlocked=false;
-            yield return ShowFold(groupId,false);
+            yield return ShowFold(groupId,false,room);
             yield return new WaitForSecondsRealtime(closedPauseDuration);
             worldGroup=-1;
             ShowDialog();
         }
-        IEnumerator ShowFold(int groupId,bool opening)
+        IEnumerator ShowFold(int groupId,bool opening,FoldingRoom folding)
         {
-            if(!room.Animating&&foldCaption){yield return FadeWorldShot();yield break;}
-            while(room.Animating)
+            if(!folding.Animating&&foldCaption){yield return FadeWorldShot();yield break;}
+            while(folding.Animating)
             {
                 if(foldCaption)
                 {
-                    float remaining=opening?1-room.Progress:room.Progress;
+                    float remaining=opening?1-folding.Progress:folding.Progress;
                     SetWorldShotVisibility(board.Panel.IsOpen?0:Mathf.SmoothStep(0,1,remaining/.18f));
                 }
                 yield return null;

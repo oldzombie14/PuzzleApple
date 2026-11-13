@@ -28,7 +28,7 @@ namespace PuzzleApple.V5
         public bool enabledShots=true;
         public Shot[] shots={new Shot("light.on",Focus.Light),new Shot("light.off",Focus.Light),
             new Shot("door.on",Focus.Door),new Shot("door.off",Focus.Door),
-            new Shot("light.move",Focus.LightGroup),new Shot("light.floor.move",Focus.LightGroup,true)};
+            new Shot("light.move",Focus.LightGroup),new Shot("light.move.floor",Focus.LightGroup,true)};
         public bool Playing {get;private set;}
         public bool CanInterrupt {get;private set;}
         public int PlayCount {get;private set;}

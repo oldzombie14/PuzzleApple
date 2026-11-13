@@ -7,15 +7,17 @@ namespace PuzzleApple.V5
     {
         public WorldEntry entry;
         public Material whitePath,blackSurround,roomMaterial,lampMaterial;
+        public Shader floorPortalShader;
         public UnityEngine.Rendering.Volume glowVolume;
         [Min(8)] public float pathLength=26;
         public Vector3 roomSize=new Vector3(16,8,18);
-        [Range(2,24)] public int lampCount=8;
+        [Range(2,24)] public int lampCount=10;
         public Vector2 lampScaleRange=new Vector2(.12f,.35f);
         [Min(0)] public float localLightIntensity=4f,localLightRange=7.5f;
         [Range(0,2)] public float emissionStrength=.35f;
         [Range(0,.5f)] public float ambientIntensity=.1f;
-        [Min(.1f)] public float lampSpeed=1.2f,lightFadeDuration=1.5f,doorDuration=1.2f;
+        [Min(.1f)] public float lampSpeed=1.2f,lightFadeDuration=1.5f,doorDuration=1.65f;
+        [Range(90,170)] public float openAngle=135f;
         [Range(0,.1f)] public float fogDensity=.018f;
         [Range(0,.05f)] public float corridorFogDensity=.012f;
         [Header("Corridor art trials")]
@@ -27,8 +29,9 @@ namespace PuzzleApple.V5
         public FloorImpactSurface floorSurface;
         public FloorDirectedMotion floorMotion;
         public bool LampsMoving=>entry&&entry.board&&entry.board.State!=null&&movementObservation&&
-            (movementObservation.lesson&&entry.board.State.HasAcquired(movementObservation.lesson.acquisitionId)&&entry.sentenceRuntime
-                ? entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)
+            (entry.sentenceRuntime&&(entry.sentenceRuntime.PlayerDirectedLampMotion||
+                movementObservation.lesson&&entry.board.State.HasAcquired(movementObservation.lesson.acquisitionId))
+                ? Brightness<=0||entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)
                 : movementObservation.HasEffect(entry.board.State,entry.board.Catalog,Cognition.CognitionSignal.LightMove));
         [Tooltip("Prototype choice, not a final design restriction.")]
         public bool allowCorridorClosure=true;
@@ -39,6 +42,7 @@ namespace PuzzleApple.V5
         public bool DoorOpen {get;private set;}
         public float DoorProgress {get;private set;}
         public bool LightsOn {get;private set;}
+        public bool LampsLit=>LightsOn&&Brightness>=.999f;
         public float Brightness {get;private set;}
         public bool LightTransitionEnabled {get;private set;}
         public bool DoorTransitionEnabled {get;private set;}
@@ -57,7 +61,7 @@ namespace PuzzleApple.V5
         public bool IsRail(Collider collider)=>rails.Contains(collider);
         Transform doorHinge;
 
-        readonly List<Renderer> corridorEdges=new List<Renderer>(),roomEdges=new List<Renderer>();
+        readonly List<Renderer> roomEdges=new List<Renderer>();
         Renderer doorLeaf;
         MaterialPropertyBlock doorSurface;
 
@@ -121,11 +125,10 @@ namespace PuzzleApple.V5
                 // Keep only narrow flowing outlines, outside the stationary white leaf.
                 foreach(float depth in new[]{.16f,-.16f})foreach(float side in new[]{-1f,1f})
                 {
-                    var edges=depth<0?corridorEdges:roomEdges;
-                    edges.Add(WallPassage.CreateFilament(Root,doorEdge,"Open door vertical filaments",new Vector3(side*(doorWidth*.5f-.05f),doorHeight*.5f,pathLength+depth),doorHeight));
+                    var upright=WallPassage.CreateFilament(Root,doorEdge,"Open door vertical filaments",new Vector3(side*(doorWidth*.5f-.05f),doorHeight*.5f,pathLength+depth),doorHeight);
                     var cross=WallPassage.CreateFilament(Root,doorEdge,"Open door horizontal filaments",new Vector3(0,side<0?.05f:doorHeight-.05f,pathLength+depth),doorWidth);
                     cross.transform.localRotation=Quaternion.Euler(0,0,90);
-                    edges.Add(cross);
+                    if(depth>0){roomEdges.Add(upright);roomEdges.Add(cross);upright.enabled=cross.enabled=false;}
                 }
             }
             float sideWidth=(roomSize.x-doorWidth)*.5f;
@@ -204,7 +207,7 @@ namespace PuzzleApple.V5
             if(target.transform.IsChildOf(doorHinge)&&distance<=7)
                 return DoorProgress<=0&&Root.InverseTransformPoint(entry.player.view.position).z>pathLength?null:"door";
             if(InSecondRoom&&floorSurface&&floorSurface.Owns(target)&&distance<=7)return "floor";
-            if(InSecondRoom&&LightsOn&&Brightness>=.999f&&target.GetComponent<DriftingLight>())return "light";
+            if(InSecondRoom&&LampsLit&&target.GetComponent<DriftingLight>())return "light";
             return null;
         }
         void Update()
@@ -228,26 +231,26 @@ namespace PuzzleApple.V5
                 if(next!=DoorProgress&&!PlayerBlocksSwing(next))
                 {
                     DoorProgress=next;
-                    doorHinge.localRotation=Quaternion.Euler(0,90*DoorProgress,0);
+                    doorHinge.localRotation=Quaternion.Euler(0,SwingAngle(DoorProgress),0);
                 }
             }
             bool corridorSide=Root.InverseTransformPoint(entry.player.view.position).z<pathLength;
-            foreach(var edge in corridorEdges)edge.enabled=corridorSide;
             foreach(var edge in roomEdges)edge.enabled=!corridorSide&&DoorProgress>0;
-            if(LightTransitionEnabled)Brightness=Mathf.MoveTowards(Brightness,LightsOn?1:0,Time.deltaTime/Mathf.Max(.01f,lightFadeDuration));ApplyLight();
+            if(LightTransitionEnabled)Brightness=Mathf.MoveTowards(Brightness,LightsOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,lightFadeDuration));ApplyLight();
             if(corridorTransition)
             {
-                CorridorBrightness=Mathf.MoveTowards(CorridorBrightness,CorridorOn?1:0,Time.deltaTime/Mathf.Max(.01f,lightFadeDuration));
+                CorridorBrightness=Mathf.MoveTowards(CorridorBrightness,CorridorOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,lightFadeDuration));
                 float level=Mathf.SmoothStep(0,1,CorridorBrightness);
                 corridorMaterial.SetFloat("_CorridorLight",Mathf.Lerp(.065f,1,level));
                 if(doorEdge)doorEdge.SetFloat("_Visibility",Mathf.Lerp(.09f,1,level));
             }
             UpdateDoorAppearance();
-            if(movementObservation)movementObservation.Available=InSecondRoom&&LightsOn&&Brightness>=.999f&&LampsMoving&&(!entry.portableClosure||!entry.portableClosure.Isolated);
+            if(movementObservation)movementObservation.Available=InSecondRoom&&LampsMoving&&(!entry.portableClosure||!entry.portableClosure.Isolated);
             if(glowVolume)glowVolume.weight=entry.portableClosure&&entry.portableClosure.Isolated?0:DoorwayLighting;
             entry.player.view.GetComponent<Camera>().backgroundColor=ViewBeyondChamber?Color.black:initialBackground;
             if(cameraData)cameraData.renderPostProcessing=initialPostProcessing;
         }
+        float SwingAngle(float progress)=>openAngle*Mathf.SmoothStep(0,1,progress);
         bool PlayerBlocksSwing(float next)
         {
             var motor=entry.player.GetComponent<CharacterController>();
@@ -257,7 +260,7 @@ namespace PuzzleApple.V5
             float padding=motor.radius+.16f;
             if(!DoorOpen&&Mathf.Abs(centre.z-.15f)<padding&&centre.x>=-padding&&centre.x<=pathWidth+padding)return true;
             float angle=Mathf.Atan2(-centre.z,centre.x)*Mathf.Rad2Deg;
-            angle=Mathf.Clamp(angle,90*Mathf.Min(next,DoorProgress),90*Mathf.Max(next,DoorProgress));
+            angle=Mathf.Clamp(angle,SwingAngle(Mathf.Min(next,DoorProgress)),SwingAngle(Mathf.Max(next,DoorProgress)));
             Vector3 local=Quaternion.Euler(0,-angle,0)*centre;
             float x=Mathf.Clamp(local.x,0,pathWidth);
             float z=Mathf.Clamp(local.z,0,.3f);

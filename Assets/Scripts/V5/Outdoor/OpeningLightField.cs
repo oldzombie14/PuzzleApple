@@ -48,7 +48,7 @@ namespace PuzzleApple.V5.Outdoor
             var glow=new GameObject("Local glow",typeof(Light));glow.transform.SetParent(go.transform,false);
             lamp.glow=glow.GetComponent<Light>();lamp.glow.type=LightType.Point;lamp.glow.range=2.5f;lamp.glow.intensity=.7f;lamp.glow.shadows=LightShadows.None;
             var motion=go.AddComponent<LightMotion>();motion.speed=moveSpeed;
-            if(transferredScale<=0)lamp.BeginReveal(revealMaterial,Time.unscaledTime,revealDuration);
+            if(transferredScale<=0)lamp.BeginReveal(revealMaterial,Time.time,revealDuration);
             go.SetActive(true);motion.SetMoving(moving);
             if(moving){var d=motion.Direction;d.y=Mathf.Max(.25f,Mathf.Abs(d.y));motion.RestoreDirection(d);}
             if(observer)Physics.IgnoreCollision(go.GetComponent<Collider>(),observer.GetComponentInParent<CharacterController>(),true);

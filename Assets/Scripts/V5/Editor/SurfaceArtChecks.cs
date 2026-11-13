@@ -64,9 +64,21 @@ namespace PuzzleApple.V5.Editor
                 yield return new WaitForFixedUpdate();origin=original.transform.position;
                 yield return new WaitForSeconds(.25f);
                 Check(!original.Moving&&Vector3.Distance(origin,original.transform.position)<.01f,"split stops original lamp");
-                e.board.State.Join(moveWord.Id,command.Id,false);original.SetOn(false);
+                e.board.State.TryAcquireSentence("check.original.off","negative light");
+                yield return Until(()=>original.Brightness==0);
+                e.board.State.Join(moveWord.Id,command.Id,false);
                 yield return new WaitForSeconds(.5f);
-                Check(original.Moving&&Vector3.Distance(origin,original.transform.position)>.2f,"rejoin resumes original lamp independently of off light");
+                Check(!original.Moving&&Vector3.Distance(origin,original.transform.position)<.01f,"rejoining light move in a dark chamber leaves the cube still");
+                e.board.State.TryAcquireSentence("check.original.on","positive light");
+                yield return Until(()=>original.Brightness==1);
+                Check(original.Moving&&Vector3.Distance(origin,original.transform.position)>.2f,"relighting resumes the existing movement sentence");
+                e.board.State.TryAcquireSentence("check.original.off.again","negative light");
+                yield return Until(()=>original.Brightness==0);
+                yield return new WaitForFixedUpdate();
+                var rigidbody=original.GetComponent<Rigidbody>();
+                origin=rigidbody.position;
+                yield return new WaitForSeconds(.25f);
+                Check(rigidbody.isKinematic&&Vector3.Distance(origin,rigidbody.position)<.001f,"extinguishing the moving chamber light stops its body");
                 e.sentenceRuntime.presentation.enabledShots=true;
                 Result="PASS: static white path without bridge particles, backward movement, room surface regression, returned chamber light move, split pause and rejoin resume";
             }

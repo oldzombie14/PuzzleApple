@@ -16,7 +16,7 @@ namespace PuzzleApple.V5
             public string rule;
             public Focus focus;
             public bool follow;
-            [Min(0)] public float enter=.65f,hold=2.4f,exit=.65f;
+            [Min(0)] public float enter=.65f,hold=1.4f,exit=.65f;
             [Range(0,.2f)] public float letterbox=.09f;
             [Min(.1f)] public float followSpeed=12;
             public Vector3 offset;
@@ -131,6 +131,7 @@ namespace PuzzleApple.V5
             apply();CanInterrupt=true;
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
+                FadeCaption(t);
                 if(current.follow&&!roomCut)
                 {
                     var target=LookAt(Target(current));var e=view.eulerAngles;var d=target.eulerAngles;
@@ -143,10 +144,14 @@ namespace PuzzleApple.V5
             {
                 float remaining=1-t/Mathf.Max(.001f,current.exit);
                 Bars(remaining);
-                if(caption)caption.alpha=Mathf.SmoothStep(0,1,remaining);
+                FadeCaption(current.hold+t);
                 yield return null;
             }
             if(token==revision)Cancel();
+        }
+        void FadeCaption(float elapsed)
+        {
+            if(caption)caption.alpha=1-Mathf.SmoothStep(0,1,elapsed/Mathf.Max(.001f,current.hold+current.exit));
         }
         Vector3 Target(Shot shot)
         {

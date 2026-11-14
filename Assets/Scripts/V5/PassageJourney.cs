@@ -90,13 +90,13 @@ namespace PuzzleApple.V5
             // Black enclosure hides the chamber and sky, while invisible rails retain the path boundary.
             foreach(float side in new[]{-1f,1f})
             {
-                Block("Black surround",new Vector3(side*6,4,pathLength*.5f),new Vector3(.2f,8,pathLength),blackSurround);
+                Block("Black surround",new Vector3(side*14,5,pathLength*.5f),new Vector3(.2f,14,pathLength),blackSurround);
                 var rail=Block("Path boundary",new Vector3(side*(width*.5f+.1f),2,pathLength*.5f),new Vector3(.2f,4,pathLength),blackSurround);
                 rail.enabled=false;
                 rails.Add(rail.GetComponent<Collider>());
             }
-            Block("Black above",new Vector3(0,8,pathLength*.5f),new Vector3(12,.2f,pathLength),blackSurround);
-            Block("Black below",new Vector3(0,-2,pathLength*.5f),new Vector3(12,.2f,pathLength),blackSurround);
+            Block("Black above",new Vector3(0,12,pathLength*.5f),new Vector3(28,.2f,pathLength),blackSurround);
+            Block("Black below",new Vector3(0,-2,pathLength*.5f),new Vector3(28,.2f,pathLength),blackSurround);
             // The entrance, path, door leaf and destination opening share one size.
             float doorWidth=width,doorHeight=openingHeight;
             doorHinge=new GameObject("Door hinge").transform;

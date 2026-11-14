@@ -13,7 +13,8 @@ namespace PuzzleApple.V5
             public float age, period, height;
         }
 
-        readonly Star[] stars=new Star[48];
+        const int PathSections=10, StarsPerSection=8;
+        readonly Star[] stars=new Star[PathSections*StarsPerSection];
         PassageJourney journey;
         Mesh diamond;
         Material ink;
@@ -47,12 +48,18 @@ namespace PuzzleApple.V5
 
         void Spawn(Star star,int slot)
         {
-            // Keep both sides populated along the whole path as individual stars drift away.
+            // Sample both sides of a vaulted cross-section, staggered along the path.
             float side=slot%2==0?1:-1;
-            float z=(slot/2+Random.value)/(stars.Length/2);
-            star.origin=new Vector3(side*Random.Range(journey.PathWidth*.5f+.3f,5f),Random.Range(.4f,6.5f),
-                Mathf.Lerp(.9f,journey.pathLength-.9f,z));
-            star.height=Random.Range(.18f,.72f);
+            int band=(slot%StarsPerSection)/2;
+            float z=(slot/StarsPerSection+Random.value)/PathSections;
+            float angle=(band+Random.value)*Mathf.PI/8f;
+            float radius=band==0?Random.Range(journey.PathWidth*.5f+.8f,5.2f):Random.Range(4.4f,9.4f);
+            float x=side*Mathf.Cos(angle)*radius;
+            float y=Random.Range(.55f,1.45f)+Mathf.Sin(angle)*radius*.78f;
+            // Extend the feet of the arch below the walkway, tapering to zero at 45 degrees.
+            y-=1.9f*(1f-Mathf.InverseLerp(0f,Mathf.PI*.25f,angle));
+            star.origin=new Vector3(x,y,Mathf.Lerp(.9f,journey.pathLength-.9f,z));
+            star.height=Random.Range(.32f,.72f);
             star.period=Random.Range(3.2f,7f);
             star.drift=new Vector3(side*Random.Range(-.07f,.07f),Random.Range(-.07f,.12f),Random.Range(-.13f,.13f));
             star.age=0;
@@ -60,7 +67,7 @@ namespace PuzzleApple.V5
 
         void LateUpdate()
         {
-            bool visible=journey.isActiveAndEnabled&&journey.InCorridor&&
+            bool visible=journey.isActiveAndEnabled&&
                 (!journey.entry.portableClosure||!journey.entry.portableClosure.Isolated)&&journey.CorridorBrightness>.001f;
             float light=journey.CorridorBrightness;
             ink.SetColor("_EmissionColor",Color.white*(1.6f*light*journey.entry.sentenceRuntime.LampMultiplier));

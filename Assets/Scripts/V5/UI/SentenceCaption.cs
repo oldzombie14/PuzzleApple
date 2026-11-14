@@ -39,7 +39,7 @@ namespace PuzzleApple.V5
             foreach(var word in sentence.Words)width+=InkAspect(word.Definition.Symbol);
             var row=new GameObject("Symbols",typeof(RectTransform),typeof(AspectRatioFitter)).GetComponent<RectTransform>();
             row.SetParent(frame,false);
-            const float contentScale=.68f;
+            const float contentScale=.48f;
             row.localScale=new Vector3(contentScale,contentScale,1);
             var fit=row.GetComponent<AspectRatioFitter>();
             fit.aspectRatio=width;

@@ -17,7 +17,7 @@ MonoBehaviour:
     focus: 0
     follow: 0
     enter: 1.3
-    hold: 2.4
+    hold: 1.4
     exit: 0.65
     letterbox: 0.09
     followSpeed: 12
@@ -26,7 +26,7 @@ MonoBehaviour:
     focus: 0
     follow: 0
     enter: 1.3
-    hold: 2.4
+    hold: 1.4
     exit: 0.65
     letterbox: 0.09
     followSpeed: 12
@@ -35,7 +35,7 @@ MonoBehaviour:
     focus: 3
     follow: 0
     enter: 1.3
-    hold: 2.4
+    hold: 1.4
     exit: 0.65
     letterbox: 0.09
     followSpeed: 12
@@ -44,7 +44,7 @@ MonoBehaviour:
     focus: 3
     follow: 0
     enter: 1.3
-    hold: 2.4
+    hold: 1.4
     exit: 0.65
     letterbox: 0.09
     followSpeed: 12
@@ -53,7 +53,7 @@ MonoBehaviour:
     focus: 1
     follow: 0
     enter: 1.3
-    hold: 2.4
+    hold: 1.4
     exit: 0.65
     letterbox: 0.09
     followSpeed: 12
@@ -62,7 +62,7 @@ MonoBehaviour:
     focus: 1
     follow: 1
     enter: 1.3
-    hold: 2.4
+    hold: 1.4
     exit: 0.65
     letterbox: 0.09
     followSpeed: 12

@@ -176,7 +176,8 @@ namespace PuzzleApple.V5
                 if(foldCaption)
                 {
                     float remaining=opening?1-folding.Progress:folding.Progress;
-                    SetWorldShotVisibility(board.Panel.IsOpen?0:Mathf.SmoothStep(0,1,remaining/.18f));
+                    if(board.Panel.IsOpen)remaining=0;
+                    SetWorldShotVisibility(Mathf.SmoothStep(0,1,remaining/.18f),Mathf.SmoothStep(0,1,remaining));
                 }
                 yield return null;
             }
@@ -211,10 +212,10 @@ namespace PuzzleApple.V5
             player.CinematicLocked=previousCameraLock;
             player.RestoreGameplayCursor();
         }
-        void SetWorldShotVisibility(float amount)
+        void SetWorldShotVisibility(float amount,float? captionAlpha=null)
         {
             if(!foldCaption)return;
-            foldCaption.alpha=amount;
+            foldCaption.alpha=captionAlpha??amount;
             sentenceRuntime.presentation.SetBarsHeight(.09f*amount);
         }
         IEnumerator FadeWorldShot()

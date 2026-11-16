@@ -15,6 +15,3 @@ MonoBehaviour:
   id: world
   displayText: world
   symbol: {fileID: 21300000, guid: 6d782a1ce8d843399b91edf86d3c685b, type: 3}
-  senses:
-  - meaning: world
-    role: 0

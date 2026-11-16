@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 namespace PuzzleApple.V5.Outdoor
 {
-    public sealed class OutdoorWorld : MonoBehaviour
+    public sealed class OutdoorWorld : MonoBehaviour, ISwitchableLight, ISwitchableDoor, ISentenceMovable
     {
         public Collider ground;
         public Light sun;
@@ -28,6 +28,35 @@ namespace PuzzleApple.V5.Outdoor
         public bool Active {get;private set;}
         bool ownsMaterials;
         Material groundMaterial, luminousGround;
+        // Outdoor light state: the lamps follow stateSource and the sky follows them into night.
+        bool ISwitchableLight.WouldChange(bool on)=>on
+            ?stateSource.Brightness<.999f||environment.NightBlend>.001f
+            :stateSource.Brightness>.001f||environment.NightBlend<.999f;
+        bool ISwitchableLight.Settling(bool on)=>((ISwitchableLight)this).WouldChange(on);
+        void ISwitchableLight.SetOn(bool on)=>stateSource.SetOn(on);
+        void ISwitchableLight.Hold()=>stateSource.HoldCurrentState();
+        // Outdoor threshold door: glows on/off once revealed. Its state follows the effective
+        // DoorOn/DoorOff signals in DoorSentenceEffects.Apply (ApplyMotion), so SetOpen/Hold are not
+        // driven separately here; retiring the command releases the state-driven hold.
+        bool ISwitchableDoor.WouldChange(bool open)=>door.Revealed&&(open?doors.appearance.Brightness<.999f:doors.appearance.Brightness>.001f);
+        void ISwitchableDoor.SetOpen(bool open){}
+        void ISwitchableDoor.Hold(){}
+        void ISwitchableDoor.Release()=>doors.ReleaseStateCommand();
+        // Outdoor motion: lamps, the threshold door and the ground each move by their own effects.
+        bool ISentenceMovable.CanMove(CognitionSignal motion)
+        {
+            switch(motion)
+            {
+                case CognitionSignal.LightMove:case CognitionSignal.LightFloorMove:
+                case CognitionSignal.LightDoorMove:case CognitionSignal.LightLightMove:return lights.CanMove(motion);
+                case CognitionSignal.DoorLightMove:return door.Revealed&&doors.CanPursue(lights.Nearest(door.transform.position));
+                case CognitionSignal.WorldLightMove:case CognitionSignal.WorldDoorMove:return world.CanRise(motion);
+                case CognitionSignal.DoorWorldMove:return door.Revealed&&!door.Landed;
+                case CognitionSignal.DoorMove:return door.Revealed;
+                case CognitionSignal.WorldMove:return true;
+                default:return false;
+            }
+        }
         public void SetFloorIlluminated(float value)
         {
             if(value==0&&!luminousGround)return;

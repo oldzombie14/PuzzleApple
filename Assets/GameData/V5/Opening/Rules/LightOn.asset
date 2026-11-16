@@ -19,4 +19,5 @@ MonoBehaviour:
   effect: 8
   additionalEffects: 
   trigger: 0
-  exclusionKey: 
+  kind: 1
+  channel: light.state

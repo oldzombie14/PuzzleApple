@@ -15,4 +15,3 @@ MonoBehaviour:
   id: move
   displayText: move
   symbol: {fileID: 21300000, guid: 2f46615cf00771f4eaed8c71f43e1088, type: 3}
-  senses: []

@@ -4,7 +4,7 @@ using PuzzleApple.V5.Cognition;
 
 namespace PuzzleApple.V5
 {
-    public sealed class ChapterRoom : MonoBehaviour
+    public sealed class ChapterRoom : MonoBehaviour, ISwitchableLight, ISentenceMovable
     {
         public Transform arrival, gardenThreshold;
         public Transform paintingFixture;
@@ -86,14 +86,21 @@ namespace PuzzleApple.V5
             target=brightness;
             foreach(var light in lights)light.target=light.level;
         }
+        bool ISwitchableLight.WouldChange(bool on)=>LightWouldChange(on);
+        bool ISwitchableLight.Settling(bool on)=>LightWouldChange(on);
+        void ISwitchableLight.SetOn(bool on)=>SetLight(on);
+        void ISwitchableLight.Hold()=>HoldLight();
+        // Only the room lamp moves in Chapter I; other motion sentences have nothing here.
+        bool ISentenceMovable.CanMove(CognitionSignal motion)=>
+            (motion==CognitionSignal.LightMove||motion==CognitionSignal.LightFloorMove)&&lamp&&Brightness>0;
         void LateUpdate()
         {
             if(!entry)return;
             float step=Time.unscaledDeltaTime/Mathf.Max(.01f,entry.chamberLight.fadeDuration);
-            brightness=Mathf.MoveTowards(brightness,target,step);
+            brightness=RoomLighting.AdvanceLevel(brightness,target,step);
             foreach(var light in lights)
             {
-                light.level=Mathf.MoveTowards(light.level,light.target,step);
+                light.level=RoomLighting.AdvanceLevel(light.level,light.target,step);
                 light.source.intensity=light.onIntensity*light.level*entry.sentenceRuntime.LampMultiplier;
             }
             if(emitter)

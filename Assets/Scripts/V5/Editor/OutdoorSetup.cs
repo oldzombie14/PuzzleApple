@@ -174,7 +174,11 @@ namespace PuzzleApple.V5.Editor
                 so.FindProperty("id").stringValue=V5RuleId(old);
                 var words=so.FindProperty("words");words.arraySize=ids.Length;for(int i=0;i<ids.Length;i++)words.GetArrayElementAtIndex(i).objectReferenceValue=target.Word(ids[i]);
                 var effect=(CognitionSignal)Enum.Parse(typeof(CognitionSignal),old.Effect.ToString());so.FindProperty("effect").intValue=(int)effect;
-                so.FindProperty("exclusionKey").stringValue=old.ExclusionKey;so.ApplyModifiedPropertiesWithoutUndo();
+                // Scheduling metadata lives on the rule asset; copy it from an existing V5 rule with the same effect.
+                var template=rules.FirstOrDefault(r=>r&&r.Effect==effect);
+                if(!template)Debug.LogWarning("MigrateGrammar: set kind/channel by hand on new rule "+old.name);
+                so.FindProperty("kind").intValue=template?(int)template.Kind:(int)SentenceKind.Sustained;
+                so.FindProperty("channel").stringValue=template&&!string.IsNullOrEmpty(template.Channel)?template.Channel:old.ExclusionKey;so.ApplyModifiedPropertiesWithoutUndo();
                 AssetDatabase.CreateAsset(rule,"Assets/GameData/V5/Opening/Rules/"+old.name+".asset");rules.Add(rule);
             }
             var catalog=new SerializedObject(target);var array=catalog.FindProperty("rules");array.arraySize=rules.Count;for(int i=0;i<rules.Count;i++)array.GetArrayElementAtIndex(i).objectReferenceValue=rules[i];catalog.ApplyModifiedPropertiesWithoutUndo();AssetDatabase.SaveAssetIfDirty(target);target.ValidateOrThrow();

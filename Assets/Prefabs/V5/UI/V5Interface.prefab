@@ -1149,6 +1149,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   maximumThumbSize: 0.28
+  wheelSmoothTime: 0.09
+  maximumWheelStep: 0.1
 --- !u!1 &1936301348392815093
 GameObject:
   m_ObjectHideFlags: 0
@@ -1501,6 +1503,7 @@ MonoBehaviour:
   - wordId: mirror
     image: {fileID: 2800000, guid: a1baed2740a20d247a3b74d1c7c0d33d, type: 3}
   moveMemory: {fileID: 11400000, guid: 56bfd2398ba4a8a4fba3bb56593c0616, type: 2}
+  sphereMoveMemory: {fileID: 11400000, guid: 9060e6d441857e843be2680d2227c55d, type: 2}
   scroll: {fileID: 5905967632299843001}
   column: {fileID: 3975698867436857571}
   details: {fileID: 6006807185647409149}
@@ -4400,6 +4403,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   maximumThumbSize: 0.28
+  wheelSmoothTime: 0.09
+  maximumWheelStep: 0.1
 --- !u!1 &8227438487386872056
 GameObject:
   m_ObjectHideFlags: 0

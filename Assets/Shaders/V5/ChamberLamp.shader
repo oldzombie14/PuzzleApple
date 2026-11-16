@@ -4,6 +4,7 @@ Shader "PuzzleApple/V5/Chamber Lamp"
     {
         _BaseColor("Surface tint", Color)=(1,1,1,1)
         [HDR] _EmissionColor("Soft neutral emission", Color)=(1,1,1,1)
+        _SphereShading("Soft sphere shading", Range(0,1))=0
         _FaceLevels("Local X / Y / Z face brightness", Vector)=(0.52,0.78,1.1,0)
     }
     SubShader
@@ -21,6 +22,7 @@ Shader "PuzzleApple/V5/Chamber Lamp"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             CBUFFER_START(UnityPerMaterial)
             float4 _BaseColor, _EmissionColor, _FaceLevels;
+            float _SphereShading;
             CBUFFER_END
             struct A {float4 positionOS:POSITION;float3 normalOS:NORMAL;};
             struct V {float4 positionCS:SV_POSITION;float3 normalOS:TEXCOORD0;};
@@ -31,6 +33,9 @@ Shader "PuzzleApple/V5/Chamber Lamp"
                 // values keep the existing cube readable as the player moves around it.
                 float3 n=abs(normalize(i.normalOS));
                 float face=dot(n,_FaceLevels.xyz)/max(dot(n,float3(1,1,1)),.001);
+                float3 worldNormal=normalize(TransformObjectToWorldNormal(i.normalOS));
+                float sphereTone=lerp(.34,1.04,smoothstep(-.75,.9,worldNormal.y));
+                face=lerp(face,sphereTone,_SphereShading);
                 return half4(_EmissionColor.rgb*face+_BaseColor.rgb*.025,1);
             }
             ENDHLSL

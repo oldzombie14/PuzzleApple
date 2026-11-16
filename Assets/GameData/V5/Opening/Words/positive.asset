@@ -15,6 +15,3 @@ MonoBehaviour:
   id: positive
   displayText: positive
   symbol: {fileID: 21300000, guid: e225ac332f9141d7a4ac555ccb80ae0c, type: 3}
-  senses:
-  - meaning: positive
-    role: 1

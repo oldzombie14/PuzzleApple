@@ -55,6 +55,11 @@ namespace PuzzleApple.V5.Cognition
                     if (!Enum.IsDefined(typeof(CognitionSignal), signal)) errors.Add(rule.name + ": unknown effect.");
                     effects.Add(signal);
                 }
+                if (!Enum.IsDefined(typeof(SentenceKind), rule.Kind)) errors.Add(rule.name + ": unknown sentence kind.");
+                bool worldFlow = rule.Effects.Contains(CognitionSignal.WorldOn) || rule.Effects.Contains(CognitionSignal.WorldOff);
+                if (worldFlow != (rule.Kind == SentenceKind.WorldFlow)) errors.Add(rule.name + ": WorldFlow kind must match a WorldOn/WorldOff effect.");
+                if (!string.IsNullOrEmpty(rule.Channel) && (rule.Channel != rule.Channel.Trim().ToLowerInvariant() || rule.Channel.Any(char.IsWhiteSpace)))
+                    errors.Add(rule.name + ": channel must be lowercase without whitespace.");
             }
             var pairs = new HashSet<string>();
             foreach (var conflict in conflicts)

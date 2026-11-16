@@ -19,4 +19,5 @@ MonoBehaviour:
   effect: 26
   additionalEffects: 
   trigger: 0
-  exclusionKey: 
+  kind: 0
+  channel: 

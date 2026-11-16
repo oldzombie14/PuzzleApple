@@ -18,4 +18,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
   effect: 7
   trigger: 0
-  exclusionKey: 
+  kind: 2
+  channel: 

@@ -30,6 +30,7 @@ namespace PuzzleApple.V5.Cognition
             public CognitionSignal Signal { get; internal set; }
             public IReadOnlyList<CognitionSignal> Signals { get; internal set; } = Array.Empty<CognitionSignal>();
             public string RuleId { get; internal set; }
+            public CognitionRule Rule { get; internal set; }
             public long Established { get; internal set; }
             internal Group(int id, IEnumerable<Word> source) { Id = id; words = source.ToList(); }
         }
@@ -37,7 +38,7 @@ namespace PuzzleApple.V5.Cognition
         readonly List<Group> groups = new List<Group>();
         readonly Dictionary<string, CognitionRule> rules = new Dictionary<string, CognitionRule>();
         readonly Dictionary<string, WordDefinition> vocabulary;
-        readonly Dictionary<string, string> exclusionKeys;
+        readonly Dictionary<string, string> channels;
         readonly (CognitionSignal First, CognitionSignal Second, bool Earliest)[] conflicts;
         readonly HashSet<string> learned = new HashSet<string>();
         long chronology;
@@ -63,7 +64,7 @@ namespace PuzzleApple.V5.Cognition
             if (!catalog) throw new ArgumentNullException(nameof(catalog));
             catalog.ValidateOrThrow();
             vocabulary = catalog.Words.ToDictionary(w => w.Id);
-            exclusionKeys = catalog.Rules.ToDictionary(r => r.Id, r => r.ExclusionKey);
+            channels = catalog.Rules.ToDictionary(r => r.Id, r => r.Channel);
             foreach (var rule in catalog.Rules)
                 rules.Add(string.Join(" ", rule.Words.Select(w => w.Id)), rule);
             conflicts = catalog.Conflicts.Select(c => (c.First, c.Second, c.EarliestWins)).ToArray();
@@ -194,6 +195,7 @@ namespace PuzzleApple.V5.Cognition
                 group.Recognized = !group.Independent && rules.ContainsKey(key);
                 group.Signal = group.Recognized ? rules[key].Effect : CognitionSignal.Empty;
                 group.Signals = group.Recognized ? rules[key].Effects.Distinct().ToArray() : Array.Empty<CognitionSignal>();
+                group.Rule = group.Recognized ? rules[key] : null;
                 group.RuleId = group.Recognized ? rules[key].Id : null;
                 if (group.RuleId != previousRule) group.Established = group.Recognized ? ++chronology : 0;
                 group.Conflicted = false;
@@ -230,13 +232,10 @@ namespace PuzzleApple.V5.Cognition
         bool ConflictsWith(Group a, Group b)
         {
             foreach (var x in a.Signals) foreach (var y in b.Signals)
-            {
-                string channel = CognitionRule.Channel(x);
-                if (x != y && channel != null && channel == CognitionRule.Channel(y)) return true;
                 if (conflicts.Any(c => (c.First == x && c.Second == y) || (c.First == y && c.Second == x))) return true;
-            }
-            string key = exclusionKeys[a.RuleId];
-            return !string.IsNullOrEmpty(key) && key == exclusionKeys[b.RuleId] &&
+            // Rules in one channel conflict unless they apply the same effects (CognitionRule.Channel).
+            string channel = channels[a.RuleId];
+            return !string.IsNullOrEmpty(channel) && channel == channels[b.RuleId] &&
                 !a.Signals.OrderBy(s => s).SequenceEqual(b.Signals.OrderBy(s => s));
         }
     }

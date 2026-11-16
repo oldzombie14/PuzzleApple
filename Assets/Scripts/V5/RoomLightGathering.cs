@@ -60,7 +60,29 @@ namespace PuzzleApple.V5
             foreach(var other in journey.Lamps)if(other&&other!=lamp)
             {var away=body.position-other.transform.position;float d=away.magnitude;if(d>.001f&&d<spacing)separation+=away/d*(1-d/spacing);}
             var direction=(delta/distance+separation*2).normalized;
-            DirectedMotion.Move(body,colliders,direction*Mathf.Min((motion==CognitionSignal.LightLightMove?clusterSpeed:directedSpeed)*Time.fixedDeltaTime,distance-stop),true);
+            Vector3 step = direction*Mathf.Min((motion==CognitionSignal.LightLightMove?clusterSpeed:directedSpeed)*Time.fixedDeltaTime,distance-stop);
+            if (motion == CognitionSignal.LightDoorMove)
+            {
+                var sphere = lamp.GetComponent<SphereCollider>();
+                Vector3 door = journey.Door.position;
+                float priority = (body.position-door).sqrMagnitude;
+                step = DirectedMotion.ApproachStep(step, offset =>
+                {
+                    foreach (var other in journey.Lamps)
+                    {
+                        if (other == lamp || !other) continue;
+                        var centre = other.GetComponent<Rigidbody>().position;
+                        float otherPriority = (centre-door).sqrMagnitude;
+                        if (otherPriority > priority || (otherPriority == priority && other.GetInstanceID() > lamp.GetInstanceID())) continue;
+                        float clearance = sphere.bounds.extents.x + other.GetComponent<SphereCollider>().bounds.extents.x
+                            + 2 * directedSpeed * Time.fixedDeltaTime;
+                        var gap = body.position-centre;
+                        if ((gap+offset).sqrMagnitude < Mathf.Min(clearance*clearance,gap.sqrMagnitude)) return false;
+                    }
+                    return DirectedMotion.SphereStepClear(sphere,offset,true);
+                });
+            }
+            DirectedMotion.Move(body,colliders,step,true);
             return true;
         }
     }

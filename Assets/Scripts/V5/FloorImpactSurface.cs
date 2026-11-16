@@ -111,7 +111,7 @@ namespace PuzzleApple.V5
             UpdateHole(0);FloorCollider.enabled=false;
         }
         public float HoleWidth=>Mathf.Clamp(holeSize,1,Mathf.Min(journey.roomSize.x,journey.roomSize.z)-2);
-        public float HoleCentreZ=>journey.pathLength+journey.roomSize.z*.5f;
+        public float HoleCentreZ=>journey.RoomStart+journey.roomSize.z*.5f;
         public bool FitsOpening(Vector3 local,float radius)
         {
             float clearance=HoleWidth*.5f*Mathf.SmoothStep(0,1,HoleProgress)-radius;
@@ -120,7 +120,7 @@ namespace PuzzleApple.V5
         void UpdateHole(float progress)
         {
             float size=HoleWidth*Mathf.SmoothStep(0,1,progress);
-            float half=size*.5f,width=journey.roomSize.x,front=journey.pathLength-.1f,back=journey.pathLength+journey.roomSize.z;
+            float half=size*.5f,width=journey.roomSize.x,front=journey.RoomStart-.1f,back=journey.RoomStart+journey.roomSize.z;
             float centre=HoleCentreZ;
             SetRim(0,new Vector3(-(width*.5f+half)*.5f,-.15f,(front+back)*.5f),new Vector3((width-size)*.5f,.3f,back-front));
             SetRim(1,new Vector3((width*.5f+half)*.5f,-.15f,(front+back)*.5f),new Vector3((width-size)*.5f,.3f,back-front));
@@ -180,7 +180,7 @@ namespace PuzzleApple.V5
         void Configure(Material ink,Vector4[] impacts)
         {
             ink.SetMatrix("_WorldToFloor",journey.Root.worldToLocalMatrix);ink.SetVectorArray("_Impacts",impacts);
-            ink.SetVector("_RoomBounds",new Vector4(journey.roomSize.x*.5f-.15f,journey.roomSize.y,journey.pathLength+.15f,journey.roomSize.z-.3f));
+            ink.SetVector("_RoomBounds",new Vector4(journey.roomSize.x*.5f-.15f,journey.roomSize.y,journey.RoomStart+.15f,journey.roomSize.z-.3f));
             ink.SetFloat("_RoomOpeningWidth",journey.PathWidth);
             ink.SetFloat("_Brightness",1);
             ink.SetFloat("_RippleDuration",rippleDuration);ink.SetFloat("_RippleSpeed",rippleSpeed);

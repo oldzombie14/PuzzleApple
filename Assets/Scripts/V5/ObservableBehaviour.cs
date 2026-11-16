@@ -7,6 +7,7 @@ namespace PuzzleApple.V5
     public sealed class ObservableBehaviour : MonoBehaviour
     {
         public ObservationLesson lesson;
+        public bool wordOnly;
         [Range(0,3)] public float aimToleranceDegrees=1.5f;
         public Collider[] members=new Collider[0];
         public bool Available {get;set;}=true;

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>协作清单 · PuzzleApple</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0 auto;padding:clamp(24px,7vw,84px) 20px;max-width:780px;color:#171717;background:white;font:15px/1.65 "Microsoft YaHei",sans-serif}
+header,nav,.row,.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:28px;letter-spacing:-1px;margin:0 auto 0 0}
+button,select,textarea{font:inherit;color:inherit;background:white}
+button,select{cursor:pointer;border:1px solid #bbb;padding:4px 12px;border-radius:3px}
+button:hover,select:hover{border-color:#171717}
+button:disabled{opacity:.45;cursor:default}
+#save{background:#171717;color:white;border-color:#171717}
+nav{margin:32px 0 0;border-bottom:1px solid #bbb;gap:24px}
+nav button{border:0;border-radius:0;padding:4px 0 9px;color:#666}
+nav button[aria-current=true]{box-shadow:inset 0 -2px #171717;color:#171717}
+article{padding:20px 0;border-bottom:1px solid #ddd}
+.row{font-size:13px;color:#555}
+.spacer{margin-right:auto}
+.row button{border:0;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
+p{white-space:pre-wrap;overflow-wrap:anywhere;margin:9px 0 0}
+.reference,small,#message{color:#555;font-size:13px}
+#message{margin:8px 0;min-height:1.65em}
+details{margin-top:12px;font-size:13px}
+summary{cursor:pointer;color:#555}
+.change{border-left:1px solid #bbb;padding-left:12px;margin-top:12px}
+label{display:block;margin:12px 0}
+textarea{display:block;width:100%;padding:8px;border:1px solid #aaa;border-radius:3px;resize:vertical}
+select{margin-left:8px}
+[hidden]{display:none!important}
+</style>
+<header><h1>协作清单</h1><button id="add" disabled>添加</button><button id="save" disabled>保存</button></header>
+<nav aria-label="清单视图"><button data-view="active" aria-current="true">当前</button><button data-view="archive">归档</button></nav>
+<div id="message" role="status"></div>
+<main id="list"></main>
+<template id="editor">
+  <form>
+    <label>修改内容<textarea name="body" rows="4" required></textarea></label>
+    <label>参考文档或设计（选填）<textarea name="ref" rows="2" placeholder="例如：Assets/Docs/V5.md，或文件路径 + 章节 / 设计编号"></textarea></label>
+    <label>状态<select name="status"><option>待处理</option><option>进行中</option><option>待确认</option><option>已完成</option></select></label>
+    <div class="actions"><button type="submit">完成编辑</button><button type="button" name="cancel">取消</button></div>
+  </form>
+</template>
+<script type="module">
+const $ = selector => document.querySelector(selector);
+const make = (tag, text, cls) => {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (cls) node.className = cls;
+  return node;
+};
+let board, items = [], view = 'active', editing = null, form, busy = false;
+const latest = () => board.versions[0];
+const dirty = () => board && JSON.stringify(items) !== JSON.stringify(latest().items);
+const pending = () => editing && (form.elements.body.value !== editing.body ||
+  form.elements.ref.value !== editing.ref || form.elements.status.value !== editing.status);
+function controls() {
+  $('#save').disabled = busy || !board || !(dirty() || pending());
+  $('#add').disabled = busy || !board || !!editing;
+  $('#message').textContent = board ? 'V' + latest().version + (dirty() || pending() ? ' · 有未保存的修改' : ' · 已保存') : '';
+  for (const button of document.querySelectorAll('nav button')) {
+    button.disabled = busy || !!editing;
+    button.setAttribute('aria-current', String(view === button.dataset.view));
+  }
+}
+function finish() {
+  if (!form.reportValidity()) return false;
+  const body = form.elements.body.value.trim();
+  if (!body) { $('#message').textContent = '请填写修改内容。'; form.elements.body.focus(); return false; }
+  const result = {...editing, body, ref:form.elements.ref.value.trim(), status:form.elements.status.value};
+  const index = items.findIndex(i => i.id === result.id);
+  if (index < 0) items.push(result);
+  else items[index] = result;
+  editing = null;
+  return true;
+}
+function edit(item) {
+  editing = item;
+  form = $('#editor').content.firstElementChild.cloneNode(true);
+  for (const key of ['body','ref','status']) form.elements[key].value = item[key];
+  form.oninput = controls;
+  form.onsubmit = event => { event.preventDefault(); if (finish()) render(); };
+  form.elements.cancel.onclick = () => { editing = null; render(); };
+  render();
+  form.elements.body.focus();
+}
+function itemHistory(id) {
+  const details = make('details','');
+  details.append(make('summary','历史记录'));
+  details.ontoggle = () => {
+    if (!details.open || details.childElementCount > 1) return;
+    let previous;
+    const records = [];
+    for (const snapshot of board.versions.slice().reverse()) {
+      const item = snapshot.items.find(entry => entry.id === id);
+      if (!item) continue;
+      const changes = [];
+      if (!previous || item.body !== previous.body) changes.push('内容　' + item.body);
+      if (previous ? item.ref !== previous.ref : item.ref) changes.push('参考　' + (item.ref || '已清空'));
+      if (!previous || item.status !== previous.status) changes.push('状态　' +
+        (previous ? previous.status + ' → ' : '') + item.status);
+      if (previous ? item.archived !== previous.archived : item.archived) changes.push(item.archived ? '已归档' : '已移回当前');
+      if (changes.length) {
+        const record = make('div','','change');
+        record.append(make('small', (previous ? '修改' : '创建') + ' · ' + new Date(snapshot.at).toLocaleString('zh-CN')));
+        record.append(...changes.map(line => make('p',line)));
+        records.push(record);
+      }
+      previous = item;
+    }
+    if (records.length) details.append(...records.reverse());
+    else details.append(make('p','首次保存后显示记录。'));
+  };
+  return details;
+}
+function row(item) {
+  const article = make('article','');
+  const bar = make('div','','row');
+  bar.append(make('span','#' + item.id), make('span',item.status + (item.archived ? ' · 已归档' : ''),'spacer'));
+  article.append(bar);
+  if (editing?.id === item.id) { article.append(form); return article; }
+  const editButton = make('button','编辑'), archive = make('button',item.archived ? '移回当前' : '归档');
+  editButton.disabled = archive.disabled = !!editing || busy;
+  editButton.onclick = () => edit(item);
+  archive.onclick = () => { item.archived = !item.archived; render(); };
+  bar.append(editButton, archive);
+  article.append(make('p',item.body));
+  if (item.ref) article.append(make('p','参考　' + item.ref,'reference'));
+  article.append(itemHistory(item.id));
+  return article;
+}
+function render() {
+  controls();
+  const list = $('#list');
+  list.replaceChildren();
+  const visible = items.filter(i => i.archived === (view === 'archive'));
+  if (editing && !items.some(i => i.id === editing.id)) visible.push(editing);
+  list.append(...visible.map(i => row(i)));
+  if (!visible.length) list.append(make('p',view === 'active' ? '暂无条目。点击「添加」写下第一条修改。' : '暂无归档条目。'));
+}
+function load(data) {
+  board = data;
+  items = structuredClone(latest().items);
+  render();
+}
+for (const button of document.querySelectorAll('nav button')) button.onclick = () => { view = button.dataset.view; render(); };
+$('#add').onclick = () => {
+  view = 'active';
+  edit({id:items.reduce((max,i) => Math.max(max,i.id),0) + 1,status:'待处理',archived:false,body:'',ref:''});
+};
+$('#save').onclick = async () => {
+  if (editing && !finish()) return;
+  busy = true;
+  render();
+  try {
+    const response = await fetch('/board',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({revision:board.revision,items})});
+    const data = await response.json();
+    if (!response.ok) throw Error(data);
+    busy = false;
+    load(data);
+  } catch (error) { busy = false; render(); $('#message').textContent = '保存失败。' + error.message; }
+};
+window.onbeforeunload = event => { if (dirty() || pending()) { event.preventDefault(); event.returnValue = ''; } };
+try {
+  if (location.protocol === 'file:') throw Error('请双击同目录的「启动清单.cmd」打开清单。');
+  const response = await fetch('/board');
+  const data = await response.json();
+  if (!response.ok) throw Error(data);
+  load(data);
+} catch (error) { $('#message').textContent = error.message; document.querySelector('nav').hidden = true; }
+</script>
+</html>

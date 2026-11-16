@@ -52,23 +52,33 @@ namespace PuzzleApple.V5.Editor
                 // Step back into the corridor to clear the outward swing.
                 p.Teleport(j.Root.TransformPoint(new Vector3(0,.02f,j.pathLength-j.PathWidth-1)),j.Root.rotation);
                 e.board.State.TryAcquireSentence("journey.door","positive door");yield return Until(()=>j.DoorProgress>=1);
+                Require(!j.Root.Find("Move tutorial Cube"),"sphere room has no floating cube");
                 Walk(p,Mathf.CeilToInt((j.PathWidth+2)/p.moveSpeed*120));yield return null;p.enabled=true;
-                Require(j.InSecondRoom&&!j.LightsOn&&j.Brightness==0,"new room starts dark");
+                Require(j.glowVolume.weight==1,"sphere room uses the drifting-light bloom");
+                Require(j.InTutorial,"first door enters the move tutorial");p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);yield return null;Require(j.InSecondRoom&&!j.LightsOn&&j.Brightness==0,"new room starts dark");
                 var first=j.Lamps[0];var before=first.transform.position;yield return new WaitForSecondsRealtime(.6f);
                 Require(Vector3.Distance(before,first.transform.position)>.1f,"lamps move in darkness");
                 Require(j.Lamps.All(l=>Physics.GetIgnoreCollision(l.GetComponent<Collider>(),p.GetComponent<CharacterController>())),"lamps ignore player");
                 e.board.State.TryAcquireSentence("journey.light","positive light");yield return null;
                 Require(j.LightsOn&&j.Brightness<1,"room lights fade in");yield return Until(()=>j.Brightness>=1);
                 before=first.transform.position;yield return new WaitForSecondsRealtime(.5f);Require(Vector3.Distance(before,first.transform.position)>.1f,"lamps move when lit");
-                var body=first.GetComponent<Rigidbody>();body.position=j.Root.TransformPoint(new Vector3(j.roomSize.x*.5f-.3f,4,j.pathLength+8));first.direction=j.Root.right;int bounced=first.BounceCount;
+                var body=first.GetComponent<Rigidbody>();body.position=j.Root.TransformPoint(new Vector3(j.roomSize.x*.5f-.3f,4,j.RoomStart+8));first.direction=j.Root.right;int bounced=first.BounceCount;
                 yield return new WaitForSecondsRealtime(.3f);Require(first.BounceCount>bounced,"wall bounce");
-                var second=j.Lamps[1];body.position=j.Root.TransformPoint(new Vector3(-.4f,4,j.pathLength+8));second.GetComponent<Rigidbody>().position=j.Root.TransformPoint(new Vector3(.4f,4,j.pathLength+8));first.direction=j.Root.right;second.direction=-j.Root.right;bounced=first.BounceCount;
+                var second=j.Lamps[1];body.position=j.Root.TransformPoint(new Vector3(-.4f,4,j.RoomStart+8));second.GetComponent<Rigidbody>().position=j.Root.TransformPoint(new Vector3(.4f,4,j.RoomStart+8));first.direction=j.Root.right;second.direction=-j.Root.right;bounced=first.BounceCount;
                 yield return new WaitForSecondsRealtime(.4f);Require(first.BounceCount>bounced,"lamp pair collision");
                 e.RequestExit();yield return Until(()=>e.DialogReady);Require(e.portableClosure.Isolated,"second room closure");
                 e.CancelExit();e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
                 Require(j.LightsOn&&j.Brightness==1&&!e.portableClosure.Isolated,"second room restores lit state");
                 e.board.State.TryAcquireSentence("journey.off","negative light");yield return Until(()=>j.Brightness==0);
                 Require(j.InSecondRoom&&!j.LightsOn,"off light affects current room");
+                foreach(var lamp in j.Lamps)
+                {
+                    var surface=lamp.GetComponent<Renderer>();
+                    Require(surface.enabled && surface.sharedMaterial.GetColor("_BaseColor").maxColorComponent>0,
+                        "switched-off cube retains a visible surface");
+                    Require(lamp.glow.intensity==0 && surface.sharedMaterial.GetColor("_EmissionColor").maxColorComponent==0,
+                        "switched-off cube emits no light");
+                }
                 Result="PASS: corridor jump and bounds, portable closure/cancel/reopen, door collection/block/open, dark-room entry, continuous dark/lit motion, wall and lamp collision, player exclusion, second-room closure and local light commands";
             }
             finally{Application.runInBackground=background;}

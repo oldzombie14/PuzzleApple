@@ -111,7 +111,7 @@ namespace PuzzleApple.V5.Outdoor
             float target = targetOn ? 1 : 0;
             if (brightness == target) return;
             brightness = transitionDuration > 0
-                ? Mathf.MoveTowards(brightness, target, Time.unscaledDeltaTime / transitionDuration) : target;
+                ? RoomLighting.AdvanceLevel(brightness, target, Time.unscaledDeltaTime / transitionDuration) : target;
             ApplyAppearance();
         }
         float lampMultiplier=1;

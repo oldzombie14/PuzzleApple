@@ -16,10 +16,15 @@ namespace PuzzleApple.V5
         public AudioClip rippleSound;
         [Range(0,1)] public float rippleVolume=.45f;
         [Range(0,31)] public int effectLayer=31;
-        public float duration=.85f;
-        [Min(.3f)] public float repeatDuration=2.4f;
+        public float duration=1.5f;
+        [Tooltip("Time between the starts of sustained ripples.")]
+        [Min(.3f)] public float repeatDuration=1.24f;
+        [Tooltip("Extra per-side spread for sentence stars, in canvas units.")]
+        public Vector2 repeatSparklePadding=new Vector2(44,32);
         internal SentenceRuntime runtime;
         readonly HashSet<int> pulsing=new HashSet<int>();
+        readonly HashSet<long> sounded = new HashSet<long>();
+        readonly HashSet<long> effective = new HashSet<long>();
         public int StrongCount {get;private set;}
         public int WeakCount {get;private set;}
         Camera effectCamera;
@@ -59,13 +64,28 @@ namespace PuzzleApple.V5
             if(!output)return;
             if(texture.width!=Screen.width||texture.height!=Screen.height)Resize();
             output.enabled=board.Panel.IsOpen&&board.Surface.gameObject.activeInHierarchy;
-            if(!output.enabled || !runtime)return;
+            if(!runtime || board.State==null)return;
+            effective.Clear();
             foreach(var group in board.State.Groups)
-                if(!pulsing.Contains(group.Id) && runtime.SustainsFeedback(group))
+            {
+                if (!group.Effective) continue;
+                effective.Add(group.Established);
+                if (!runtime.SustainsFeedback(group)) continue;
+                SoundOnce(group);
+                if(output.enabled && !pulsing.Contains(group.Id))
                     StartCoroutine(Pulse(group.Id,true,true));
+            }
+            sounded.IntersectWith(effective);
+        }
+        void SoundOnce(CognitionState.Group group)
+        {
+            if (rippleAudio && rippleSound && sounded.Add(group.Established))
+                rippleAudio.PlayOneShot(rippleSound,rippleVolume);
         }
         public void Play(int groupId,bool strong)
         {
+            var group = board.State.Find(groupId);
+            if (strong && group!=null && group.Effective) SoundOnce(group);
             if(!stage||!board.Panel.IsOpen)return;
             if(strong)StrongCount++;else WeakCount++;
             StartCoroutine(Pulse(groupId,strong));
@@ -77,7 +97,7 @@ namespace PuzzleApple.V5
             if(initialGroup==null||!initialGroup.Recognized||(strong&&!initialGroup.Effective))yield break;
             if(strong && !pulsing.Add(groupId))yield break;
             long established=initialGroup.Established;
-            float lifetime=repeat?Mathf.Max(.3f,repeatDuration):duration;
+            bool ownsPulse = strong;
             var content=board.GroupContentBounds(groupId);
             var root=new GameObject(strong?"Sentence effect ripple":"Sentence grammar ripple");root.layer=effectLayer;
             root.transform.SetParent(stage,false);
@@ -94,25 +114,34 @@ namespace PuzzleApple.V5
             if(strong&&sparklePrefab)
             {
                 var particles=Instantiate(sparklePrefab,root.transform);
-                var shape=particles.shape;shape.scale=new Vector3(content.width*scale,content.height*scale*.8f,0);
+                var padding=repeatSparklePadding;
+                var shape=particles.shape;
+                shape.scale=new Vector3((content.width+2*Mathf.Max(0,padding.x))*scale,
+                    (content.height*.8f+2*Mathf.Max(0,padding.y))*scale,0);
                 var main=particles.main;main.startSize=new ParticleSystem.MinMaxCurve(34*scale,60*scale);
-                if(repeat)main.simulationSpeed*=duration/lifetime;
                 main.useUnscaledTime=true;
+                main.simulationSpeed *= .85f/duration;
                 particles.Play();
             }
-            // One cue per pulse, shared by its rings and stars; follows global listener mute.
-            if(!repeat&&rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
-            for(float t=0;t<lifetime;t+=Time.unscaledDeltaTime)
+            if(!strong&&rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
+            for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
             {
                 var group=board.State.Find(groupId);
                 if(!rect||!board.Panel.IsOpen||group==null||group.Established!=established||
                     !group.Recognized||(strong&&!group.Effective)||(repeat&&!runtime.SustainsFeedback(group)))break;
+                if (ownsPulse && t >= repeatDuration)
+                {
+                    // Let the next pulse start while this pair of rings finishes fading.
+                    pulsing.Remove(groupId);
+                    ownsPulse = false;
+                }
                 content=board.GroupContentBounds(groupId);
                 Vector2 screen=RectTransformUtility.WorldToScreenPoint(null,rect.TransformPoint(content.center));
                 root.transform.localPosition=new Vector3(screen.x-Screen.width*.5f,screen.y-Screen.height*.5f,5);
                 for(int i=0;i<lines.Length;i++)
                 {
-                    float u=Mathf.Clamp01((t-i*.12f)/(lifetime-i*.12f));
+                    float delay=i*.14f*duration;
+                    float u=Mathf.Clamp01((t-delay)/(duration-delay));
                     float alpha=(strong?.62f:.25f)*Mathf.Sin(Mathf.PI*Mathf.Pow(u,.55f));
                     lines[i].startColor=lines[i].endColor=new Color(.89f,.94f,1,alpha);
                     // Briefly hold the expanded frame before it resumes spreading and fades.
@@ -127,7 +156,7 @@ namespace PuzzleApple.V5
                 yield return null;
             }
             Destroy(root);
-            if(strong)pulsing.Remove(groupId);
+            if(ownsPulse)pulsing.Remove(groupId);
         }
         void OnDestroy(){if(texture){texture.Release();Destroy(texture);}}
     }

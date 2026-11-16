@@ -56,11 +56,11 @@ namespace PuzzleApple.V5
             if(body.isKinematic)body.isKinematic=false;
             // Bounds also seal the doorway for lamps without blocking the player.
             var local=journey.Root.InverseTransformPoint(body.position);
-            var lo=new Vector3(-journey.roomSize.x*.5f+.4f,.4f,journey.pathLength+.4f);
+            var lo=new Vector3(-journey.roomSize.x*.5f+.4f,.4f,journey.RoomStart+.4f);
             // With the interactive floor, let the native collider produce real contacts.
             // The old fixed .4 m limit reflected lamps before they ever touched it.
             if(journey.floorSurface)lo.y=-10000;
-            var hi=new Vector3(journey.roomSize.x*.5f-.4f,journey.roomSize.y-.4f,journey.pathLength+journey.roomSize.z-.4f);
+            var hi=new Vector3(journey.roomSize.x*.5f-.4f,journey.roomSize.y-.4f,journey.RoomStart+journey.roomSize.z-.4f);
             if(journey.floorSurface&&journey.floorSurface.HasWalls)
             {
                 lo.x=-10000;hi.x=10000;hi.y=10000;hi.z=10000;

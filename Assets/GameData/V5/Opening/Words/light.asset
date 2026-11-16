@@ -15,4 +15,3 @@ MonoBehaviour:
   id: light
   displayText: light
   symbol: {fileID: 21300000, guid: e1825a5d21674aae9668bccbb4ba35a5, type: 3}
-  senses: []

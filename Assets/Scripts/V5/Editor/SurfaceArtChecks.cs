@@ -33,15 +33,15 @@ namespace PuzzleApple.V5.Editor
                 before=j.Root.InverseTransformPoint(p.transform.position).z;
                 for(int i=0;i<20;i++){advance.Invoke(p,new object[]{Vector2.up,true,.026f,false});yield return null;}
                 Check(j.Root.InverseTransformPoint(p.transform.position).z<before-.8f,"turned W return retained");
-                p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength+4)),j.Root.rotation);j.SetLights(true);
+                p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.RoomStart+4)),j.Root.rotation);j.SetLights(true);
                 yield return Until(()=>j.Brightness>=1);yield return null;
                 var f=j.floorSurface;var ceiling=j.Root.Find("Room ceiling").GetComponent<Renderer>();
-                var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();body.position=j.Root.TransformPoint(new Vector3(0,j.roomSize.y-.5f,j.pathLength+7));
+                var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();body.position=j.Root.TransformPoint(new Vector3(0,j.roomSize.y-.5f,j.RoomStart+7));
                 lamp.direction=j.Root.up;Physics.SyncTransforms();int count=f.WallImpactCount;
                 yield return Until(()=>f.WallImpactCount>count&&Vector3.Dot(lamp.direction,j.Root.up)<0);
                 Check(f.WallImpactCount>count,"native ceiling contact creates ripple and reflects");
                 var wall=j.Root.Cast<Transform>().First(t=>t.name=="Room side wall").GetComponent<Renderer>();
-                var point=j.Root.TransformPoint(new Vector3(-j.roomSize.x*.5f+.15f,j.roomSize.y-.2f,j.pathLength+7));
+                var point=j.Root.TransformPoint(new Vector3(-j.roomSize.x*.5f+.15f,j.roomSize.y-.2f,j.RoomStart+7));
                 Check(f.ImpactWall(wall.GetComponent<Collider>(),point,j.Root.right),"wall impact accepted");yield return null;
                 var shared=f.Surface.sharedMaterial.GetVectorArray("_Impacts");
                 Check(shared.SequenceEqual(wall.sharedMaterial.GetVectorArray("_Impacts"))&&shared.SequenceEqual(ceiling.sharedMaterial.GetVectorArray("_Impacts")),"wall floor ceiling share timed spatial wave sources");

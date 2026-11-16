@@ -39,16 +39,15 @@ namespace PuzzleApple.V5
         Shot current;
         CanvasGroup caption;
         float shotRoll;
-        bool roomCut;
-        Vector3 returnPosition;
-        Quaternion returnRotation;
         WorldEntry Entry=>runtime.entry;
         Shot[] Profiles=>settings?settings.shots:shots;
         readonly Shot[] migrated={new Shot("light.light.move",Focus.LightGroup,true),new Shot("light.door.move",Focus.Door),
             new Shot("door.move",Focus.Door,true),new Shot("door.floor.move",Focus.Door),new Shot("door.light.move",Focus.Door,true),
             new Shot("floor.move",Focus.Sky),new Shot("floor.light.move",Focus.Floor),new Shot("floor.door.move",Focus.Floor)};
         Shot Profile(string rule)=>Array.Find(Profiles,s=>s!=null&&s.rule==rule)??Array.Find(migrated,s=>s.rule==rule);
-        public bool HasShot(string rule)=>enabledShots&&Profile(rule)!=null;
+        bool tutorialMoveShown;
+        public bool HasShot(string rule)=>enabledShots&&Profile(rule)!=null&&
+            !(rule=="light.move"&&Entry.journey&&Entry.journey.InTutorial&&tutorialMoveShown);
         void Update()
         {
             if(Playing&&CanInterrupt&&Keyboard.current!=null&&Keyboard.current.tabKey.wasPressedThisFrame)InterruptForEditing();
@@ -65,12 +64,6 @@ namespace PuzzleApple.V5
             if(!Playing)return;
             Playing=false;CanInterrupt=false;if(top)Bars(0);
             if(!runtime||!Entry||!Entry.player||!Entry.board)return;
-            if(roomCut)
-            {
-                Entry.player.view.localPosition=returnPosition;
-                Entry.player.view.rotation=returnRotation;
-                roomCut=false;
-            }
             Entry.player.AdoptCurrentView();Entry.player.CinematicLocked=previousLock;
             Entry.board.Panel.InputBlocked=previousBlocked;
             Entry.player.RestoreGameplayCursor();
@@ -95,44 +88,24 @@ namespace PuzzleApple.V5
             var journey=Entry.journey;
             bool corridorShot=(rule=="light.on"||rule=="light.off")&&journey&&journey.InCorridor&&
                 !(Entry.outdoor&&Entry.outdoor.IsOutside)&&!(Entry.portableClosure&&Entry.portableClosure.Isolated);
-            bool farSide=corridorShot&&journey.Root.InverseTransformPoint(Entry.player.transform.position).z>journey.pathLength*.5f;
-            if(corridorShot)
-            {
-                float requested=rule=="light.on"?1:0;
-                bool chamberChanges=Mathf.Abs(Entry.chamberLight.Brightness-requested)>.001f;
-                bool lampRoomChanges=Mathf.Abs(journey.Brightness-requested)>.001f;
-                if(chamberChanges!=lampRoomChanges)farSide=lampRoomChanges;
-            }
-            Vector3 cameraPoint=corridorShot?journey.Root.TransformPoint(new Vector3(0,1.7f,farSide?journey.pathLength+2:-2)):view.position;
-            bool corridorCut=corridorShot&&rule=="light.off";
-            Vector3 focus=corridorShot&&!corridorCut?
-                (farSide?LampCentre(journey):Entry.chamberLight.surface.bounds.center)+current.offset:
-                (corridorCut?cameraPoint:Target(current));
-            Quaternion start=view.rotation,goal=LookAt(focus);
+            bool holdView=corridorShot;
+            Quaternion start=view.rotation,goal=start;
+            if(!holdView)goal=LookAt(Target(current));
             for(float t=0;t<current.enter&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 float u=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,current.enter));
-                view.rotation=Blend(start,goal,u);Bars(u);yield return null;
+                if(!holdView)view.rotation=Blend(start,goal,u);
+                Bars(u);yield return null;
             }
             if(token!=revision)yield break;
-            view.rotation=goal;Bars(1);
-            if(corridorCut)
-            {
-                returnPosition=view.localPosition;
-                returnRotation=goal;
-                roomCut=true;
-                view.position=cameraPoint;
-                view.rotation=LookAt(farSide?LampCentre(journey):Entry.chamberLight.surface.bounds.center);
-                // Establish the unchanged room in frame before starting the light transition.
-                yield return null;
-                for(float t=0;t<.35f&&token==revision;t+=Time.unscaledDeltaTime)yield return null;
-                if(token!=revision)yield break;
-            }
+            if(!holdView)view.rotation=goal;
+            Bars(1);
             apply();CanInterrupt=true;
+            if(rule=="light.move"&&journey&&journey.InTutorial)tutorialMoveShown=true;
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 FadeCaption(t);
-                if(current.follow&&!roomCut)
+                if(current.follow&&!holdView)
                 {
                     var target=LookAt(Target(current));var e=view.eulerAngles;var d=target.eulerAngles;
                     view.rotation=Quaternion.Euler(Mathf.MoveTowardsAngle(e.x,d.x,current.followSpeed*Time.unscaledDeltaTime),
@@ -157,6 +130,8 @@ namespace PuzzleApple.V5
         {
             if(Entry.outdoor&&Entry.outdoor.IsOutside)return Entry.outdoor.World.Focus(shot.focus)+shot.offset;
             var j=Entry.journey;Vector3 target=Entry.player.view.position+Entry.player.view.forward*5;
+            if(j&&j.InTutorial&&shot.focus!=Focus.Door)return j.Tutorial.Sphere.position+shot.offset;
+            if(j&&j.InCorridor&&LastRule=="light.move")return Entry.player.view.position+Entry.player.view.forward*5;
             if(shot.focus==Focus.Door&&j&&j.Door)target=j.Door.position;
             else if(shot.focus==Focus.Floor&&j&&j.floorSurface&&j.floorSurface.Surface)target=j.floorSurface.Surface.bounds.center;
             else if(j&&j.InSecondRoom&&j.Lamps.Count>0)

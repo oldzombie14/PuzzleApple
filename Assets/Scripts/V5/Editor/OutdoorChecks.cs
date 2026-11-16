@@ -80,8 +80,8 @@ namespace PuzzleApple.V5.Editor
                 player.view.LookAt(e.chamberLight.surface.bounds.center);player.AdoptCurrentView();
                 Check(e.chamberLight.TryCollect(),"lit ceiling collection");yield return Until(()=>!e.chamberLight.Collecting,"collection completion");
                 Check(!e.outdoor.TryWorldDrop(e.board,"light",new Vector2(Screen.width*.8f,Screen.height*.5f)),"world drop prohibited indoors");
-                player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.pathLength+3)),j.Root.rotation);yield return null;
-                var lamp=j.Lamps[0];lamp.GetComponent<Rigidbody>().position=j.Root.TransformPoint(new Vector3(0,2,j.pathLength+6));
+                player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);yield return null;
+                var lamp=j.Lamps[0];lamp.GetComponent<Rigidbody>().position=j.Root.TransformPoint(new Vector3(0,2,j.RoomStart+6));
                 lamp.direction=Vector3.zero;Physics.SyncTransforms();player.view.LookAt(lamp.transform.position);player.AdoptCurrentView();yield return null;
                 Check(!e.chamberLight.LookingAtLight()&&!e.chamberLight.TryCollect(),"dark room lamp cannot supply known light");
                 j.SetLights(true);yield return Until(()=>j.Brightness==1,"room bright");
@@ -96,7 +96,7 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>e.outdoor.TransferredLamps>0,"a lamp falls and exits before the player");
                 Check(e.outdoor.RenderingWarmed&&!e.outdoor.IsOutside,"outdoor window rendered before travel");
                 player.MovementLocked=false;
-                var centre=j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength+j.roomSize.z*.5f));
+                var centre=j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart+j.roomSize.z*.5f));
                 player.Teleport(centre+j.Root.right*.45f+j.Root.forward*.2f,j.Root.rotation);
                 player.view.rotation=j.Root.rotation*Quaternion.Euler(68,24,0);player.AdoptCurrentView();
                 var mappedDirection=Quaternion.Euler(-90,0,0)*j.Root.InverseTransformDirection(player.view.forward);

@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f936b4fc28ab47899e1d89c6f99e1d2a, type: 3}
-  m_Name: ground_door_move
+  m_Name: FloorDoorMove
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.CognitionRule
   id: floor.door.move
   words:
@@ -20,4 +20,5 @@ MonoBehaviour:
   effect: 21
   additionalEffects: 
   trigger: 0
-  exclusionKey: 
+  kind: 0
+  channel: world.motion

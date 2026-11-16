@@ -21,14 +21,14 @@ namespace PuzzleApple.V5.Editor
             {
                 e.EnterWorld();yield return Until(()=>e.Entered);e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
                 var j=e.journey;var floor=j.floorSurface;
-                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.pathLength+3)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
+                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
                 j.SetLights(true);yield return Until(()=>j.Brightness==1);yield return new WaitForEndOfFrame();
                 Check(floor.Surface.sharedMaterial.shader==j.whitePath.shader&&floor.Surface.sharedMaterial.GetFloat("_SurfaceMode")==2&&floor.Surface.sharedMaterial.GetFloat("_Brightness")==1,"shared surface shader preserves white lit floor effects");
                 e.player.view.rotation=Quaternion.LookRotation(Vector3.down,j.Root.forward);e.player.AdoptCurrentView();yield return null;
                 Cursor.lockState=CursorLockMode.Locked;Check(e.chamberLight.TryCollect(),"floor uses normal collection path");yield return Until(()=>!e.chamberLight.Collecting);
                 Check(e.board.State.Knows("floor"),"floor vocabulary learned");
                 var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();
-                body.position=j.Root.TransformPoint(new Vector3(-4,.7f,j.pathLength+8));lamp.direction=Vector3.down;Physics.SyncTransforms();
+                body.position=j.Root.TransformPoint(new Vector3(-4,.7f,j.RoomStart+8));lamp.direction=Vector3.down;Physics.SyncTransforms();
                 int impacts=floor.ImpactCount;yield return Until(()=>floor.ImpactCount>impacts&&lamp.direction.y>0);
                 Check(lamp.direction.y>0,"native floor collision reflects lamp upward");
                 var squares=j.Root.Find("Floor impact squares").GetComponent<ParticleSystem>();
@@ -53,7 +53,7 @@ namespace PuzzleApple.V5.Editor
                 yield return new WaitForFixedUpdate();
                 var detached=state.Detach(group.Id,group.Words.Last().Id);
                 yield return Until(()=>j.LampsMoving);
-                body.position=j.Root.TransformPoint(new Vector3(-4,4,j.pathLength+8));
+                body.position=j.Root.TransformPoint(new Vector3(-4,4,j.RoomStart+8));
                 strong=e.feedback.StrongCount;
                 state.Join(detached.Id,group.Id,false);
                 yield return Until(()=>j.floorMotion.Active);
@@ -79,7 +79,7 @@ namespace PuzzleApple.V5.Editor
                 }
                 e.board.Panel.SetOpen(false);
                 j.SetLights(true);yield return Until(()=>floor.HoleOpen);Physics.SyncTransforms();
-                var centre=j.Root.TransformPoint(new Vector3(0,.2f,j.pathLength+j.roomSize.z*.5f));
+                var centre=j.Root.TransformPoint(new Vector3(0,.2f,j.RoomStart+j.roomSize.z*.5f));
                 Check(!Physics.Raycast(centre,Vector3.down,2,~0,QueryTriggerInteraction.Ignore),"centre has no hidden collision floor");
                 Check(Physics.Raycast(centre+j.Root.right*(floor.holeSize*.5f+1),Vector3.down,2,~0,QueryTriggerInteraction.Ignore),"rim remains solid");
                 e.player.Teleport(centre,j.Root.rotation);yield return new WaitForSecondsRealtime(1.2f);

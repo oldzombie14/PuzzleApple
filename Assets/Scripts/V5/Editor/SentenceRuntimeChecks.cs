@@ -20,6 +20,60 @@ namespace PuzzleApple.V5.Editor
             if(!e||e.room.Progress>0)throw new InvalidOperationException("Start in the closed P5 box.");
             Result="Running";e.StartCoroutine(Exercise(e));
         }
+        public static void RunDoorSwing()
+        {
+            var entry = UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            Result = "Running";
+            entry.StartCoroutine(CheckDoorSwing(entry));
+        }
+
+        static IEnumerator CheckDoorSwing(WorldEntry entry)
+        {
+            entry.EnterWorld();
+            yield return Until(() => entry.Entered);
+            entry.OpenWorld(-1);
+            yield return Until(() => entry.room.Opened && !entry.Busy);
+            var journey = entry.journey;
+            var state = entry.board.State;
+            var player = entry.player;
+            var presentation = entry.sentenceRuntime.presentation;
+            bool shots = presentation.enabledShots;
+            presentation.enabledShots = false;
+            try
+            {
+                player.Teleport(journey.Root.TransformPoint(new Vector3(0,.05f,journey.pathLength-9)),journey.Root.rotation);
+                yield return null;
+                player.view.LookAt(journey.Door);
+                player.AdoptCurrentView();
+                Cursor.lockState = CursorLockMode.Locked;
+                Check(entry.chamberLight.TryCollect(),"can collect from nine metres");
+                yield return Until(() => !entry.chamberLight.Collecting);
+                Check(state.Knows("door"),"collected door from nine metres");
+                player.Teleport(journey.Root.TransformPoint(new Vector3(0,.05f,journey.pathLength-1)),journey.Root.rotation);
+                state.TryAcquireSentence("check.swing.open","positive door");
+                yield return Until(() => journey.DoorProgress > .2f);
+                var motor = player.GetComponent<CharacterController>();
+                foreach (var part in journey.Door.parent.GetComponentsInChildren<Collider>())
+                    Check(Physics.GetIgnoreCollision(part,motor),"opening leaf and handle pass through player");
+                yield return Until(() => journey.DoorProgress == 1);
+                yield return null;
+                Check(!Physics.GetIgnoreCollision(journey.Door.GetComponent<Collider>(),motor),"open door regains collision");
+                yield return Until(() => !state.Groups.Any(g => g.RuleId == "door.on"));
+                player.Teleport(journey.Root.TransformPoint(new Vector3(0,.05f,journey.pathLength-9)),journey.Root.rotation);
+                state.TryAcquireSentence("check.swing.cycle","door move",out var cycle);
+                yield return Until(() => journey.DoorProgress == 0);
+                yield return Until(() => journey.DoorProgress > .3f);
+                var detached = state.Detach(cycle.Id,cycle.Words.Last().Id);
+                float held = journey.DoorProgress;
+                yield return new WaitForSeconds(.25f);
+                Check(held == journey.DoorProgress,"splitting door move holds angle");
+                state.Join(detached.Id,cycle.Id,false);
+                yield return Until(() => journey.DoorProgress == 1);
+                yield return Until(() => journey.DoorProgress < .8f);
+                Result = "PASS";
+            }
+            finally { presentation.enabledShots = shots; }
+        }
         static IEnumerator Exercise(WorldEntry e)
         {
             bool background=Application.runInBackground;Application.runInBackground=true;
@@ -42,6 +96,7 @@ namespace PuzzleApple.V5.Editor
                 float brightness=e.chamberLight.Brightness;
                 Check(brightness>0&&brightness<1,"light starts gradual off");
                 var off=state.Groups.First(g=>g.RuleId=="light.off");
+                Check(!e.sentenceRuntime.SustainsFeedback(off),"an active light fade must not repeat the command ripple");
                 var word=state.Detach(off.Id,off.Words.Last().Id);
                 yield return new WaitForSeconds(.2f);
                 Check(Mathf.Abs(brightness-e.chamberLight.Brightness)<.0001f,"split holds partial brightness");
@@ -57,7 +112,7 @@ namespace PuzzleApple.V5.Editor
                 Check(e.feedback.StrongCount==pulses+1&&presentation.LastRule=="light.on","newly effective ON receives strong ripple and its own shot");
                 Check(e.chamberLight.Brightness==held&&!presentation.CanInterrupt,"old fade stops immediately before takeover shot");
                 yield return Until(()=>!presentation.Playing);
-                Check(presentation.PlayCount==shotsBefore+1&&e.chamberLight.Brightness==1&&j.Brightness==1,"takeover runs once and brightens both rooms");
+                Check(presentation.PlayCount==shotsBefore+1&&e.chamberLight.Brightness==1&&j.Brightness==0,"takeover brightens chamber but stops at closed door");
                 presentation.enabledShots=false;
                 yield return Until(()=>state.Find(on.Id)==null);
                 var doorPosition=j.Door.position;
@@ -79,7 +134,7 @@ namespace PuzzleApple.V5.Editor
                 state.TryAcquireSentence("check.door.off","negative door");
                 yield return new WaitForSeconds(1.5f);
                 Check(j.DoorProgress==1,"closing waits while player occupies doorway");
-                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength+4)),j.Root.rotation);yield return Until(()=>j.DoorProgress<=0);
+                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.RoomStart+4)),j.Root.rotation);yield return Until(()=>j.DoorProgress<=0);
                 Check(j.DoorProgress==0,"off door closes after doorway clears");
                 Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled&&j.Door.position==doorPosition,"off restores stationary white leaf and collision");
                 Check(!j.Root.GetComponentsInChildren<Renderer>().Any(r=>r.name.Contains("door")&&r.name.Contains("filaments")&&r.transform.localPosition.z>j.pathLength&&r.enabled),"closed door conceals the room-side outline");
@@ -135,7 +190,7 @@ namespace PuzzleApple.V5.Editor
             try
             {
                 e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
-                j.SetLights(true);yield return Until(()=>j.Brightness==1);
+                j.SetLights(true,PassageJourney.LightSpace.All);yield return Until(()=>j.Brightness==1);
                 var camera=p.view.GetComponent<Camera>();
                 for(int pass=0;pass<3;pass++)
                 {
@@ -143,7 +198,7 @@ namespace PuzzleApple.V5.Editor
                     if(on){j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);}
                     if(pass==2)
                     {
-                        e.chamberLight.SetOn(false);j.SetLights(false);
+                        j.SetLights(false,PassageJourney.LightSpace.All);
                         yield return Until(()=>e.chamberLight.Brightness==0&&j.Brightness==0);
                     }
                     var position=j.Root.TransformPoint(new Vector3(0,.05f,on?j.pathLength-4:4));
@@ -152,42 +207,42 @@ namespace PuzzleApple.V5.Editor
                     yield return Until(()=>j.InCorridor);
                     var local=p.view.localPosition;
                     var cameraPosition=p.view.position;
+                    Quaternion? fixedRotation=on?(Quaternion?)null:p.view.rotation;
                     e.board.State.TryAcquireSentence("corridor."+pass,on?"positive light":"negative light");
-                    yield return FixedCameraUntil(()=>show.CanInterrupt,p,cameraPosition,on);
+                    yield return FixedCameraUntil(()=>show.CanInterrupt,p,cameraPosition,fixedRotation);
                     yield return new WaitForEndOfFrame();
-                    float depth=j.Root.InverseTransformPoint(p.view.position).z;
-                    Check(on?Vector3.Distance(p.view.position,cameraPosition)<.0001f:depth<0,"ON stays outside; OFF retains chamber cut");
                     float before=FrameLuminance(camera);
-                    yield return FixedCameraUntil(()=>e.chamberLight.Brightness==(on?1:0)&&j.Brightness==(on?1:0),p,cameraPosition,on);
+                    yield return FixedCameraUntil(()=>e.chamberLight.Brightness==(on?1:0)&&j.Stars.Brightness==(on?1:0),p,cameraPosition,fixedRotation);
                     yield return new WaitForEndOfFrame();
                     float after=FrameLuminance(camera);
                     Check(show.Playing&&(on?after-before:before-after)>.01f,"visible light change in held shot: "+before+" to "+after);
                     if(pass==2)Check(show.InterruptForEditing(),"interrupt stationary corridor shot");
-                    yield return FixedCameraUntil(()=>!show.Playing,p,cameraPosition,on);
+                    yield return FixedCameraUntil(()=>!show.Playing,p,cameraPosition,fixedRotation);
                     Check((p.view.localPosition-local).sqrMagnitude<.0001f&&j.InCorridor,"camera returned to corridor");
                     e.board.State.ClearWorkspace();
                 }
                 j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);
                 yield return new WaitForEndOfFrame();
                 float outside=RenderSettings.ambientLight.r;
-                p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.pathLength+3)),j.Root.rotation);
+                p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.RoomStart+3)),j.Root.rotation);
                 yield return Until(()=>j.InSecondRoom);yield return new WaitForEndOfFrame();
                 float inside=RenderSettings.ambientLight.r;
                 Check(outside>=inside*.85f&&outside<inside,"open door exterior keeps most of the interior light");
-                Result="PASS: corridor ON camera stays fixed through entry, lighting, completion and interruption; visible room changes; OFF cut retained. Ambient outside/inside "+outside+"/"+inside;
+                Result="PASS: corridor camera stays fixed through entry, lighting, completion and interruption; visible room changes; OFF keeps current view. Ambient outside/inside "+outside+"/"+inside;
             }
             finally{Application.runInBackground=background;}
         }
-        static IEnumerator FixedCameraUntil(Func<bool> ready,FirstPersonController player,Vector3 position,bool fixedCamera)
+        static IEnumerator FixedCameraUntil(Func<bool> ready,FirstPersonController player,Vector3 position,Quaternion? fixedRotation)
         {
             float end=Time.realtimeSinceStartup+25;
             while(!ready()&&Time.realtimeSinceStartup<end)
             {
-                if(fixedCamera)Check(Vector3.Distance(player.view.position,position)<.0001f,"corridor ON camera never translates");
+                Check(Vector3.Distance(player.view.position,position)<.0001f,"corridor camera never translates");
+                if(fixedRotation.HasValue)Check(Quaternion.Angle(player.view.rotation,fixedRotation.Value)<.05f,"OFF preserves view direction");
                 yield return null;
             }
             Check(ready(),"corridor lighting timeout");
-            if(fixedCamera)Check(Vector3.Distance(player.view.position,position)<.0001f,"corridor ON camera remains at original position");
+            Check(Vector3.Distance(player.view.position,position)<.0001f,"corridor camera remains at original position");
         }
         public static void RunCameraContract()
         {
@@ -255,12 +310,12 @@ namespace PuzzleApple.V5.Editor
             {
                 if(!e.Entered){e.EnterWorld();yield return Until(()=>e.Entered);e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);}
                 var j=e.journey;var f=j.floorSurface;var state=e.board.State;
-                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.pathLength+4)),j.Root.rotation);
-                j.SetLights(true);yield return Until(()=>j.Brightness>=1);yield return null;
+                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+4)),j.Root.rotation);
+                yield return Until(()=>j.InSecondRoom);j.SetLights(true);yield return Until(()=>j.Brightness>=1);yield return null;
                 var wall=j.Root.Find("Room side wall").GetComponent<Renderer>();
                 Check(wall.sharedMaterial.shader==f.Surface.sharedMaterial.shader&&wall.sharedMaterial.GetFloat("_Brightness")==1,"wall uses lit white ripple surface");
                 var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();
-                body.position=j.Root.TransformPoint(new Vector3(j.roomSize.x*.5f-.6f,3,j.pathLength+6));lamp.direction=j.Root.right;Physics.SyncTransforms();
+                body.position=j.Root.TransformPoint(new Vector3(j.roomSize.x*.5f-.6f,3,j.RoomStart+6));lamp.direction=j.Root.right;Physics.SyncTransforms();
                 int impacts=f.WallImpactCount;yield return Until(()=>f.WallImpactCount>impacts&&Vector3.Dot(lamp.direction,j.Root.right)<0);
                 Check(f.WallImpactCount>impacts,"actual wall collision emits ripple");
                 j.SetLights(false);yield return Until(()=>j.Brightness<=0);yield return null;

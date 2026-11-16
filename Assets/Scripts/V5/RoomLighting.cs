@@ -3,6 +3,8 @@ using UnityEngine;
 namespace PuzzleApple.V5
 {
     // Native broad spotlights: dim slit light when closed, white diffuse fill when open.
+    // Ambient fill comes from each room's RoomLightBalance, so every room follows one RoomLightStyle.
+    // Ambient fill comes from each room's RoomLightBalance, so every room follows one RoomLightStyle.
     public sealed class RoomLighting : MonoBehaviour
     {
         public FoldingRoom room;
@@ -18,9 +20,16 @@ namespace PuzzleApple.V5
         [Min(0)] public float closedIntensity=.4f, openIntensity=180;
         public Color closedAmbient=new Color(.003f,.003f,.003f);
         [Range(0,1)] public float unfoldedSpotContribution=.25f;
-        [Range(0,1)] public float unfoldedAmbientLift=.15f;
-        public Color openAmbient=new Color(.24f,.24f,.24f);
-        [Range(0,.15f)] public float offAmbient=.055f;
+        [Tooltip("Measures the unfolded chamber's lights; its style sets the shared room fill rule.")]
+        public RoomLightBalance chamberFill;
+        [Tooltip("Share of the far room's fill that reaches the corridor through the fully open door.")]
+        [Range(0,1)] public float openDoorFill=.9f;
+        public static float AdvanceLevel(float current, float target, float step)
+        {
+            float dark = 1 - Mathf.Clamp01(current);
+            if (target < current) step *= 1 + 2.5f*dark*dark;
+            return Mathf.MoveTowards(current,target,step);
+        }
         void LateUpdate()
         {
             // Indoor lighting must not inherit the outdoor scene's coloured gradient.
@@ -38,15 +47,18 @@ namespace PuzzleApple.V5
                 interiorFill.enabled=false;
             }
             float corridor=journey?journey.CorridorBlend:0;
-            if(chamberBloom)chamberBloom.weight=blend*(1-corridor);
-            Color dim=Color.white*offAmbient;
-            Color outside=Color.Lerp(dim,openAmbient+Color.white*unfoldedAmbientLift,lamp);
-            if(journey)
+            if(chamberBloom)chamberBloom.weight=blend*(journey?1-journey.RoomBloom:1);
+            // Each room's fill follows its own lights; doorways blend between rooms by view position.
+            var style=chamberFill?chamberFill.style:null;
+            Color dim=Color.white*(style?style.darkFill:.055f);
+            Color outside=dim;
+            var view=journey?journey.entry.player.view:Camera.main?Camera.main.transform:null;
+            if(view&&RoomLightBalance.FillAt(view.position,out float fill,out float weight))
+                outside=Color.Lerp(dim,Color.white*fill,weight);
+            if(journey&&journey.FarRoomFill&&journey.InCorridor)
             {
-                float roomLight=Mathf.SmoothStep(0,1,journey.Brightness);
-                Color farRoom=Color.Lerp(dim,Color.white*journey.ambientIntensity,roomLight);
-                float visibleRoom=Mathf.Lerp(.9f*journey.DoorProgress,1,journey.DoorwayLighting);
-                outside=Color.Lerp(outside,Color.Lerp(dim,farRoom,visibleRoom),corridor);
+                float far=Mathf.Lerp(dim.r,journey.FarRoomFill.Fill,openDoorFill*journey.DoorProgress);
+                if(far>outside.r)outside=Color.white*far;
             }
             RenderSettings.ambientLight=Color.Lerp(closedAmbient,outside,blend);
             // Keep the fog shader variant ready from the initial menu frame.

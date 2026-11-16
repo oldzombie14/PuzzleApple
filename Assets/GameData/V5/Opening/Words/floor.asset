@@ -15,4 +15,3 @@ MonoBehaviour:
   id: floor
   displayText: floor
   symbol: {fileID: 21300000, guid: 5fc530826ef94a1684ffd07a870f414e, type: 3}
-  senses: []

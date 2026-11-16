@@ -15,4 +15,3 @@ MonoBehaviour:
   id: mirror
   displayText: mirror
   symbol: {fileID: 21300000, guid: 2b5d17148475497bad7f7f062b38cd9d, type: 3}
-  senses: []

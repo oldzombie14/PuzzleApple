@@ -14,9 +14,16 @@ namespace PuzzleApple.V5
         [System.Serializable] public struct VocabularyImage { public string wordId; public Texture2D image; }
         [UnityEngine.Serialization.FormerlySerializedAs("memoryPresets")]
         public VocabularyImage[] vocabularyImages=new VocabularyImage[0];
+        public enum MoveOrigin { Stars, Spheres }
+        [Tooltip("Shown when the verb was first learned from the corridor stars or any non-sphere source.")]
         public SnapshotSequence moveMemory;
+        [Tooltip("Shown when the verb was first learned from the move tutorial room's spheres.")]
+        public SnapshotSequence sphereMoveMemory;
+        public MoveOrigin MoveSource {get;private set;}
         Material memoryPrint;
-        Material movePrint;
+        Material movePrint,sphereMovePrint;
+        SnapshotSequence MoveClip=>MoveSource==MoveOrigin.Spheres&&sphereMoveMemory&&sphereMoveMemory.atlas?sphereMoveMemory:moveMemory;
+        Material MovePrint=>MoveClip==sphereMoveMemory&&sphereMoveMemory?sphereMovePrint:movePrint;
         WorldEntry worldEntry;
         float playbackStart;
         Vector2? dismissPress;
@@ -51,12 +58,8 @@ namespace PuzzleApple.V5
         {
             memoryPrint=snapshot.material;
             worldEntry=FindFirstObjectByType<WorldEntry>();
-            if(moveMemory&&moveMemory.unlitAtlas)
-            {
-                movePrint=new Material(memoryPrint);
-                movePrint.SetTexture("_UnlitAtlas",moveMemory.unlitAtlas);
-                movePrint.EnableKeyword("MOVE_SNAPSHOT");
-            }
+            movePrint=CreateMovePrint(moveMemory);
+            sphereMovePrint=CreateMovePrint(sphereMoveMemory);
             note.lineType=InputField.LineType.SingleLine;
             note.caretBlinkRate=.85f;
             note.caretWidth=2;
@@ -67,6 +70,20 @@ namespace PuzzleApple.V5
             board.State.Changed+=Refresh;
             board.Panel.OpenChanged.AddListener(OnPanel);
             Refresh(CognitionChange.Add);Show(false);
+        }
+        Material CreateMovePrint(SnapshotSequence clip)
+        {
+            if(!clip||!clip.unlitAtlas)return null;
+            var print=new Material(memoryPrint);
+            print.SetTexture("_UnlitAtlas",clip.unlitAtlas);
+            print.EnableKeyword("MOVE_SNAPSHOT");
+            return print;
+        }
+        // Called just before an observation grants the verb; the first acquisition decides the memory.
+        public void NoteMoveSource(MoveOrigin origin)
+        {
+            if(board.State.Knows("move"))return;
+            MoveSource=origin;
         }
         void EditNote(string value){if(selected!=null)drafts[selected]=value;UpdateSaveButton();}
         void SubmitNote(string value){if(IsOpen&&!board.Panel.InputBlocked)SaveNote();}
@@ -115,6 +132,7 @@ namespace PuzzleApple.V5
             {
                 if(photos.TryGetValue(id,out var photo)&&photo&&capturedPhotos.Remove(photo))Destroy(photo);
                 photos.Remove(id);savedNotes.Remove(id);drafts.Remove(id);
+                if(id=="move")MoveSource=MoveOrigin.Stars;
             }
         }
         public void Remember(string id)
@@ -159,12 +177,13 @@ namespace PuzzleApple.V5
                 ?AspectRatioFitter.AspectMode.FitInParent:AspectRatioFitter.AspectMode.EnvelopeParent;
             snapshot.uvRect=new Rect(0,0,1,1);
             snapshot.texture=photos.TryGetValue(selected,out var photo)?photo:null;
-            if(selected=="move"&&moveMemory&&moveMemory.atlas)
+            var clip=MoveClip;
+            if(selected=="move"&&clip&&clip.atlas)
             {
-                snapshot.texture=moveMemory.atlas;
-                snapshot.uvRect=moveMemory.Frame(Time.unscaledTime-playbackStart);
+                snapshot.texture=clip.atlas;
+                snapshot.uvRect=clip.Frame(Time.unscaledTime-playbackStart);
             }
-            snapshot.material=selected=="move"?movePrint:selected=="light"?null:memoryPrint;
+            snapshot.material=selected=="move"?MovePrint:selected=="light"?null:memoryPrint;
             snapshot.enabled=snapshot.texture;
             if(snapshotFrame.activeSelf!=snapshot.enabled)
             {
@@ -184,10 +203,10 @@ namespace PuzzleApple.V5
                     float glow=worldEntry&&worldEntry.sentenceRuntime?worldEntry.sentenceRuntime.FloorIllumination:0;
                     exposure=Mathf.Lerp(.012f,1,Mathf.Max(lighting,glow));
                 }
-                else if(movePrint)movePrint.SetFloat("_SnapshotLighting",lighting);
+                else if(MovePrint)MovePrint.SetFloat("_SnapshotLighting",clip==sphereMoveMemory?SphereLighting():lighting);
             }
             snapshot.color=new Color(exposure,exposure,exposure,1f);
-            if(snapshot.texture)snapshotAspect.aspectRatio=selected=="move"&&moveMemory?moveMemory.aspect:(float)snapshot.texture.width/snapshot.texture.height;
+            if(snapshot.texture)snapshotAspect.aspectRatio=selected=="move"&&clip?clip.aspect:(float)snapshot.texture.width/snapshot.texture.height;
         }
         float SnapshotLighting()
         {
@@ -197,6 +216,12 @@ namespace PuzzleApple.V5
             if(outdoor&&outdoor.IsOutside)return outdoor.World.stateSource.Brightness;
             var journey=worldEntry.journey;
             return journey&&journey.BeyondChamber?journey.Brightness:worldEntry.chamberLight.Brightness;
+        }
+        // The sphere memory follows the tutorial spheres themselves, wherever the library is opened.
+        float SphereLighting()
+        {
+            var tutorial=worldEntry&&worldEntry.journey?worldEntry.journey.Tutorial:null;
+            return tutorial?tutorial.SphereBrightness:1;
         }
         void UpdateSaveButton(){saveNote.interactable=selected!=null&&note.text.Trim()!=SavedNote(selected);}
         public void SaveNote()
@@ -320,6 +345,7 @@ namespace PuzzleApple.V5
         void OnDestroy()
         {
             if(movePrint)Destroy(movePrint);
+            if(sphereMovePrint)Destroy(sphereMovePrint);
             foreach(var photo in capturedPhotos)if(photo)Destroy(photo);
             if(board&&board.State!=null)board.State.Changed-=Refresh;
             if(board&&board.Panel)board.Panel.OpenChanged.RemoveListener(OnPanel);

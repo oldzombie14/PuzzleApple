@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -20,7 +19,8 @@ namespace PuzzleApple.V5
         public Transform Entrance {get;private set;}
         Renderer cover;
         MaterialPropertyBlock wallProperties;
-        readonly List<Renderer> segments=new List<Renderer>();
+        Renderer openingWall;
+        Mesh openingMesh;
         Material glow;
         Material coverInk;
         public float Reveal=>journey&&journey.ViewBeyondChamber?1:1-Mathf.SmoothStep(0,1,lamp.Brightness);
@@ -38,11 +38,19 @@ namespace PuzzleApple.V5
             float centre=0;
             float left=centre-width*.5f,right=centre+width*.5f;
             var mat=cover.sharedMaterial;
-            segments.Add(Block(root,"Wall left",new Vector3((-span*.5f+left)*.5f,tall*.5f,0),new Vector3(left+span*.5f,tall,thick),mat));
-            segments.Add(Block(root,"Wall right",new Vector3((right+span*.5f)*.5f,tall*.5f,0),new Vector3(span*.5f-right,tall,thick),mat));
-            segments.Add(Block(root,"Wall below opening",new Vector3(centre,sillHeight*.5f,0),new Vector3(width,sillHeight,thick),mat));
+            WallCollider(root,"Wall left",new Vector3((-span*.5f+left)*.5f,tall*.5f,0),new Vector3(left+span*.5f,tall,thick));
+            WallCollider(root,"Wall right",new Vector3((right+span*.5f)*.5f,tall*.5f,0),new Vector3(span*.5f-right,tall,thick));
+            WallCollider(root,"Wall below opening",new Vector3(centre,sillHeight*.5f,0),new Vector3(width,sillHeight,thick));
             float top=sillHeight+height;
-            segments.Add(Block(root,"Wall above opening",new Vector3(centre,(top+tall)*.5f,0),new Vector3(width,tall-top,thick),mat));
+            WallCollider(root,"Wall above opening",new Vector3(centre,(top+tall)*.5f,0),new Vector3(width,tall-top,thick));
+            var front=new GameObject("Wall with passage",typeof(MeshFilter),typeof(MeshRenderer));
+            front.transform.SetParent(root,false);
+            front.transform.localPosition=Vector3.up*(tall*.5f);
+            front.transform.localScale=new Vector3(span,tall,thick);
+            openingMesh=OpeningWallMesh.Build(width/span,sillHeight/tall,top/tall,false);
+            front.GetComponent<MeshFilter>().sharedMesh=openingMesh;
+            openingWall=front.GetComponent<Renderer>();
+            openingWall.sharedMaterials=new[]{mat,mat};
             wallProperties=new MaterialPropertyBlock();
             Entrance=new GameObject("Passage entrance").transform;Entrance.SetParent(root,false);Entrance.localPosition=new Vector3(centre,sillHeight,0);
             // Solid wall sections keep their depth and shadows. Only the aperture fades,
@@ -52,7 +60,9 @@ namespace PuzzleApple.V5
             coverInk.SetFloat("_SrcBlend",(float)UnityEngine.Rendering.BlendMode.SrcAlpha);
             coverInk.SetFloat("_DstBlend",(float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             coverInk.SetFloat("_ZWrite",0);
-            coverInk.renderQueue=(int)UnityEngine.Rendering.RenderQueue.Transparent;
+            // Composite the aperture over corridor stars even when their renderer
+            // centres sort nearer than the centre of the full wall.
+            coverInk.renderQueue=(int)UnityEngine.Rendering.RenderQueue.Transparent+1;
             coverInk.SetShaderPassEnabled("DepthOnly",false);
             coverInk.SetShaderPassEnabled("DepthNormals",false);
             cover.sharedMaterial=coverInk;
@@ -104,6 +114,13 @@ namespace PuzzleApple.V5
             var obj=GameObject.CreatePrimitive(PrimitiveType.Cube);obj.name=name;obj.transform.SetParent(parent,false);obj.transform.localPosition=position;obj.transform.localScale=size;
             var renderer=obj.GetComponent<Renderer>();renderer.sharedMaterial=material;return renderer;
         }
+        static void WallCollider(Transform parent,string name,Vector3 position,Vector3 size)
+        {
+            var obj=new GameObject(name,typeof(BoxCollider));
+            obj.transform.SetParent(parent,false);
+            obj.transform.localPosition=position;
+            obj.transform.localScale=size;
+        }
         void Update()
         {
             if(!cover)return;
@@ -117,15 +134,15 @@ namespace PuzzleApple.V5
             cover.SetPropertyBlock(wallProperties);
             // Sections use their own local inward normal and must never inherit the cover mask.
             wallProperties.SetVector("_RoomShellInward",Vector3.back);
-            foreach(var segment in segments)segment.SetPropertyBlock(wallProperties);
+            openingWall.SetPropertyBlock(wallProperties);
             cover.enabled=darkness<1;
-            float corridorGlow=journey?Mathf.Lerp(.09f,1,journey.CorridorBrightness):1;
+            float corridorGlow=journey&&journey.Stars?Mathf.Lerp(.09f,1,journey.Stars.Brightness):1;
             glow.SetFloat("_Visibility",darkness*corridorGlow);
             if(returnGlow)returnGlow.SetFloat("_Visibility",corridorGlow);
             var p=Entrance.InverseTransformPoint(lamp.entry.player.transform.position);
             if(!ReachedEntrance&&Mathf.Abs(p.x)<width*.5f&&p.z>.35f&&p.z<entranceDepth&&p.y>-.2f&&p.y<height)
             {ReachedEntrance=true;reachedEntrance.Invoke();}
         }
-        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);if(coverInk)Destroy(coverInk);}
+        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);if(coverInk)Destroy(coverInk);if(openingMesh)Destroy(openingMesh);}
     }
 }

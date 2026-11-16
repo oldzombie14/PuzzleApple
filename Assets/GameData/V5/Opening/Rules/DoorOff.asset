@@ -19,5 +19,6 @@ MonoBehaviour:
   effect: 13
   additionalEffects: 
   trigger: 0
-  exclusionKey: 
+  kind: 1
+  channel: door.state
 

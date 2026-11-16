@@ -10,6 +10,161 @@ namespace PuzzleApple.V5.Editor
         public static string Result {get;private set;}
         static void Check(bool ok,string text){if(!ok){Result="FAIL: "+text;throw new Exception(Result);}}
         public static void Run(){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(Run(e));}
+        public static void RunCorridorStars()
+        {
+            Result = "Running";
+            var entry = UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            entry.StartCoroutine(RunTutorialCheck(entry));
+        }
+
+        static IEnumerator RunTutorialCheck(WorldEntry entry)
+        {
+            var presentation = entry.sentenceRuntime.presentation;
+            bool shots = presentation.enabledShots;
+            try
+            {
+                presentation.enabledShots = false;
+                yield return CheckCorridorStars(entry);
+            }
+            finally { presentation.enabledShots = shots; }
+        }
+
+        static IEnumerator CheckCorridorStars(WorldEntry entry)
+        {
+            entry.EnterWorld();
+            yield return Until(() => entry.Entered);
+            var state = entry.board.State;
+            state.TryAcquireSentence("tutorial.check.world", "positive world");
+            yield return Until(() => entry.room.Opened && !entry.Busy);
+            var journey = entry.journey;
+            var observer = entry.chamberLight.observer;
+            var player = entry.player;
+            var sphere = journey.Tutorial.Sphere;
+            var start = sphere.position;
+            var collider = sphere.GetComponent<Collider>();
+            entry.board.Panel.SetOpen(false);
+            player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.pathLength*.5f)),journey.Root.rotation);
+            yield return Until(() => journey.InCorridor);
+            Cursor.lockState=CursorLockMode.Locked;
+            var stars=journey.ActiveStars.GetComponentsInChildren<MeshRenderer>();
+            var before=stars[0].transform.position;
+            yield return new WaitForSeconds(.25f);
+            Check(Vector3.Distance(before,stars[0].transform.position)>.01f,"stars drift before learning move");
+            yield return Until(() =>
+            {
+                foreach(var star in stars)
+                {
+                    player.view.LookAt(star.transform);
+                    player.AdoptCurrentView();
+                    observer.Advance(false,0);
+                    if(observer.Target==journey.ActiveStars.Observation) return true;
+                }
+                return false;
+            });
+            observer.Advance(true,1);
+            Check(entry.chamberLight.Collecting,"hold starts observation collection");
+            yield return Until(() => !entry.chamberLight.Collecting);
+            Check(state.HasEffect(Cognition.CognitionSignal.LightMove) && entry.board.Panel.IsOpen,"observing a star grants the example");
+            yield return new WaitForSeconds(.2f);
+            Check(sphere.position==start && journey.DoorProgress==0,"closed first door isolates the sphere");
+            state.TryAcquireSentence("tutorial.check.door","positive door");
+            yield return Until(() => journey.DoorProgress>=1);
+            var small=journey.Root.Find("Move tutorial small sphere 1");
+            before=small.position;
+            yield return new WaitForSeconds(.25f);
+            Check(sphere.position==start && journey.Tutorial.ExitBlocked && !journey.Tutorial.IsLit(collider),
+                "opening with light move leaves the dark sphere blocking the exit");
+            Check(Vector3.Distance(before,small.position)>.01f && journey.Tutorial.IsLit(small.GetComponent<Collider>()),
+                "small lit sphere drifts with light move");
+            state.TryAcquireSentence("tutorial.check.on","positive light",out var on);
+            var lampLight=sphere.GetComponentInChildren<Light>();
+            float fullSphere=journey.LightStyle.LampIntensity(sphere.localScale.x);
+            float smallLampFill=journey.Tutorial.Fill.Fill;
+            yield return Until(() => Vector3.Distance(start,sphere.position)>.1f && !journey.Tutorial.WouldChange(true));
+            Check(Mathf.Approximately(lampLight.intensity,fullSphere*journey.entry.sentenceRuntime.LampMultiplier),
+                "sphere light output follows its size");
+            Check(journey.Tutorial.Fill.Fill>smallLampFill+.01f,"lighting the large sphere raises the room fill");
+            state.Detach(on.Id,on.Words.Last().Id);
+            player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.Tutorial.ExitZ+2)),journey.Root.rotation);
+            yield return Until(() => journey.InReturnPath);
+            before=sphere.position;
+            yield return new WaitForSeconds(.25f);
+            Check(Vector3.Distance(before,sphere.position)>.01f,"sphere continues from second corridor");
+            var motion=state.Groups.Single(g=>g.RuleId=="light.move");
+            state.Detach(motion.Id,motion.Words.Last().Id);
+            before=sphere.position;
+            var smallBefore=small.position;
+            yield return new WaitForSeconds(.2f);
+            Check(sphere.position==before && small.position==smallBefore,"split holds lit spheres");
+            player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.pathLength+3)),journey.Root.rotation);
+            yield return Until(()=>journey.InTutorial);
+            var glow=sphere.GetComponentInChildren<Light>();
+            state.TryAcquireSentence("tutorial.check.off","negative light",out var off);
+            yield return Until(()=>glow.intensity<journey.LightStyle.LampIntensity(sphere.localScale.x)*.7f);
+            var token=state.Detach(off.Id,off.Words.Last().Id);
+            yield return new WaitForSeconds(.15f);
+            Check(glow.intensity>0 && journey.WordAt(collider,1)=="light","half-lit sphere retains light identity");
+            state.Join(token.Id,off.Id,false);
+            yield return Until(()=>!journey.Tutorial.AnyLit);
+            before=sphere.position;
+            smallBefore=small.position;
+            yield return new WaitForSeconds(.25f);
+            Check(sphere.position==before && Vector3.Distance(smallBefore,small.position)>.01f,
+                "dark small sphere drifts independently while dark blocker holds");
+            yield return CheckBlockedApproach(entry);
+            Result = "PASS";
+        }
+        static IEnumerator CheckBlockedApproach(WorldEntry entry)
+        {
+            var j = entry.journey;
+            var sphere = j.Tutorial.Sphere;
+            var body = sphere.GetComponent<SphereCollider>();
+            var obstacles = new GameObject("Door approach check");
+            obstacles.transform.SetParent(j.Root,false);
+            try
+            {
+                var block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                block.transform.SetParent(obstacles.transform,false);
+                block.transform.localPosition = new Vector3(.8f,2.5f,j.pathLength+8);
+                block.transform.localScale = new Vector3(1,6,1);
+                var start = new Vector3(0,2.23f,j.pathLength+12);
+                sphere.localPosition = start;
+                j.Tutorial.SetOn(true);
+                Physics.SyncTransforms();
+                entry.board.State.TryAcquireSentence("tutorial.check.approach","light door move");
+                yield return Until(()=>entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightDoorMove));
+                for (int i=0; i<700 && sphere.localPosition.z > j.pathLength+4; i++)
+                {
+                    yield return new WaitForFixedUpdate();
+                    CheckClear(body,block.GetComponent<Collider>());
+                }
+                Check(sphere.localPosition.z < j.pathLength+4,"sphere gets past partial barrier");
+                sphere.localPosition = start;
+                block.transform.localPosition = new Vector3(0,2.5f,j.pathLength+8);
+                block.transform.localScale = new Vector3(9,6,1);
+                foreach (int sign in new[]{-1,1})
+                {
+                    var side = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    side.transform.SetParent(obstacles.transform,false);
+                    side.transform.localPosition = new Vector3(sign*2.69f,2.5f,j.pathLength+10);
+                    side.transform.localScale = new Vector3(1,6,8);
+                }
+                Physics.SyncTransforms();
+                yield return new WaitForSeconds(2);
+                foreach (var obstacle in obstacles.GetComponentsInChildren<Collider>()) CheckClear(body,obstacle);
+                Vector3 held = sphere.position;
+                yield return new WaitForSeconds(.3f);
+                Check(Vector3.Distance(held,sphere.position)<.001f,"sphere stops at sealed barrier");
+            }
+            finally { UnityEngine.Object.Destroy(obstacles); }
+        }
+
+        static void CheckClear(Collider lamp,Collider obstacle)
+        {
+            bool overlaps = Physics.ComputePenetration(lamp,lamp.transform.position,lamp.transform.rotation,
+                obstacle,obstacle.transform.position,obstacle.transform.rotation,out _,out float depth);
+            Check(!overlaps || depth<.00001f,"sphere penetrated obstacle");
+        }
         static IEnumerator Until(Func<bool> predicate)
         {float end=Time.realtimeSinceStartup+20;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout");}
         static IEnumerator Run(WorldEntry e)
@@ -23,7 +178,7 @@ namespace PuzzleApple.V5.Editor
                 e.EnterWorld();yield return Until(()=>e.Entered);
                 e.board.State.TryAcquireSentence("observe.check.world","positive world");yield return Until(()=>e.room.Opened&&!e.Busy);
                 var j=e.journey;var p=e.player;
-                p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.pathLength+2)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
+                p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+2)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
                 var body=j.Lamps[0].GetComponent<Rigidbody>();var before=body.position;yield return new WaitForSeconds(.2f);
                 Check(!j.LightsOn&&Vector3.Distance(before,body.position)>.02f,"unlearned dark lamps keep moving");
                 Check(!e.board.State.HasEffect(Cognition.CognitionSignal.LightMove)&&j.movementObservation.HasEffect(e.board.State,e.board.Catalog,Cognition.CognitionSignal.LightMove),"preset sentence drives movement before ownership transfer");
@@ -34,12 +189,12 @@ namespace PuzzleApple.V5.Editor
                 {
                     var lampBody=j.Lamps[i].GetComponent<Rigidbody>();
                     lampBody.interpolation=RigidbodyInterpolation.None;
-                    lampBody.position=j.Root.TransformPoint(new Vector3(4,2+i*.5f,j.pathLength+10));
+                    lampBody.position=j.Root.TransformPoint(new Vector3(4,2+i*.5f,j.RoomStart+10));
                 }
                 Physics.SyncTransforms();
                 p.view.LookAt(j.Root.Find("Room far wall"));p.AdoptCurrentView();
                 Check(o.FindTarget()==null,"bare mural cannot start observation");
-                body.position=j.Root.TransformPoint(new Vector3(0,3,j.pathLength+10));Physics.SyncTransforms();
+                body.position=j.Root.TransformPoint(new Vector3(0,3,j.RoomStart+10));Physics.SyncTransforms();
                 p.view.LookAt(body.position+j.Root.right*.25f);p.AdoptCurrentView();
                 Check(o.FindTarget()==j.movementObservation,"near-edge tolerance");
                 p.view.LookAt(body.position);p.AdoptCurrentView();yield return null;

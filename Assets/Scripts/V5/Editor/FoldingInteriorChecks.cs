@@ -113,7 +113,7 @@ namespace PuzzleApple.V5.Editor
                 yield return new WaitForEndOfFrame();Check(intermediate&&e.room.Opened,"smooth handoff during opening");Surfaces(interior,0);
                 foreach(bool second in new[]{false,true})
                 {
-                    var j=e.journey;e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,second?j.pathLength+3:3)),j.Root.rotation);
+                    var j=e.journey;e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,second?j.RoomStart+3:3)),j.Root.rotation);
                     yield return null;yield return null;Check(j.BeyondChamber&&j.InSecondRoom==second,"test space selected");
                     e.RequestExit();
                     yield return Until(()=>room.FloorFinishProgress<.5f);

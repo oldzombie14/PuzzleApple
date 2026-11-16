@@ -18,6 +18,7 @@ namespace PuzzleApple.V5
         public float FloorIllumination=>Mathf.SmoothStep(0,1,levels.z);
         public float LampMultiplier => 1 + Mathf.SmoothStep(0,1,levels.w);
         const float FadeSeconds=1.4f;
+        const float DoorGlowStrength=.9f;
 
         void Awake()
         {
@@ -78,11 +79,12 @@ namespace PuzzleApple.V5
             float door=Mathf.SmoothStep(0,1,levels.y);
             float floor=FloorIllumination;
             bloomVolume.weight=outside?0:door;
-            Shader.SetGlobalFloat("_P5DoorGlow",door*2.5f);
+            float doorGlow=door*DoorGlowStrength;
+            Shader.SetGlobalFloat("_P5DoorGlow",doorGlow*2.5f);
             Shader.SetGlobalFloat("_P5FloorGlow",floor*.85f);
             if(outside)
             {
-                passage.World.doors.appearance.SetIlluminated(door);
+                passage.World.doors.appearance.SetIlluminated(doorGlow);
                 passage.World.SetFloorIlluminated(floor);
                 passage.World.stateSource.SetLampMultiplier(LampMultiplier);
             }

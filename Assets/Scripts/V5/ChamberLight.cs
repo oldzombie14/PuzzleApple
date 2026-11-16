@@ -1,11 +1,12 @@
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace PuzzleApple.V5
 {
-    public sealed class ChamberLight : MonoBehaviour
+    public sealed class ChamberLight : MonoBehaviour, ISwitchableLight, ISentenceMovable
     {
         public WorldEntry entry;
         public Renderer surface;
@@ -73,7 +74,7 @@ namespace PuzzleApple.V5
             var own=GetComponent<Collider>();if(own)Physics.IgnoreCollision(own,entry.player.GetComponent<CharacterController>());
             moveDirection=new Vector3(.6f,.65f,.45f).normalized;
             roomMin=new Vector3(-14,0,-14);roomMax=new Vector3(14,15.92f,14);
-            edges=FindFirstObjectByType<OuterRoomEdges>();
+            edges=FindObjectsByType<OuterRoomEdges>(FindObjectsSortMode.None).FirstOrDefault(e=>e.surfaces?.Length==6);
             if(edges&&edges.surfaces!=null)
             {
                 foreach(var wall in edges.surfaces)
@@ -127,6 +128,10 @@ namespace PuzzleApple.V5
         }
         public void SetOn(bool value){TargetOn=value;TransitionEnabled=true;}
         public void HoldCurrentState()=>TransitionEnabled=false;
+        public bool WouldChange(bool on)=>Mathf.Abs(Brightness-(on?1:0))>.001f;
+        public bool Settling(bool on)=>Brightness!=(on?1:0);
+        void ISwitchableLight.Hold()=>HoldCurrentState();
+        public bool CanMove(Cognition.CognitionSignal motion)=>motion==Cognition.CognitionSignal.LightMove&&Brightness>0;
         public bool LookingAtLight()
         {
             return LookedAtWord()=="light";
@@ -138,30 +143,34 @@ namespace PuzzleApple.V5
             if(!entry.Entered||entry.Busy||entry.ConfirmingExit||Collecting||!entry.room.Opened||!entry.player.CanInteractWithWorld)return null;
             var view=entry.player.view;
             if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.LookedAtWord(new Ray(view.position,view.forward),out emitter);
-            int count=Physics.RaycastNonAlloc(view.position,view.forward,collectionHits,collectionDistance,~0,QueryTriggerInteraction.Ignore);
-            var hits=count==collectionHits.Length?Physics.RaycastAll(view.position,view.forward,collectionDistance,~0,QueryTriggerInteraction.Ignore):collectionHits;
-            if(hits!=collectionHits)count=hits.Length;
-            RaycastHit hit=default;float closest=float.PositiveInfinity,starReach=collectionDistance;
-            for(int i=0;i<count;i++)
-            {
-                if(hits[i].collider.transform.IsChildOf(entry.player.transform))continue;
-                if(hits[i].distance<closest){hit=hits[i];closest=hits[i].distance;}
-                if(entry.journey&&!entry.journey.IsRail(hits[i].collider))starReach=Mathf.Min(starReach,hits[i].distance);
-            }
-            if(entry.journey&&entry.journey.Stars)
-            {
-                emitter=entry.journey.Stars.Pick(new Ray(view.position,view.forward),starReach);
-                if(emitter)return "light";
-            }
+            var ray = new Ray(view.position, view.forward);
+            emitter = PickStar(ray, collectionDistance, out var hit);
+            if(emitter)return "light";
             if(!hit.collider)return null;
             if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.CurrentRoom.WordAt(hit.collider,out emitter);
             if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null){if(word=="light")emitter=hit.collider.GetComponent<Renderer>();return word;}}
             if((!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
             return null;
         }
+
+        public Renderer PickStar(Ray ray, float reach, out RaycastHit hit)
+        {
+            int count=Physics.RaycastNonAlloc(ray,collectionHits,reach,~0,QueryTriggerInteraction.Ignore);
+            var hits=count==collectionHits.Length?Physics.RaycastAll(ray,reach,~0,QueryTriggerInteraction.Ignore):collectionHits;
+            if(hits!=collectionHits)count=hits.Length;
+            hit=default;float closest=float.PositiveInfinity,starReach=reach;
+            for(int i=0;i<count;i++)
+            {
+                if(hits[i].collider.transform.IsChildOf(entry.player.transform))continue;
+                if(hits[i].distance<closest){hit=hits[i];closest=hits[i].distance;}
+                if(entry.journey&&!entry.journey.IsRail(hits[i].collider))starReach=Mathf.Min(starReach,hits[i].distance);
+            }
+            return entry.journey && entry.journey.InCorridor && entry.journey.ActiveStars
+                ? entry.journey.ActiveStars.Pick(ray,starReach) : null;
+        }
         void Update()
         {
-            if(TransitionEnabled)Brightness=Mathf.MoveTowards(Brightness,TargetOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,fadeDuration));
+            if(TransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,TargetOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,fadeDuration));
             material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness)*entry.sentenceRuntime.LampMultiplier);
             material.SetColor("_BaseColor",Color.Lerp(new Color(.015f,.015f,.015f),onColor,Brightness));
             if(cubeMotion)cubeMotion.Available=Moving&&TargetOn&&Brightness>=.999f;
@@ -266,16 +275,14 @@ namespace PuzzleApple.V5
             }
             knownSymbol.gameObject.SetActive(false);knownFeedback=null;KnownFeedbackWord=null;
         }
-        public void CollectObservation(Cognition.ObservationLesson lesson)
-        {if(!Collecting&&lesson)StartCoroutine(Collect(lesson.verb.Id,lesson));}
-        IEnumerator Collect(string id,Cognition.ObservationLesson lesson=null)
+        public void CollectObservation(Cognition.ObservationLesson lesson,bool wordOnly=false)
+        {if(!Collecting&&lesson)StartCoroutine(Collect(lesson.verb.Id,lesson,wordOnly));}
+        IEnumerator Collect(string id,Cognition.ObservationLesson lesson=null,bool wordOnly=false)
         {
             Collecting=true;hoverEye.gameObject.SetActive(false);if(reticle)reticle.SetActive(false);
             var p=entry.player;bool locked=p.MovementLocked;p.MovementLocked=true;
             entry.board.Panel.InputBlocked=true;
             var word=entry.board.Catalog.Word(id);
-            var journey=entry.journey;
-            bool unlitObservation=lesson&&journey&&journey.movementObservation&&journey.movementObservation.lesson==lesson&&!journey.LampsLit;
             var rect=collectionSymbol.rectTransform;collectionSymbol.sprite=word.Symbol;collectionSymbol.gameObject.SetActive(true);
             float duration=wordDisplayDuration;
             for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
@@ -288,7 +295,7 @@ namespace PuzzleApple.V5
             }
             collectionSymbol.gameObject.SetActive(false);
             Cognition.CognitionState.Group acquired=null;
-            if(lesson&&!unlitObservation)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
+            if(lesson&&!wordOnly)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
             else entry.board.State.TryAcquireWord("collect."+id,word);
             if(acquired!=null)entry.board.PlaceAcquiredSentence(acquired.Id);
             p.MovementLocked=locked;entry.board.Panel.InputBlocked=false;Collecting=false;

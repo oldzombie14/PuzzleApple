@@ -40,7 +40,7 @@ namespace PuzzleApple.V5.Editor
                 e.board.Panel.SetOpen(true);yield return null;
                 Check(!l.reticle.activeSelf&&!l.hoverEye.gameObject.activeSelf,"panel hides aiming UI");
                 e.board.Panel.SetOpen(false);yield return null;p.view.LookAt(l.transform);p.AdoptCurrentView();yield return null;
-                Check(l.TryCollect()&&l.Collecting&&p.MovementLocked,"new collection locks movement");
+                Check(l.TryCollect()&&l.Collecting&&!p.MovementLocked,"collection allows gravity");
                 Check(!l.hoverEye.gameObject.activeSelf&&!l.reticle.activeSelf,"collection hides aim");
                 yield return Until(()=>!l.Collecting);yield return null;
                 Check(!p.MovementLocked&&Mathf.Abs(l.hoverEye.color.a-.35f)<.001f,"known eye and unlock");

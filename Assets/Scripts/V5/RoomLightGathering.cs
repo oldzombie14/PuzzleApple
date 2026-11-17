@@ -12,14 +12,15 @@ namespace PuzzleApple.V5
         public Vector2 gatheringRadius=new Vector2(2.5f,5);
         readonly Dictionary<DriftingLight,DriftingLight> neighbours=new Dictionary<DriftingLight,DriftingLight>();
         CognitionSignal previous;
-        CognitionSignal Motion=>journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightDoorMove)?CognitionSignal.LightDoorMove:
-            journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightLightMove)?CognitionSignal.LightLightMove:CognitionSignal.Empty;
-        bool InRange(DriftingLight lamp)=>lamp&&(lamp.transform.position-journey.entry.player.transform.position).sqrMagnitude<=influenceRadius*influenceRadius;
+        readonly Dictionary<DriftingLight,float> blocked=new Dictionary<DriftingLight,float>();
+        CognitionSignal Motion=>journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightDoorMove,PassageJourney.LightSpace.FarRoom)?CognitionSignal.LightDoorMove:
+            journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightLightMove,PassageJourney.LightSpace.FarRoom)?CognitionSignal.LightLightMove:CognitionSignal.Empty;
+        bool InRange(DriftingLight lamp)=>lamp && lamp.isActiveAndEnabled;
         public bool CanMove(CognitionSignal motion)
         {
             if(!journey||journey.Brightness<=0)return false;
             foreach(var lamp in journey.Lamps)
-                if(InRange(lamp)&&TryTarget(lamp,lamp.GetComponent<Rigidbody>(),motion,false,out _,out _))return true;
+                if(InRange(lamp)&&!(motion==CognitionSignal.LightDoorMove && lamp.Docked)&&(motion!=previous || !blocked.TryGetValue(lamp,out var held) || held<.6f)&&TryTarget(lamp,lamp.GetComponent<Rigidbody>(),motion,false,out _,out _))return true;
             return false;
         }
         bool TryTarget(DriftingLight lamp,Rigidbody body,CognitionSignal motion,bool remember,out Vector3 delta,out float stop)
@@ -28,11 +29,9 @@ namespace PuzzleApple.V5
             var collider=lamp.GetComponent<Collider>();Vector3 target;stop=.16f;
             if(motion==CognitionSignal.LightDoorMove)
             {
-                uint id=unchecked((uint)lamp.GetInstanceID()*2654435761u);
-                float a=(id&65535)/65535f*Mathf.PI*2,y=((id>>16)&65535)/65535f*2-1,r=Mathf.Lerp(gatheringRadius.x,gatheringRadius.y,(id%997)/997f);
-                float ring=Mathf.Sqrt(Mathf.Max(0,1-y*y));
-                target=journey.Door.position+new Vector3(Mathf.Cos(a)*ring,y,Mathf.Sin(a)*ring)*r;
-                if(journey.floorSurface)target.y=Mathf.Max(target.y,journey.floorSurface.Surface.bounds.max.y+collider.bounds.extents.y+.1f);
+                var door=journey.EndingDoor;
+                if(!door)return false;
+                target=door.Slot(lamp.SlotIndex,journey.Lamps.Count);
             }
             else
             {
@@ -44,17 +43,20 @@ namespace PuzzleApple.V5
                 if(remember)neighbours[lamp]=best;if(!best)return false;
                 target=best.transform.position;stop=spacing+collider.bounds.extents.magnitude+best.GetComponent<Collider>().bounds.extents.magnitude;
             }
-            delta=target-body.position;return delta.magnitude>stop;
+            delta=target-body.position;return delta.magnitude>stop+.003f;
         }
         public bool Step(DriftingLight lamp,Rigidbody body,Collider[] colliders)
         {
             if(!journey||journey.Brightness<=0||!journey.entry.sentenceRuntime)return false;
             var motion=Motion;
-            if(motion!=previous){neighbours.Clear();previous=motion;}
+            if(motion!=previous){blocked.Clear();previous=motion;}
             if(motion==CognitionSignal.Empty)return false;
             if(!body.isKinematic){body.linearVelocity=Vector3.zero;body.angularVelocity=Vector3.zero;body.isKinematic=true;}
             if(!InRange(lamp))return true;
-            if(!TryTarget(lamp,body,motion,true,out var delta,out var stop))return true;
+            if(!TryTarget(lamp,body,motion,true,out var delta,out var stop)){
+                if(motion==CognitionSignal.LightDoorMove)lamp.DockAtDoor();
+                return true;
+            }
             float distance=delta.magnitude;
             Vector3 separation=Vector3.zero;
             foreach(var other in journey.Lamps)if(other&&other!=lamp)
@@ -64,7 +66,7 @@ namespace PuzzleApple.V5
             if (motion == CognitionSignal.LightDoorMove)
             {
                 var sphere = lamp.GetComponent<SphereCollider>();
-                Vector3 door = journey.Door.position;
+                Vector3 door = journey.EndingDoor.transform.position;
                 float priority = (body.position-door).sqrMagnitude;
                 step = DirectedMotion.ApproachStep(step, offset =>
                 {
@@ -82,7 +84,9 @@ namespace PuzzleApple.V5
                     return DirectedMotion.SphereStepClear(sphere,offset,true);
                 });
             }
-            DirectedMotion.Move(body,colliders,step,true);
+            float travel=DirectedMotion.Move(body,colliders,step,true);
+            blocked.TryGetValue(lamp,out var stalled);
+            blocked[lamp]=travel<.0001f?stalled+Time.fixedDeltaTime:0;
             return true;
         }
     }

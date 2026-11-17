@@ -33,7 +33,7 @@ namespace PuzzleApple.V5.Editor
                 before=j.Root.InverseTransformPoint(p.transform.position).z;
                 for(int i=0;i<20;i++){advance.Invoke(p,new object[]{Vector2.up,true,.026f,false});yield return null;}
                 Check(j.Root.InverseTransformPoint(p.transform.position).z<before-.8f,"turned W return retained");
-                p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.RoomStart+4)),j.Root.rotation);j.SetLights(true);
+                p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.RoomStart+4)),j.Root.rotation);yield return Until(()=>j.InSecondRoom);j.SetLights(true);
                 yield return Until(()=>j.Brightness>=1);yield return null;
                 var f=j.floorSurface;var ceiling=j.Root.Find("Room ceiling").GetComponent<Renderer>();
                 var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();body.position=j.Root.TransformPoint(new Vector3(0,j.roomSize.y-.5f,j.RoomStart+7));

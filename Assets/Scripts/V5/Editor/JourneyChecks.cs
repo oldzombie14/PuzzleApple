@@ -33,7 +33,7 @@ namespace PuzzleApple.V5.Editor
                 Require(j.InCorridor&&hole.ReachedEntrance,"jump reaches corridor");
                 // Try to leave the path sideways; native rail and explicit corridor constraint agree.
                 Walk(p,180,false,Vector2.right);yield return null;
-                Require(Mathf.Abs(j.Root.InverseTransformPoint(p.transform.position).x)<1,"path edge retains player");
+                Require(Mathf.Abs(j.Root.InverseTransformPoint(p.transform.position).x)<=j.PathWidth*.5f,"path edge retains player");
                 p.enabled=true;e.RequestExit();yield return Until(()=>e.DialogReady);
                 Require(e.portableClosure.Isolated&&e.room.PortablePlacement,"portable closure in corridor");
                 var frozen=p.transform.position;Walk(p,30,true,Vector2.one);Require(p.transform.position==frozen,"closure freezes XYZ");
@@ -54,13 +54,13 @@ namespace PuzzleApple.V5.Editor
                 e.board.State.TryAcquireSentence("journey.door","positive door");yield return Until(()=>j.DoorProgress>=1);
                 Require(!j.Root.Find("Move tutorial Cube"),"sphere room has no floating cube");
                 Walk(p,Mathf.CeilToInt((j.PathWidth+2)/p.moveSpeed*120));yield return null;p.enabled=true;
-                Require(j.glowVolume.weight==1,"sphere room uses the drifting-light bloom");
+                Require(j.glowVolume.weight>0,"sphere room uses its configured bloom contribution");
                 Require(j.InTutorial,"first door enters the move tutorial");p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);yield return null;Require(j.InSecondRoom&&!j.LightsOn&&j.Brightness==0,"new room starts dark");
                 var first=j.Lamps[0];var before=first.transform.position;yield return new WaitForSecondsRealtime(.6f);
                 Require(Vector3.Distance(before,first.transform.position)>.1f,"lamps move in darkness");
                 Require(j.Lamps.All(l=>Physics.GetIgnoreCollision(l.GetComponent<Collider>(),p.GetComponent<CharacterController>())),"lamps ignore player");
                 e.board.State.TryAcquireSentence("journey.light","positive light");yield return null;
-                Require(j.LightsOn&&j.Brightness<1,"room lights fade in");yield return Until(()=>j.Brightness>=1);
+                yield return Until(()=>j.LightsOn);Require(j.Brightness<1,"room lights fade in");yield return Until(()=>j.Brightness>=1);
                 before=first.transform.position;yield return new WaitForSecondsRealtime(.5f);Require(Vector3.Distance(before,first.transform.position)>.1f,"lamps move when lit");
                 var body=first.GetComponent<Rigidbody>();body.position=j.Root.TransformPoint(new Vector3(j.roomSize.x*.5f-.3f,4,j.RoomStart+8));first.direction=j.Root.right;int bounced=first.BounceCount;
                 yield return new WaitForSecondsRealtime(.3f);Require(first.BounceCount>bounced,"wall bounce");

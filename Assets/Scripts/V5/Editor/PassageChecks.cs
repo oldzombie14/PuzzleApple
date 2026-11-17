@@ -44,11 +44,20 @@ namespace PuzzleApple.V5.Editor
                     var original=source.walls[wall];testWall=GameObject.CreatePrimitive(PrimitiveType.Cube);testWall.name="Temporary passage test wall";
                     testWall.transform.SetPositionAndRotation(original.position,original.rotation);testWall.transform.localScale=original.lossyScale;testWall.GetComponent<Renderer>().sharedMaterial=renderers[wall].sharedMaterial;
                     testJourney=new GameObject("Temporary passage test journey");var j=testJourney.AddComponent<PassageJourney>();j.enabled=false;j.entry=e;j.whitePath=journey.whitePath;j.blackSurround=journey.blackSurround;j.roomMaterial=journey.roomMaterial;j.lampMaterial=journey.lampMaterial;
+                    j.floorSurface=testJourney.AddComponent<FloorImpactSurface>();j.floorSurface.journey=j;j.floorSurface.floorMaterial=journey.floorSurface.floorMaterial;
+                    j.movementObservation=testJourney.AddComponent<ObservableBehaviour>();
+                    j.movementObservation.lesson=journey.movementObservation.lesson;
+                    var setup=new UnityEditor.SerializedObject(j);
+                    setup.FindProperty("firstStars").objectReferenceValue=UnityEngine.Object.Instantiate(journey.Stars,j.transform);
+                    setup.FindProperty("secondStars").objectReferenceValue=UnityEngine.Object.Instantiate(journey.ReturnStars,j.transform);
+                    setup.ApplyModifiedPropertiesWithoutUndo();
                     testPassage=new GameObject("Temporary passage test");var h=testPassage.AddComponent<WallPassage>();h.lamp=e.chamberLight;h.journey=j;h.walls=new[]{testWall.transform};h.width=source.width;h.height=source.height;h.sillHeight=source.sillHeight;h.edgeMaterial=source.edgeMaterial;
                     yield return null;yield return null;
                     e.journey=j;lighting.journey=j;j.enabled=true;
                     Check(Mathf.Abs(h.Entrance.localPosition.x)<.001f,"centred opening on wall "+wall);
-                    var path=j.Root.Find("White path");var floor=j.Root.Find("Room floor");float thickness=Mathf.Min(original.lossyScale.x,original.lossyScale.z);
+                    var stairLamp=h.Entrance.Find("Entrance stairs/Light from corridor");
+                    Check(stairLamp && Mathf.Abs(stairLamp.localPosition.x)<.001f && Vector3.Dot(stairLamp.forward,Vector3.down)>.999f,"centred overhead stair light on wall "+wall);
+                    var path=j.Root.Find("White path");var floor=j.Root.Find("Move tutorial Floor");float thickness=Mathf.Min(original.lossyScale.x,original.lossyScale.z);
                     var lintel=j.Root.Find("Door lintel");
                     Check(Mathf.Abs(j.Door.localScale.x-h.width)<.0001f&&Mathf.Abs(j.Door.localScale.y-h.height)<.0001f,"door matches entrance width and height");
                     Check(Mathf.Abs(path.localScale.x-j.Door.localScale.x)<.0001f&&Mathf.Abs(j.Door.localPosition.y-j.Door.localScale.y*.5f)<.0001f,"door matches path width and floor height");
@@ -62,14 +71,19 @@ namespace PuzzleApple.V5.Editor
                     {
                         e.chamberLight.SetOn(on);yield return Until(()=>Mathf.Approximately(e.chamberLight.Brightness,on?1:0));yield return null;
                         Check(testWall.GetComponent<Renderer>().enabled==on,"light conceals passage and darkness reveals it");
-                        var origin=h.Entrance.TransformPoint(new Vector3(0,-h.sillHeight+.08f,-1.3f));
+                        var origin=h.Entrance.TransformPoint(new Vector3(0,-h.sillHeight+.08f,on?-1.3f:-3f));
                         p.Teleport(origin,h.Entrance.rotation);Physics.SyncTransforms();Walk(p,180);
-                        Check(h.Entrance.InverseTransformPoint(p.transform.position).z<0,"raised sill requires jump");
-                        p.Teleport(origin,h.Entrance.rotation);Physics.SyncTransforms();for(int n=0;n<20;n++)Step.Invoke(p,new object[]{Vector2.zero,true,1f/120,false});Walk(p,110,true);
-                        Check(h.Entrance.InverseTransformPoint(p.transform.position).z>.35f,"normal jump enters wall "+wall+" lit="+on);
+                        if(on)
+                        {
+                            Check(h.Entrance.InverseTransformPoint(p.transform.position).z<0,"lit sill requires jump");
+                            p.Teleport(origin,h.Entrance.rotation);Physics.SyncTransforms();for(int n=0;n<20;n++)Step.Invoke(p,new object[]{Vector2.zero,true,1f/120,false});Walk(p,110,true);
+                        }
+                        Check(h.Entrance.InverseTransformPoint(p.transform.position).z>.35f,"lit jump or dark stair walk enters wall "+wall+" lit="+on);
                         p.transform.rotation=h.Entrance.rotation*Quaternion.Euler(0,180,0);Walk(p,200);yield return new WaitForEndOfFrame();
                         Check(h.Entrance.InverseTransformPoint(p.transform.position).z<-.3f&&!j.BeyondChamber,"return crosses visual cover without collision");
                     }
+                    // Sample the enclosure itself without foreground twinkling stars.
+                    foreach(var stars in new[]{j.Stars,j.ReturnStars})foreach(var star in stars.GetComponentsInChildren<MeshRenderer>(true))star.forceRenderingOff=true;
                     foreach(float z in new[]{-.19f,.01f,.3f,3f,j.pathLength-.8f})foreach(float yaw in new[]{-65f,0f,65f})
                     {
                         p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,z)),j.Root.rotation);

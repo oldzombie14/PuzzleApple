@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -41,9 +42,9 @@ namespace PuzzleApple.V5
         float shotRoll;
         WorldEntry Entry=>runtime.entry;
         Shot[] Profiles=>settings?settings.shots:shots;
-        readonly Shot[] migrated={new Shot("light.light.move",Focus.LightGroup,true),new Shot("light.door.move",Focus.Door),
-            new Shot("door.move",Focus.Door,true),new Shot("door.floor.move",Focus.Door),new Shot("door.light.move",Focus.Door,true),
-            new Shot("floor.move",Focus.Sky),new Shot("floor.light.move",Focus.Floor),new Shot("floor.door.move",Focus.Floor)};
+        readonly Shot[] migrated={new Shot("light.move.light",Focus.LightGroup,true),new Shot("light.move.door",Focus.Door),
+            new Shot("door.move",Focus.Door,true),new Shot("door.move.floor",Focus.Door),new Shot("door.move.light",Focus.Door,true),
+            new Shot("floor.move",Focus.Sky),new Shot("floor.move.light",Focus.Floor),new Shot("floor.move.door",Focus.Floor)};
         Shot Profile(string rule)=>Array.Find(Profiles,s=>s!=null&&s.rule==rule)??Array.Find(migrated,s=>s.rule==rule);
         bool tutorialMoveShown;
         public bool HasShot(string rule)=>enabledShots&&Profile(rule)!=null&&
@@ -89,8 +90,9 @@ namespace PuzzleApple.V5
             bool corridorShot=(rule=="light.on"||rule=="light.off")&&journey&&journey.InCorridor&&
                 !(Entry.outdoor&&Entry.outdoor.IsOutside)&&!(Entry.portableClosure&&Entry.portableClosure.Isolated);
             bool holdView=corridorShot;
+            bool roomMotion=journey && !journey.InCorridor && MotionEffect.MovesLamps(Entry.board.Catalog.Rules.FirstOrDefault(r=>r.Id==rule));
             Quaternion start=view.rotation,goal=start;
-            if(!holdView)goal=LookAt(Target(current));
+            if(!holdView)goal=LookAt(Target(current,roomMotion));
             for(float t=0;t<current.enter&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 float u=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,current.enter));
@@ -107,7 +109,7 @@ namespace PuzzleApple.V5
                 FadeCaption(t);
                 if(current.follow&&!holdView)
                 {
-                    var target=LookAt(Target(current));var e=view.eulerAngles;var d=target.eulerAngles;
+                    var target=LookAt(Target(current,roomMotion));var e=view.eulerAngles;var d=target.eulerAngles;
                     view.rotation=Quaternion.Euler(Mathf.MoveTowardsAngle(e.x,d.x,current.followSpeed*Time.unscaledDeltaTime),
                         Mathf.MoveTowardsAngle(e.y,d.y,current.followSpeed*Time.unscaledDeltaTime),shotRoll);
                 }
@@ -126,10 +128,37 @@ namespace PuzzleApple.V5
         {
             if(caption)caption.alpha=1-Mathf.SmoothStep(0,1,elapsed/Mathf.Max(.001f,current.hold+current.exit));
         }
-        Vector3 Target(Shot shot)
+        Vector3 Target(Shot shot,bool roomMotion)
         {
             if(Entry.outdoor&&Entry.outdoor.IsOutside)return Entry.outdoor.World.Focus(shot.focus)+shot.offset;
             var j=Entry.journey;Vector3 target=Entry.player.view.position+Entry.player.view.forward*5;
+            if(shot.rule=="floor.move"&&j&&j.Platform)
+                return Entry.player.StandingOn(j.Platform.Deck)?Entry.player.view.position+j.Platform.TravelDirection:j.Platform.Deck.bounds.center;
+            if(shot.focus==Focus.Door && j && j.EndingDoor){
+                var group=Entry.board.State.Groups.FirstOrDefault(g=>g.Effective && g.RuleId==shot.rule);
+                if(group!=null && (runtime.Scope(group)&PassageJourney.LightSpace.FarRoom)!=0)return j.EndingDoor.Leaf.position;
+            }
+            if((shot.rule=="light.move" || shot.focus==Focus.Light) && j && j.PlayerSpace==PassageJourney.LightSpace.FarRoom){
+                var eye=Entry.player.view;
+                var mouth=j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart));
+                var toMouth=mouth-eye.position;
+                bool facingStars=toMouth.magnitude<=4 && Vector3.Dot(eye.forward,toMouth.normalized)>.65f;
+                if(j.ReturnStars && j.ReturnStars.Brightness>0 && (facingStars || !j.LampsLit && shot.rule=="light.move"))
+                    return j.ReturnStars.FocusNear(mouth-j.Root.forward*4);
+                if(j.Lamps.Count>0){
+                    var lamp=j.Lamps.Where(l=>l).OrderByDescending(l=>Vector3.Dot(eye.forward,(l.transform.position-eye.position).normalized)).FirstOrDefault();
+                    if(lamp)return lamp.transform.position+shot.offset;
+                }
+            }
+            if(roomMotion)
+            {
+                Vector3 centre=j.InTutorial?j.Tutorial.Fill.transform.position:
+                    j.InSecondRoom?j.FarRoomFill.transform.position:Entry.chamberLight.RoomCentre;
+                var eye=Entry.player.view;
+                var heading=Vector3.ProjectOnPlane(centre-eye.position,Vector3.up);
+                if(heading.sqrMagnitude<.01f)heading=Quaternion.Euler(0,eye.eulerAngles.y,0)*Vector3.forward;
+                return eye.position+heading;
+            }
             if(j&&j.InTutorial&&shot.focus!=Focus.Door)return j.Tutorial.Sphere.position+shot.offset;
             if(j&&j.InCorridor&&LastRule=="light.move")return Entry.player.view.position+Entry.player.view.forward*5;
             if(shot.focus==Focus.Door&&j&&j.Door)target=j.Door.position;

@@ -20,6 +20,6 @@ MonoBehaviour:
   effect: 12
   additionalEffects: 
   trigger: 0
-  kind: 0
+  kind: 1
   channel: light.motion
 

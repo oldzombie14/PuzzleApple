@@ -44,4 +44,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c0b7fd9052a74da788b4a13191e7f6df, type: 2}
   - {fileID: 11400000, guid: ac8f4e58b73d4664bf8fa9234135ff18, type: 2}
   - {fileID: 11400000, guid: b670d4540942475d82a33eba6ab8b941, type: 2}
+  - {fileID: 11400000, guid: 3d4717c2fdf1ed5428b89642f4ee06b1, type: 2}
+  - {fileID: 11400000, guid: 6628115597847c64d89558bf0c8c6676, type: 2}
   conflicts: []

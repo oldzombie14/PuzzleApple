@@ -27,6 +27,8 @@ namespace PuzzleApple.V5.Cognition
         public PeriodStyle punctuation=new PeriodStyle();
         PeriodTray periods;
         internal bool LearnedPeriod {get;set;}
+        public bool PreviewMirrorCopy {get;private set;}
+        public bool PreviewMirrorMove {get;private set;}
         public CognitionState State { get; private set; }
         public CognitionCatalog Catalog => catalog;
         public GameplayPanel Panel => panel;
@@ -45,8 +47,15 @@ namespace PuzzleApple.V5.Cognition
         {
             if (!views.TryGetValue(id, out var view)) return default;
             var rect = view.Root.rect;
-            return new Rect(rect.xMin + view.InkStart, rect.yMin,
-                view.InkEnd - view.InkStart, rect.height);
+            var bounds=new Rect(rect.xMin+view.InkStart,rect.yMin,view.InkEnd-view.InkStart,rect.height);
+            if(State.RequirePeriod && view.Group.Spoken){
+                var point=view.Root.InverseTransformPoint(PeriodEnd(id));
+                float radius=punctuation.diameter*.5f*view.FontScale*punctuation.landingScale;
+                bounds.xMax=Mathf.Max(bounds.xMax,point.x+radius);
+                bounds.yMin=Mathf.Min(bounds.yMin,point.y-radius);
+                bounds.yMax=Mathf.Max(bounds.yMax,point.y+radius);
+            }
+            return bounds;
         }
         public void RemoveToken(int groupId,int wordId,bool whole=false)
         {
@@ -216,11 +225,14 @@ namespace PuzzleApple.V5.Cognition
             if (panel) panel.OpenChanged.RemoveListener(OnPanelChanged);
         }
         void OnPanelChanged(bool open) { if (!open) { CancelDrag(); ClearRemovalEffects(); } }
+        internal float PeriodScale(int id)=>views[id].FontScale;
         public Vector3 PeriodEnd(int id)
         {
             var v=views[id];
-            return v.Root.TransformPoint(new Vector3(v.Root.rect.xMin+v.TextEnd+punctuation.spacing*v.FontScale,
-                v.Root.rect.center.y,0));
+            float inkBottom=v.Words.Min(word=>v.Root.InverseTransformPoint(
+                word.rectTransform.TransformPoint(new Vector3(0,SymbolUI.InkRect(word).yMin,0))).y);
+            return v.Root.TransformPoint(new Vector3(v.Root.rect.xMin+v.TextEnd+(wordGap+punctuation.diameter*.5f)*v.FontScale,
+                inkBottom+punctuation.diameter*.5f*v.FontScale,0));
         }
         bool Dim(CognitionState.Group g)=>g.Conflicted || (State.RequirePeriod && !g.Independent && !g.Spoken);
         bool CanFit(IEnumerable<CognitionState.Word> words)
@@ -252,10 +264,10 @@ namespace PuzzleApple.V5.Cognition
             {
                 views.TryGetValue(group.Id, out var old);
                 string signature = string.Join(" ", group.Words.Select(w => w.Id));
-                bool changed = old == null || old.Signature != signature || old.Recognized != group.Recognized || old.Conflicted != Dim(group) || old.Spoken!=group.Spoken;
+                bool changed = old == null || old.Signature != signature || old.Recognized != group.Recognized || old.Conflicted != Dim(group) || old.Spoken!=group.Spoken || State.RequirePeriod && old.Scratches!=group.RejectedAttempts;
                 if (!changed) { next[group.Id] = old; continue; }
                 Vector2 position = old != null ? old.Position : wordPositions.TryGetValue(group.Words[0].Id, out var p) ? p : NewPosition(next.Count);
-                int scratches = group.Independent || group.Recognized ? 0 : (old != null ? old.Scratches : 0) + 1;
+                int scratches = State.RequirePeriod ? group.RejectedAttempts : group.Independent || group.Recognized ? 0 : (old != null ? old.Scratches : 0) + 1;
                 var view = BuildView(group, position, scratches, signature);
                 if (kind == CognitionChange.Split && wordPositions.TryGetValue(group.Words[0].Id, out var firstPosition))
                 {
@@ -306,7 +318,7 @@ namespace PuzzleApple.V5.Cognition
                 x += width + wordGap;
             }
             float textEnd = x - wordGap;
-            x = textEnd+(State.RequirePeriod && !group.Independent?punctuation.spacing+punctuation.hitSize*.5f:0);
+            x = textEnd+(State.RequirePeriod && !group.Independent?wordGap+wordSize:0);
             v.FontScale = Mathf.Min(1, (Surface.rect.width - 8) / Mathf.Max(1, x));
             v.Width = x * v.FontScale; v.Height = WordHeight * v.FontScale;
             v.Mask.localScale = Vector3.one * v.FontScale;
@@ -337,7 +349,8 @@ namespace PuzzleApple.V5.Cognition
                 line.Seed = group.Id * 19 + i * 31;
                 float offset = i == 0 ? 0 : ((i + 1) / 2 % 3 + 1) * (i % 2 == 0 ? 1 : -1);
                 float angle = i == 0 ? 0 : (i % 2 == 0 ? .6f : -.6f);
-                float strokeWidth = textEnd - textStart - 6;
+                float strokeWidth = (State.RequirePeriod && group.Spoken
+                    ? textEnd+wordGap+punctuation.diameter : textEnd-6)-textStart;
                 float centerCorrection = Mathf.Sin(angle * Mathf.Deg2Rad) * strokeWidth * .5f;
                 float strokeHeight=strokePrefab.rectTransform.rect.height;
                 CognitionUI.Place(line.rectTransform, textStart + 1, textCenter + offset - strokeHeight*.5f + centerCorrection, strokeWidth, strokeHeight);
@@ -492,7 +505,18 @@ namespace PuzzleApple.V5.Cognition
             var target = canJoin ? SnapTarget(drag, out prepend) : null;
             var source = views[drag.GroupId];
             drag.Ghost.localScale = Vector3.one * (drag.Whole ? 1 : source.FontScale);
+            if(target!=null && target.FloatIndependently){
+                target.Position=target.DisplayPosition=new Vector2(target.Root.anchoredPosition.x,-target.Root.anchoredPosition.y);
+                target.FloatIndependently=false;
+            }
             snapTargetId = target != null ? target.Group.Id : -1;
+            PreviewMirrorCopy=PreviewMirrorMove=false;
+            if(target!=null && target.Group.Independent && source.Group.Independent){
+                string first=(prepend?source:target).Group.Words[0].Meaning;
+                string last=(prepend?target:source).Group.Words[0].Meaning;
+                PreviewMirrorCopy=first=="mirror" && last=="mirror";
+                PreviewMirrorMove=first=="mirror" && last=="move";
+            }
             foreach (var v in views.Values) if (v.LeadingHandle)
                 v.LeadingHandle.gameObject.SetActive(target == null && drag.Whole && v.Group.Id == drag.GroupId);
             if (drag.GhostHandle) drag.GhostHandle.gameObject.SetActive(target == null);
@@ -601,6 +625,8 @@ namespace PuzzleApple.V5.Cognition
                 int oldIndex = joined.Group.Words.ToList().FindIndex(w => w.Id == firstOldWord);
                 joined.Position = oldFirstWordPosition - new Vector2(joined.Offsets[oldIndex],0);
                 joined.Position = FindFree(joined, joined.Position);
+                joined.DisplayPosition = joined.Position;
+                Place(joined);
             }
             else
             {
@@ -611,6 +637,7 @@ namespace PuzzleApple.V5.Cognition
         public void CancelDrag()
         {
             if(periods)periods.Cancel();
+            PreviewMirrorCopy=PreviewMirrorMove=false;
             if (drag == null) return;
             if (views.TryGetValue(drag.GroupId, out var v))
             { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = ChalkColor; }

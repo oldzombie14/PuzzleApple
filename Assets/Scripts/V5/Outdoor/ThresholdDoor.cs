@@ -12,7 +12,6 @@ namespace PuzzleApple.V5.Outdoor
         [Tooltip("远处鱼门的收词距离特例；普通实体统一使用 OpeningFlow.interactionDistance。")]
         [Min(1)] public float collectionDistance = 65;
         public float spawnDistance = 42, suspendedHeight = 18;
-        [Min(0)] public float releaseLandingTolerance = .5f;
         public Material rippleMaterial;
         public float rippleDuration = 2.4f;
         [Min(3)] public float rippleRadius = 12;
@@ -67,7 +66,7 @@ namespace PuzzleApple.V5.Outdoor
         }
         public void SetMotion(bool freelyMoving, bool descending)
         {
-            bool starting=freelyMoving&&!freeMotion.Moving;
+            bool starting=freelyMoving && freeMotion.Direction==Vector3.zero;
             freeMotion.SetMoving(freelyMoving);
             if(starting&&Landed)
             {
@@ -80,15 +79,6 @@ namespace PuzzleApple.V5.Outdoor
         {
             Descending = value;
             if (!value) speed = 0;
-        }
-        public void SettleAfterFreeMotion()
-        {
-            if(!Revealed)return;
-            if(ground)groundHeight=ground.bounds.max.y+.02f;
-            if(Mathf.Abs(body.position.y-groundHeight)>releaseLandingTolerance)return;
-            var position=body.position;position.y=groundHeight;
-            body.position=position;transform.position=position;
-            CompleteLanding();Physics.SyncTransforms();
         }
         void FixedUpdate()
         {

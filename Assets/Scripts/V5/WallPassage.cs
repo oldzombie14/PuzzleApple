@@ -23,6 +23,9 @@ namespace PuzzleApple.V5
         Mesh openingMesh;
         Material glow;
         Material coverInk;
+        GameObject stairs;
+        Material stairInk;
+        Light stairLight;
         public float Reveal=>journey&&journey.ViewBeyondChamber?1:1-Mathf.SmoothStep(0,1,lamp.Brightness);
         Material returnGlow;
         void Start()
@@ -53,6 +56,7 @@ namespace PuzzleApple.V5
             openingWall.sharedMaterials=new[]{mat,mat};
             wallProperties=new MaterialPropertyBlock();
             Entrance=new GameObject("Passage entrance").transform;Entrance.SetParent(root,false);Entrance.localPosition=new Vector3(centre,sillHeight,0);
+            BuildStairs(thick, mat);
             // Solid wall sections keep their depth and shadows. Only the aperture fades,
             // after the opaque exterior has rendered, so the path appears continuously.
             coverInk=new Material(mat);
@@ -90,6 +94,49 @@ namespace PuzzleApple.V5
                 returnGlow.renderQueue=coverInk.renderQueue-1;
             }
         }
+        void BuildStairs(float wallThickness, Material surface)
+        {
+            stairs = new GameObject("Entrance stairs");
+            stairs.transform.SetParent(Entrance, false);
+            stairInk = new Material(surface);
+            stairInk.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            stairInk.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            stairInk.SetFloat("_ZWrite", 0);
+            stairInk.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+
+            // Light spilling in from the threshold reaches the upper treads first.
+            stairLight = new GameObject("Light from corridor", typeof(Light)).GetComponent<Light>();
+            stairLight.transform.SetParent(stairs.transform, false);
+            stairLight.transform.localPosition = new Vector3(0, .92f, -wallThickness * .5f - .16f);
+            stairLight.transform.localRotation = Quaternion.Euler(90, 0, 0);
+            stairLight.type = LightType.Spot;
+            stairLight.range = 2.9f;
+            stairLight.spotAngle = 112f;
+            stairLight.innerSpotAngle = 110f;
+            stairLight.shadows = LightShadows.Hard;
+
+            const float tread = .32f;
+            int count = Mathf.CeilToInt(sillHeight / .2f);
+            for (int i = 0; i < count; i++)
+            {
+                float top = sillHeight * (i + 1) / count;
+                float z = -wallThickness * .5f - (count - i - .5f) * tread;
+                Block(stairs.transform, "Tread " + (i + 1),
+                    new Vector3(0, -sillHeight + top * .5f, z), new Vector3(width, top, tread), stairInk);
+            }
+            UpdateStairs();
+        }
+
+        void UpdateStairs()
+        {
+            // The aperture stays open when viewed from the corridor. The stairs follow the chamber lamp on both sides.
+            float dissolve = Mathf.SmoothStep(0, 1, lamp.Brightness);
+            stairInk.SetFloat("_Dissolve", dissolve);
+            float corridorLight = journey && journey.Stars ? journey.Stars.Brightness : 1;
+            stairLight.intensity = 2.2f * (1 - dissolve) * corridorLight;
+            if (stairs.activeSelf != (dissolve < 1)) stairs.SetActive(dissolve < 1);
+        }
+
         void AddOutline(Transform parent,Material material,float depth)
         {
             foreach(float sign in new[]{-1f,1f})
@@ -124,6 +171,7 @@ namespace PuzzleApple.V5
         void Update()
         {
             if(!cover)return;
+            UpdateStairs();
             float darkness=Reveal;
             cover.GetPropertyBlock(wallProperties);
             wallProperties.SetVector("_PassageOrigin",Entrance.position);
@@ -143,6 +191,6 @@ namespace PuzzleApple.V5
             if(!ReachedEntrance&&Mathf.Abs(p.x)<width*.5f&&p.z>.35f&&p.z<entranceDepth&&p.y>-.2f&&p.y<height)
             {ReachedEntrance=true;reachedEntrance.Invoke();}
         }
-        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);if(coverInk)Destroy(coverInk);if(openingMesh)Destroy(openingMesh);}
+        void OnDestroy(){if(glow)Destroy(glow);if(returnGlow)Destroy(returnGlow);if(coverInk)Destroy(coverInk);if(openingMesh)Destroy(openingMesh);if(stairInk)Destroy(stairInk);}
     }
 }

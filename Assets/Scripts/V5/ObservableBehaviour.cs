@@ -18,6 +18,10 @@ namespace PuzzleApple.V5
         {
             if(!lesson||!lesson.example)return false;
             if(playerState.HasAcquired(lesson.acquisitionId))return playerState.HasEffect(signal);
+            return Demonstrates(catalog,signal);
+        }
+        public bool Demonstrates(CognitionCatalog catalog,CognitionSignal signal){
+            if(!lesson || !lesson.example)return false;
             if(initialState==null)
             {
                 initialState=new CognitionState(catalog);

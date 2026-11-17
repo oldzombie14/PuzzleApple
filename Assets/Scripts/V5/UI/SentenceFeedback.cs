@@ -123,13 +123,14 @@ namespace PuzzleApple.V5
                 main.simulationSpeed *= .85f/duration;
                 particles.Play();
             }
-            if(!strong&&rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
-            for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
+            if(!strong&&!repeat&&rippleSound&&rippleAudio)rippleAudio.PlayOneShot(rippleSound,rippleVolume);
+            float visualDuration=duration*1.2f;
+            for(float t=0;t<visualDuration;t+=Time.unscaledDeltaTime)
             {
                 var group=board.State.Find(groupId);
                 if(!rect||!board.Panel.IsOpen||group==null||group.Established!=established||
                     !group.Recognized||(strong&&!group.Effective)||(repeat&&!runtime.SustainsFeedback(group)))break;
-                if (ownsPulse && t >= repeatDuration)
+                if (ownsPulse && t >= repeatDuration*1.2f)
                 {
                     // Let the next pulse start while this pair of rings finishes fading.
                     pulsing.Remove(groupId);
@@ -140,8 +141,8 @@ namespace PuzzleApple.V5
                 root.transform.localPosition=new Vector3(screen.x-Screen.width*.5f,screen.y-Screen.height*.5f,5);
                 for(int i=0;i<lines.Length;i++)
                 {
-                    float delay=i*.14f*duration;
-                    float u=Mathf.Clamp01((t-delay)/(duration-delay));
+                    float delay=i*.14f*visualDuration;
+                    float u=Mathf.Clamp01((t-delay)/(visualDuration-delay));
                     float alpha=(strong?.62f:.25f)*Mathf.Sin(Mathf.PI*Mathf.Pow(u,.55f));
                     lines[i].startColor=lines[i].endColor=new Color(.89f,.94f,1,alpha);
                     // Briefly hold the expanded frame before it resumes spreading and fades.

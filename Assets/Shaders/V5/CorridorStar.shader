@@ -4,6 +4,7 @@ Shader "PuzzleApple/V5/Corridor Star"
     {
         _BaseColor("Tint and opacity", Color)=(0,0,0,1)
         [HDR] _EmissionColor("Emission", Color)=(1,1,1,1)
+        _FogInfluence("Fog influence",Range(0,1))=1
         _FacetStrength("Facet shading", Range(0,1))=1
         [HideInInspector] _CorridorAxis("Corridor depth plane", Vector)=(0,0,0,0)
         [HideInInspector] _CorridorLength("Visible corridor length", Float)=1
@@ -22,7 +23,7 @@ Shader "PuzzleApple/V5/Corridor Star"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor, _EmissionColor, _CorridorAxis;
-                float _CorridorLength, _FacetStrength;
+                float _CorridorLength, _FacetStrength, _FogInfluence;
             CBUFFER_END
             struct Varyings { float4 positionCS:SV_POSITION; float depth:TEXCOORD0; half fog:TEXCOORD1; half tone:TEXCOORD2; };
             Varyings vert(float4 positionOS:POSITION, float3 normalOS:NORMAL)
@@ -42,7 +43,8 @@ Shader "PuzzleApple/V5/Corridor Star"
             half4 frag(Varyings i):SV_Target
             {
                 clip(min(i.depth,_CorridorLength-i.depth));
-                return half4(MixFog(_BaseColor.rgb+_EmissionColor.rgb*i.tone,i.fog),_BaseColor.a);
+                half3 color=_BaseColor.rgb+_EmissionColor.rgb*i.tone;
+                return half4(lerp(color,MixFog(color,i.fog),_FogInfluence),_BaseColor.a);
             }
             ENDHLSL
         }

@@ -15,8 +15,21 @@ namespace PuzzleApple.V5
         public bool CinematicLocked {get;set;}
         public bool PointerUIActive {get;set;}
         public bool PanelOpen {get;private set;}
-        public bool CanInteractWithWorld => isActiveAndEnabled&&!CinematicLocked&&!PanelOpen&&closedFrame!=Time.frameCount&&Cursor.lockState==CursorLockMode.Locked;
+        bool Respawning => journey && journey.Platform && journey.Platform.Respawning;
+        public bool CanInteractWithWorld => isActiveAndEnabled&&!CinematicLocked&&!Respawning&&!PanelOpen&&closedFrame!=Time.frameCount&&Cursor.lockState==CursorLockMode.Locked;
         CharacterController motor;
+        Collider support;
+        Vector3 carrierTravel;
+        void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            if(hit.normal.y>.7f)support=hit.collider;
+        }
+        public bool StandingOn(Collider deck)=>motor.enabled&&motor.isGrounded&&support==deck;
+        public void CarryOn(Collider deck,Vector3 travel)
+        {
+            if(isActiveAndEnabled && StandingOn(deck))
+                carrierTravel+=travel;
+        }
         Vector3 normalView,launchVelocity;
         public float VerticalVelocity=>vertical;
         public void Launch(Vector3 velocity){launchVelocity=Vector3.ProjectOnPlane(velocity,Vector3.up);vertical=velocity.y;}
@@ -49,7 +62,9 @@ namespace PuzzleApple.V5
         }
         public void Teleport(Vector3 position,Quaternion rotation)
         {
+            support=null;carrierTravel=Vector3.zero;
             bool active=motor.enabled;motor.enabled=false;
+            if(journey && journey.entry.outdoor)journey.entry.outdoor.ResetCrossing();
             transform.SetPositionAndRotation(position,rotation);motor.enabled=active;
             if(journey)journey.RefreshCollisionExclusions();
             launchVelocity=Vector3.zero;vertical=0;view.localRotation=Quaternion.identity;AdoptCurrentView();
@@ -64,7 +79,11 @@ namespace PuzzleApple.V5
         }
         void Update()
         {
-            if(CinematicLocked)return;
+            if(CinematicLocked){
+                if(carrierTravel.sqrMagnitude>0)motor.Move(carrierTravel-Vector3.up*motor.skinWidth);
+                carrierTravel=Vector3.zero;
+                return;
+            }
             var key=Keyboard.current;var mouse=Mouse.current;
             if(key!=null&&key.escapeKey.wasPressedThisFrame)LockCursor(false);
             else if(!PanelOpen&&!PointerUIActive&&mouse!=null&&mouse.leftButton.wasPressedThisFrame)LockCursor(true);
@@ -81,9 +100,17 @@ namespace PuzzleApple.V5
         internal void AdvanceMovement(Vector2 input,bool controls,float deltaTime,bool jumpPressed=false)
         {
             // Lock includes gravity; orientation remains independent.
-            if(deltaTime>0 && MovementLocked){vertical=0;launchVelocity=Vector3.zero;}
+            if(deltaTime>0 && MovementLocked){vertical=0;launchVelocity=Vector3.zero;
+                if(carrierTravel.sqrMagnitude>0)motor.Move(carrierTravel-Vector3.up*motor.skinWidth);
+            }
             else if(deltaTime>0)
             {
+                // Collection and respawn suppress new movement input while airborne motion continues.
+                if (Respawning || (journey && journey.entry.chamberLight.Collecting))
+                {
+                    input = Vector2.zero;
+                    jumpPressed = false;
+                }
                 input=Vector2.ClampMagnitude(input,1);
                 if(motor.isGrounded&&vertical<0)vertical=-2;
                 if(controls&&jumpPressed&&motor.isGrounded&&vertical<=0&&jumpHeight>0)
@@ -100,9 +127,14 @@ namespace PuzzleApple.V5
                 launchVelocity=Vector3.MoveTowards(launchVelocity,Vector3.zero,8*deltaTime);
                 if(journey&&journey.enabled)motion=journey.ConstrainMovement(transform.position,motion);
                 if(closedRoom)motion=closedRoom.ConstrainClosedMovement(motor,motion);
-                var collisions=motor.Move(motion);
+                // Use the same ground contact while riding, including camera and UI locks.
+                // A shorter gravity step must not change the capsule's skin penetration each frame.
+                if(carrierTravel.sqrMagnitude>0 && motor.isGrounded && vertical<=0)
+                    motion.y=-motor.skinWidth;
+                var collisions=motor.Move(motion+carrierTravel);
                 if((collisions&CollisionFlags.Above)!=0&&vertical>0)vertical=0;
             }
+            carrierTravel=Vector3.zero;
             float sway=PanelOpen?(Mathf.Sin(idleTime*.5f)*panelSway+Mathf.Sin(idleTime*.37f)*panelPitch)*Mathf.Clamp01(idleTime*.5f):0;
 
             view.localRotation=Quaternion.Euler(pitch+sway,0,0);view.localPosition=normalView;

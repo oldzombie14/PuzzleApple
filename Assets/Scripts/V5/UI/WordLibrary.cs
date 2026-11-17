@@ -203,7 +203,7 @@ namespace PuzzleApple.V5
                     float glow=worldEntry&&worldEntry.sentenceRuntime?worldEntry.sentenceRuntime.FloorIllumination:0;
                     exposure=Mathf.Lerp(.012f,1,Mathf.Max(lighting,glow));
                 }
-                else if(MovePrint)MovePrint.SetFloat("_SnapshotLighting",clip==sphereMoveMemory?SphereLighting():lighting);
+                else if(MovePrint)MovePrint.SetFloat("_SnapshotLighting",clip==sphereMoveMemory?SphereLighting():StarLighting());
             }
             snapshot.color=new Color(exposure,exposure,exposure,1f);
             if(snapshot.texture)snapshotAspect.aspectRatio=selected=="move"&&clip?clip.aspect:(float)snapshot.texture.width/snapshot.texture.height;
@@ -215,9 +215,17 @@ namespace PuzzleApple.V5
             if(outdoor&&outdoor.InChapter)return outdoor.CurrentRoom.Brightness;
             if(outdoor&&outdoor.IsOutside)return outdoor.World.stateSource.Brightness;
             var journey=worldEntry.journey;
+            if(journey&&journey.InCorridor)return journey.CorridorBrightness;
+            if(journey&&journey.InTutorial)return journey.Tutorial.SphereBrightness;
             return journey&&journey.BeyondChamber?journey.Brightness:worldEntry.chamberLight.Brightness;
         }
-        // The sphere memory follows the tutorial spheres themselves, wherever the library is opened.
+        // Each move memory follows its own subject, not the room the viewer stands in:
+        // the far room starts dark, which used to show the star memory dimmed in the corridor.
+        float StarLighting()
+        {
+            var stars=worldEntry&&worldEntry.journey?worldEntry.journey.Stars:null;
+            return stars?stars.Brightness:1;
+        }
         float SphereLighting()
         {
             var tutorial=worldEntry&&worldEntry.journey?worldEntry.journey.Tutorial:null;

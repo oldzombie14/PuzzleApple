@@ -27,10 +27,10 @@ namespace PuzzleApple.V5.Outdoor
         public bool CanRise(CognitionSignal requested)
         {
             if(!ground||!player)return false;
-            float target=requested==CognitionSignal.WorldLightMove&&lights&&lights.CanOperate?lights.LowestBottom(true):
+            float target=requested==CognitionSignal.WorldLightMove&&lights&&lights.CanOperate?lights.LowestBottom():
                 requested==CognitionSignal.WorldDoorMove&&door&&door.Revealed?door.transform.position.y:float.PositiveInfinity;
-            if(float.IsInfinity(target)||target-ground.bounds.max.y<=feedbackProximity)return false;
-            return UnblockedTravel(feedbackProximity+.02f)>feedbackProximity;
+            if(float.IsInfinity(target)||target-ground.bounds.max.y<=.03f)return false;
+            return UnblockedTravel(.04f)>.004f;
         }
         float UnblockedTravel(float travel)
         {
@@ -64,7 +64,7 @@ namespace PuzzleApple.V5.Outdoor
             if(Time.time>=nextCheck)
             {
                 nextCheck=Time.time+recheckInterval;
-                targetHeight=motion==CognitionSignal.WorldLightMove && lights?lights.LowestBottom(true):
+                targetHeight=motion==CognitionSignal.WorldLightMove && lights?lights.LowestBottom():
                     motion==CognitionSignal.WorldDoorMove && door && door.Revealed?door.transform.position.y:float.PositiveInfinity;
             }
             float top=ground.bounds.max.y;

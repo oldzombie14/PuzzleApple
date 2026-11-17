@@ -11,7 +11,8 @@ namespace PuzzleApple.V5
         [Min(.1f)] public float range=40;
         public ObservableBehaviour Target {get;private set;}
         public float Progress {get;private set;}
-        bool WordOnly => Target.wordOnly || (Target == entry.journey.movementObservation && !entry.journey.LampsLit);
+        bool WordOnly => Target.wordOnly || (Target == entry.journey.movementObservation && !entry.journey.LampsLit) ||
+            (Target==sphereObservation && trackedMember is Collider member && !entry.journey.Tutorial.IsLit(member));
         public bool Known => Target && (entry.board.State.HasAcquired(Target.lesson.acquisitionId) ||
             WordOnly && entry.board.State.Knows(Target.lesson.verb.Id));
         public bool Showing=>Target&&CanObserve;

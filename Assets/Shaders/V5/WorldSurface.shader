@@ -9,6 +9,7 @@ Shader "PuzzleApple/V5/World Surface"
         _BaseColor("Surface color",Color)=(1,1,1,1)
         _Smoothness("Smoothness",Range(0,1))=0
         _Metallic("Metallic",Range(0,1))=0
+        _SculptureRelief("Plaster relief shading",Range(0,1))=0
         _EdgeWidth("Black edge width in pixels",Range(0,3))=0
         [HideInInspector] _UseInkRoomBounds("Shared inner ink boundary",Float)=0
         [HideInInspector] _InkRoomMin("Inner ink minimum",Vector)=(0,0,0,0)
@@ -32,7 +33,9 @@ Shader "PuzzleApple/V5/World Surface"
         [NoScaleOffset] _HintFloor("Floor hint",2D)="black"{}
         [NoScaleOffset] _HintMove("Move hint",2D)="black"{}
         _MuralEnabled("Mural enabled",Float)=0
-        [HideInInspector] _Dissolve("Door dissolve",Range(0,1))=0
+        [HideInInspector] _Dissolve("Surface fade",Range(0,1))=0
+        [HideInInspector] _RoomExitWidth("Far doorway opening",Float)=0
+        [HideInInspector] _NicheFillAnchor("Room-side fill sample",Vector)=(0,0,0,0)
         [HideInInspector] _IsDoorLeaf("Door leaf",Float)=0
         [HideInInspector] _DoorBackBrightness("Room-side brightness",Float)=0
         [HideInInspector] _DoorBackColor("Room-side wall color",Color)=(1,1,1,1)
@@ -83,13 +86,23 @@ Shader "PuzzleApple/V5/World Surface"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
             float4 _RoomShellInward,_InteriorNormal,_PanelSize,_InteriorTint,_InteriorEdgeMin,_InteriorEdgeMax;
             float _ClosedWeight,_DarkLevel,_SeamCore,_CoreWidthPixels;
-            float _P5FloorGlow,_P5DoorGlow,_LiningShade,_PlayableFloor;
-            float _EdgeWidth;
+            #include "SentenceGlow.hlsl"
+            float _LiningShade,_PlayableFloor;
+            float _EdgeWidth,_SculptureRelief;
             float _UseInkRoomBounds;
             float _PassageCover,_PassageOpacity,_CorridorLight;
             float4 _PassageOrigin,_PassageRight,_PassageUp,_PassageSize;
             float4 _InkRoomMin,_InkRoomMax;
-            float4 _InkColor;
+            float4 _InkColor,_NicheFillAnchor;
+            // Per-room diffuse fill from RoomLightBalance (world AABBs, linear colour).
+            float4 _RoomFillMin[4],_RoomFillMax[4],_RoomFillColor[4];
+            float _RoomFillCount;
+            void ApplyRoomFill(float3 positionWS,inout InputData lighting)
+            {
+                [unroll]for(int i=0;i<4;i++)
+                    if(i<(int)_RoomFillCount&&all(positionWS>=_RoomFillMin[i].xyz)&&all(positionWS<=_RoomFillMax[i].xyz))
+                    {lighting.bakedGI=_RoomFillColor[i].rgb;return;}
+            }
             #include "WorldSurfaceEffects.hlsl"
             #include "BoxImmersionRipple.hlsl"
             void InteriorFragment(Varyings input,out half4 result:SV_Target)
@@ -112,7 +125,7 @@ Shader "PuzzleApple/V5/World Surface"
                 }
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(input.uv,surface);
-                bool roomFace=_SurfaceMode==1&&_IsDoorLeaf>0&&normalOS.z>.5;
+                bool roomFace=_SurfaceMode==1&&_IsDoorLeaf==1&&normalOS.z>.5;
                 if(_SurfaceMode==1)
                 {
 
@@ -131,13 +144,14 @@ Shader "PuzzleApple/V5/World Surface"
                 InputData lighting;
                 InitializeInputData(input,surface.normalTS,lighting);
                 InitializeBakedGIData(input,lighting);
+                ApplyRoomFill(_NicheFillAnchor.w>.5?_NicheFillAnchor.xyz:input.positionWS,lighting);
                 result=UniversalFragmentPBR(lighting,surface);
                 // Roll off close point-light hotspots on matte surfaces. Keep HDR bloom
                 // on the dedicated lamp shaders rather than turning white walls into lamps.
                 float peak=max(result.r,max(result.g,result.b));
                 if(peak>.65)result.rgb*=(.65+.3*(1-exp(-(peak-.65)/.3)))/peak;
-                if(_LiningShade>0)result.rgb=(result.rgb+_P5FloorGlow)*_LiningShade;
-                if((_RoomShellInward.y>.9&&normalOS.y>.9)||(_PlayableFloor>.5&&input.normalWS.y>.9))result.rgb+=_P5FloorGlow;
+                if(_LiningShade>0)result.rgb=(result.rgb+FloorSentenceGlow(input.positionWS))*_LiningShade;
+                if((dot(_RoomShellInward.xyz,_RoomShellInward.xyz)>.5||_PlayableFloor>.5)&&input.normalWS.y>.9)result.rgb+=FloorSentenceGlow(input.positionWS);
                 if(_SurfaceMode==2||roomFace)
                 {
                     float luminance=dot(result.rgb,float3(.2126,.7152,.0722));
@@ -152,16 +166,17 @@ Shader "PuzzleApple/V5/World Surface"
                     if(_SurfaceMode==2)result.rgb*=RoomSurfaceEffects(input.positionWS);
                 }
                 if(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5)result.rgb=1;
-                if(_RoundOutline>.5)
+                if(_RoundOutline>.5 && _RoundOutline<1.5)
                 {
                     float key=dot(normalize(normalOS),normalize(float3(-.55,.75,-.38)));
                     // The handle has exactly two tones with a hard light/shadow boundary.
                     result.rgb=step(0,key);
                 }
-                if(_SurfaceMode==1)
+                if(_IsDoorLeaf>1.5)result.rgb+=.60*smoothstep(0,1,_P5RoomSentenceGlow[4].y);
+                else if(_SurfaceMode==1)
                 {
-                    if(_IsDoorLeaf>.5)result.rgb+=_P5DoorGlow;
-                    else if(normalOS.y>.9)result.rgb+=_P5FloorGlow;
+                    if(_IsDoorLeaf>.5)result.rgb+=(2.25*smoothstep(0,1,max(_P5RoomSentenceGlow[1].y,_P5RoomSentenceGlow[2].y)));
+                    else if(normalOS.y>.9)result.rgb+=FloorSentenceGlow(input.positionWS);
                 }
                 float3 inward=TransformObjectToWorldNormal(_InteriorNormal.xyz);
                 float interior=step(.99,dot(normalize(input.normalWS),normalize(inward)));
@@ -172,14 +187,18 @@ Shader "PuzzleApple/V5/World Surface"
                 float3 face=abs(normalOS);
                 float2 q=face.y>.5?p.xz:(face.x>.5?p.zy:p.xy);
                 float d=min(.5-abs(q.x),.5-abs(q.y));
-                if(_RoundOutline>.5)
+                if(_SculptureRelief>0){
+                    float key=dot(normalize(normalOS),normalize(float3(-.48,.72,.5)));
+                    result.rgb*=lerp(1,lerp(.36,1.4,smoothstep(-.85,.8,key)),_SculptureRelief);
+                }
+                if(_RoundOutline>.5 || _SculptureRelief>0)
                 {
                     float facing=saturate(dot(normalize(input.normalWS),GetWorldSpaceNormalizeViewDir(input.positionWS)));
                     d=facing*facing;
                 }
                 // Use the whole room's perimeter, not each doorway collision section.
                 // This avoids drawing false seams that reveal the concealed room-side door.
-                if(_SurfaceMode==2)d=RoomPerimeterDistance(input.positionWS);
+                if(_SurfaceMode==2 && _NicheFillAnchor.w<.5)d=RoomPerimeterDistance(input.positionWS);
                 if(_UseInkRoomBounds>.5)
                 {
                     if(_RippleStrength>0)result.rgb*=ContactRipple(input.positionWS);
@@ -191,8 +210,15 @@ Shader "PuzzleApple/V5/World Surface"
                 // Each adjacent face supplies half the total screen-space stroke.
                 float ink=(_UseInkRoomBounds>.5?saturate(_EdgeWidth*.5+.5-abs(d)/inkPixel):
                     1-smoothstep(0,max(fwidth(d)*_EdgeWidth,.000001),d))*step(.001,_EdgeWidth);
+                if(_IsDoorLeaf>1.5 && normalOS.z<-.5)
+                {
+                    // A continuous hairline where the slab meets the reveal, including at oblique angles.
+                    float2 dx=ddx(p.xy),dy=ddy(p.xy);
+                    float2 pixels=(.5-abs(p.xy))/max(sqrt(dx*dx+dy*dy),1e-6);
+                    ink=.7*saturate(1.8*_ScaledScreenParams.y/720+.5-min(pixels.x,pixels.y));
+                }
                 if(!roomFace)result.rgb*=lerp(float3(1,1,1),_InkColor.rgb,ink);
-                if(_RoundOutline<.5&&!(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5))result.rgb=MixFog(result.rgb,lighting.fogCoord);
+                if((_RoundOutline<.5||_RoundOutline>1.5)&&!(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5))result.rgb=MixFog(result.rgb,lighting.fogCoord);
                 float3 edges=min(p-_InteriorEdgeMin.xyz,_InteriorEdgeMax.xyz-p)*_PanelSize.xyz;
                 float3 axis=abs(_InteriorNormal.xyz);
                 float distance=axis.x>.5?min(edges.y,edges.z):(axis.y>.5?min(edges.x,edges.z):min(edges.x,edges.y));
@@ -209,7 +235,7 @@ Shader "PuzzleApple/V5/World Surface"
                 if(input.normalWS.y>.9 && abs(input.positionWS.y-_P5BoxWavePhase.y)<.18)
                     result.rgb=BoxImmersionRipple(result.rgb,input.positionWS.xz);
                 if(_SurfaceMode==1&&!roomFace)result.rgb*=_CorridorLight;
-                result.a=_SurfaceMode==1?saturate(1-_Dissolve):1;
+                result.a=saturate(1-_Dissolve);
                 if(_PassageCover>.5)result.a*=_PassageOpacity;
             }
             ENDHLSL
@@ -227,6 +253,7 @@ Shader "PuzzleApple/V5/World Surface"
             #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Random.hlsl"
             #include "WorldSurfaceEffects.hlsl"
             struct SurfaceShadowVaryings
             {
@@ -250,6 +277,8 @@ Shader "PuzzleApple/V5/World Surface"
             half4 SurfaceShadowFragment(SurfaceShadowVaryings input):SV_TARGET
             {
                 UNITY_SETUP_INSTANCE_ID(input);
+                if (_Dissolve > 0)
+                    clip(InterleavedGradientNoise(input.positionCS.xy, 0) - _Dissolve);
 
                 if(_SurfaceMode==2&&_Hole.w>.5)
                 {

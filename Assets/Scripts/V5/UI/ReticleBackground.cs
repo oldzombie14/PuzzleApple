@@ -24,7 +24,11 @@ namespace PuzzleApple.V5
         RenderTexture frame, previousTarget;
         GameObject output;
         RawImage image;
-        public float WorldVisibility=>image?image.color.a:1;
+        public float WorldVisibility
+        {
+            get => image ? image.color.a : 1;
+            set { if (image) image.color = new Color(1,1,1,Mathf.Clamp01(value)); }
+        }
         void OnEnable()
         {
             previousTarget=worldCamera.targetTexture;

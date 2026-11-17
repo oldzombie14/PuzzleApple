@@ -50,8 +50,19 @@ namespace PuzzleApple.V5.Editor
                 current.ReturnToLibrary(current.Groups[0].Id,0,true);old.ReturnToLibrary(old.Groups[0].Id,0,true);
                 Check(old.Groups.Select(g=>g.Effective).SequenceEqual(current.Groups.Select(g=>g.Effective)),"split takeover parity");
             }
-            foreach(var invalid in new[]{"light floor move","world move","light world move","door door move","floor floor move","door move floor","light positive","positive light move","negative light move floor","light move move","light door floor"})
+            foreach(var text in new[]{"mirror mirror","mirror move"}){
+                var state=new CognitionState(v5);state.TryAcquireSentence("mirror",text);
+                Check(state.Groups.Single().Effective && state.Groups.Single().Rule.Kind==SentenceKind.Sustained,text);
+            }
+            foreach(var invalid in new[]{"mirror light","mirror door","mirror floor","mirror world","light floor move","world move","light world move","door door move","floor floor move","light door move","light light move","door floor move","door light move","floor door move","floor light move","light positive","positive light move","negative light move floor","light move move","light door floor"})
             {var state=new CognitionState(v5);state.TryAcquireSentence("invalid",invalid);Check(!state.Groups.Single().Recognized,"invalid syntax "+invalid);}
+            var profiles=AssetDatabase.LoadAssetAtPath<SentencePresentationSettings>("Assets/GameData/V5/Resources/V5/SentencePresentation.asset");
+            foreach(var rule in v5.Rules.Where(r=>r.Words.Count==3 && r.Words[1].Id=="move")){
+                var state=new CognitionState(v5);string words=string.Join(" ",rule.Words.Select(w=>w.Id));
+                state.TryAcquireSentence("grammar.history",words);
+                Check(rule.Kind==SentenceKind.Command && state.History.Any(h=>h.Effective && string.Join(" ",h.Words.Select(w=>w.Id))==words),"directional history "+words);
+                Check(profiles.shots.Any(shot=>shot.rule==rule.Id),"serialized shot "+rule.Id);
+            }
             return "PASS: four illumination sentences, duplicate and split behavior, all 16 V4 sentences, all ordered rule pairs, conflict takeover and invalid combinations (ground maps to floor).";
         }
         static IEnumerator Until(Func<bool> predicate,string label,float timeout=30)
@@ -88,28 +99,15 @@ namespace PuzzleApple.V5.Editor
                 player.view.LookAt(lamp.transform.position);player.AdoptCurrentView();
                 Check(e.chamberLight.TryCollect(),"lit room lamp repeat collection");
                 foreach(var id in new[]{"floor","door","move"})state.TryAcquireWord("outdoor.check."+id,e.board.Catalog.Word(id));
-                // Solving the floor puzzle is covered by FloorImpactChecks; here exercise its exit.
-                var fallingLamp=j.Lamps[0];var body=fallingLamp.GetComponent<Rigidbody>();
-                body.position=j.Root.TransformPoint(new Vector3(0,.45f,j.floorSurface.HoleCentreZ));
-                fallingLamp.direction=Vector3.zero;
-                player.MovementLocked=true;j.floorSurface.OpenHole();
-                yield return Until(()=>e.outdoor.TransferredLamps>0,"a lamp falls and exits before the player");
-                Check(e.outdoor.RenderingWarmed&&!e.outdoor.IsOutside,"outdoor window rendered before travel");
-                player.MovementLocked=false;
-                var centre=j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart+j.roomSize.z*.5f));
-                player.Teleport(centre+j.Root.right*.45f+j.Root.forward*.2f,j.Root.rotation);
-                player.view.rotation=j.Root.rotation*Quaternion.Euler(68,24,0);player.AdoptCurrentView();
-                var mappedDirection=Quaternion.Euler(-90,0,0)*j.Root.InverseTransformDirection(player.view.forward);
-                yield return Until(()=>e.outdoor.IsOutside&&!e.outdoor.Transitioning,"continuous fall through the portal");
-                Check(!e.outdoor.transform.Find("Passage cinematic"),"portal crossing leaves the world view unobstructed");
+                yield return WhiteAscentChecks.Leave(e);
                 var w=e.outdoor.World;
                 Check(e.outdoor.TransitionCount==1&&w.field.ActiveCount==e.outdoor.TransferredLamps,"single transition retains the transferred lamps");
                 Check(w.door.GetComponentsInChildren<Renderer>().All(r=>r.enabled),"exit frame visible without V4 reveal event");
                 Check(player.transform.position.x>1000&&w.door.transform.position.x>1000,"player and physical frame are in the outdoor scene space");
-                Check(e.outdoor.LastExitVelocity.z>0&&e.outdoor.LastExitVelocity.z<=e.outdoor.exitSpeed&&Vector3.Angle(player.view.forward,w.exit.TransformDirection(mappedDirection))<.25f,"horizontal launch preserves oblique sightline");
+                Check(e.journey.Ascent.Completed && e.outdoor.LastExitVelocity==Vector3.zero,"ascent arrives standing outdoors");
                 Check(!player.CinematicLocked&&!player.MovementLocked&&!e.board.Panel.InputBlocked,"control restored");
                 Check(state.Knows("floor")&&state.Knows("light"),"vocabulary preserved");
-                Check(w.Audio&&w.GetComponents<AudioSource>().Any(a=>a.isPlaying&&a.loop&&a.clip==w.music.clip&&Mathf.Abs(a.volume-.45f)<.001f),"V4 BGM actually playing");
+                Check(w.Audio&&w.Audio.GetComponents<AudioSource>().Any(a=>a.isPlaying&&a.loop&&a.clip==w.music.clip&&Mathf.Abs(a.volume-.45f)<.001f),"V4 BGM actually playing");
                 yield return new WaitForSeconds(2);
                 Check(player.GetComponent<CharacterController>().isGrounded,"gravity returns player to ground");
                 player.MovementLocked=true;player.Launch(Vector3.zero);
@@ -118,26 +116,36 @@ namespace PuzzleApple.V5.Editor
                 var screen=new Vector2(Screen.width*.78f,Screen.height*.48f);
                 var library=UnityEngine.Object.FindFirstObjectByType<WordLibrary>();
                 var tile=library.GetComponentsInChildren<LibraryDrag>(true).First(t=>t.name=="Vocabulary light");
-                Drag(tile.gameObject,screen);
+                Drag(tile.gameObject,screen);Check(e.outdoor.Picker.Open,"library release opens picker");e.outdoor.Picker.Select(InstanceShape.Cube);
                 Check(w.field.ActiveCount==e.outdoor.TransferredLamps+1,"library drag creates lamp");
                 var first=w.field.ActiveLamps.First(l=>l.RevealAmount<1);Check(first.RevealAmount<1,"lamp starts faded");
                 yield return Until(()=>first.RevealAmount>=1,"lamp fades in at V4 configured duration");
                 state.TryAcquireSentence("outdoor.drag.sentence","light move");yield return null;yield return null;
                 var group=state.Groups.First(g=>g.RuleId=="light.move");
                 var handle=e.board.GroupRect(group.Id).GetComponentsInChildren<CognitionDragHandle>().First(h=>h.WordId==group.Words[0].Id);
-                Drag(handle.gameObject,new Vector2(Screen.width*.68f,Screen.height*.48f),true);
+                Drag(handle.gameObject,new Vector2(Screen.width*.68f,Screen.height*.48f),true);Check(e.outdoor.Picker.Open,"detached token opens picker");e.outdoor.Picker.Select(InstanceShape.Cube);
                 Check(w.field.ActiveCount==e.outdoor.TransferredLamps+2,"sentence token drag creates lamp");
                 Check(!state.HasEffect(CognitionSignal.LightMove),"drag detaches sentence token");
                 state.ClearWorkspace();state.TryAcquireSentence("outdoor.motion","light move");yield return null;yield return null;
                 var before=w.field.ActiveLamps.ToDictionary(l=>l,l=>l.transform.position);yield return new WaitForSeconds(.35f);
                 Check(before.All(p=>Vector3.Distance(p.Key.transform.position,p.Value)>.1f),"all created lamps move");
-                Drag(tile.gameObject,new Vector2(Screen.width*.87f,Screen.height*.45f));
+                Drag(tile.gameObject,new Vector2(Screen.width*.87f,Screen.height*.45f));e.outdoor.Picker.Select(InstanceShape.Cube);
                 Check(w.field.ActiveCount==e.outdoor.TransferredLamps+3,"new lamp while moving");
                 var newest=w.field.ActiveLamps.First(l=>!before.ContainsKey(l));var newPosition=newest.transform.position;yield return new WaitForSeconds(.3f);
                 Check(Vector3.Distance(newest.transform.position,newPosition)>.08f,"new lamp inherits movement");
                 state.ClearWorkspace();yield return null;yield return null;
                 before=w.field.ActiveLamps.ToDictionary(l=>l,l=>l.transform.position);yield return new WaitForSeconds(.3f);
                 Check(before.All(p=>Vector3.Distance(p.Key.transform.position,p.Value)<.005f),"split suspends lamps");
+                var directions=w.field.ActiveLamps.Select(l=>l.GetComponent<Outdoor.LightMotion>()).ToDictionary(m=>m,m=>m.Direction);
+                state.TryAcquireSentence("outdoor.resume","light move",out var resume);yield return null;
+                Check(directions.All(d=>d.Key.Moving && Vector3.Dot(d.Key.Direction,d.Value)>.999f),"outdoor lamps resume their original headings");
+                if(state.RequirePeriod){
+                    state.Unsay(resume.Id);yield return null;
+                    Check(directions.All(d=>!d.Key.Moving),"unsay holds every lamp");
+                    state.Speak(resume.Id);yield return null;
+                    Check(directions.All(d=>d.Key.Moving && Vector3.Dot(d.Key.Direction,d.Value)>.999f),"respeaking keeps every heading");
+                }
+                state.ClearWorkspace();yield return null;
                 state.TryAcquireSentence("outdoor.night","negative light");yield return Until(()=>w.stateSource.IsOff&&w.environment.NightBlend>.99f,"night");
                 Check(w.GetComponentsInChildren<Outdoor.ThresholdDoor>().Length==1,"night creates no progression door");
                 var dark=w.field.ActiveLamps.First();
@@ -147,7 +155,7 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>w.stateSource.IsOn&&w.environment.NightBlend<.01f,"day");
                 Check(w.LookedAtWord(new Ray(player.view.position,-w.sun.transform.forward))=="light","day sun offers known light");
                 e.sentenceRuntime.presentation.enabledShots=true;state.ClearWorkspace();yield return null;
-                state.TryAcquireSentence("outdoor.cluster","light light move");
+                state.TryAcquireSentence("outdoor.cluster","light move light");
                 yield return Until(()=>e.sentenceRuntime.presentation.Playing,"cluster cutscene");
                 yield return Until(()=>e.sentenceRuntime.presentation.CanInterrupt,"deferred effect");
                 Check(e.sentenceRuntime.HasEffect(CognitionSignal.LightLightMove),"cluster begins at cinematic application");
@@ -155,7 +163,7 @@ namespace PuzzleApple.V5.Editor
                 Check(e.board.Panel.IsOpen&&!player.CinematicLocked,"cutscene restores editing");
                 e.sentenceRuntime.presentation.enabledShots=false;
                 yield return MotionAndPlacement(e);
-                Result="PASS: direct indoor entry; live outdoor window and lamp transfer; dark/lit collection in all V5 spaces; real fall, portal crossing, horizontal impulse and landing; retained vocabulary and playing V4 BGM; both UI drag sources; fade; all/new lamps move; split; day/night without V4 progression; cutscene application/interruption.";
+                Result="PASS: indoor collection, white ascent and grounded arrival, retained vocabulary and music, picker from both real drag sources, all/new lamps move, split, day/night, scoped outdoor motion and placement.";
             }
             finally{e.sentenceRuntime.presentation.enabledShots=shots;Application.runInBackground=background;}
         }
@@ -164,24 +172,24 @@ namespace PuzzleApple.V5.Editor
             var w=e.outdoor.World;var s=e.board.State;var p=e.player;var lamps=w.field.ActiveLamps.ToArray();
             s.ClearWorkspace();yield return null;yield return null;
             var origin=w.transform.position;
-            for(int i=0;i<lamps.Length;i++){var b=lamps[i].GetComponent<Rigidbody>();b.position=origin+new Vector3(-5+i*5,4,22);}
+            for(int i=0;i<lamps.Length;i++){var b=lamps[i].GetComponent<Rigidbody>();b.position=origin+new Vector3(i<2?-5+i*5:12+i*5,4,22);}
             Physics.SyncTransforms();yield return new WaitForFixedUpdate();
             float distance=Vector3.Distance(lamps[0].transform.position,lamps[1].transform.position);
-            s.TryAcquireSentence("physical.cluster","light light move");yield return new WaitForSeconds(.5f);
+            s.TryAcquireSentence("physical.cluster","light move light");yield return new WaitForSeconds(.5f);
             Check(Vector3.Distance(lamps[0].transform.position,lamps[1].transform.position)<distance-.2f,"nearest-neighbour cluster physically approaches");
             s.ClearWorkspace();yield return null;yield return null;
             float away=Vector3.Distance(lamps[0].transform.position,w.door.transform.position);
-            s.TryAcquireSentence("physical.gather","light door move");yield return new WaitForSeconds(.5f);
+            s.TryAcquireSentence("physical.gather","light move door");yield return new WaitForSeconds(.5f);
             Check(Vector3.Distance(lamps[0].transform.position,w.door.transform.position)<away-.2f,"lamps gather toward existing frame");
             s.ClearWorkspace();yield return null;yield return null;
             var doorBody=w.door.GetComponent<Rigidbody>();var doorBefore=doorBody.position;
-            s.TryAcquireSentence("physical.pursue","door light move");yield return new WaitForSeconds(.5f);
-            Check(Vector3.Distance(doorBefore,doorBody.position)>.3f,"door pursues nearest light");
+            s.TryAcquireSentence("physical.pursue","door move light");yield return new WaitForSeconds(.5f);
+            Check(Vector3.Distance(doorBefore,doorBody.position)<.01f,"anchored door ignores light target");
             s.ClearWorkspace();yield return null;yield return null;
             doorBody.position=origin+new Vector3(10,8,0);Physics.SyncTransforms();yield return new WaitForFixedUpdate();
             float doorY=doorBody.position.y;
-            s.TryAcquireSentence("physical.door.floor","door floor move");yield return new WaitForSeconds(.5f);
-            Check(doorBody.position.y<doorY-.2f,"door descends toward floor");
+            s.TryAcquireSentence("physical.door.floor","door move floor");yield return new WaitForSeconds(.5f);
+            Check(Mathf.Abs(doorBody.position.y-doorY)<.01f,"anchored door ignores floor target");
             s.ClearWorkspace();yield return null;yield return null;
             doorBefore=doorBody.position;s.TryAcquireSentence("physical.door.free","door move");yield return new WaitForSeconds(.4f);
             Check(Vector3.Distance(doorBefore,doorBody.position)>.5f,"door free movement");
@@ -195,11 +203,11 @@ namespace PuzzleApple.V5.Editor
             doorBody.position=origin+new Vector3(10,12,0);Physics.SyncTransforms();
             p.Teleport(origin+new Vector3(0,.05f,10),Quaternion.identity);p.view.localRotation=Quaternion.Euler(-12,0,0);p.AdoptCurrentView();
             float groundY=w.ground.bounds.max.y,playerY=p.transform.position.y;
-            s.TryAcquireSentence("physical.floor.rise","floor light move");yield return new WaitForSeconds(.5f);
+            s.TryAcquireSentence("physical.floor.rise","floor move light");yield return new WaitForSeconds(.5f);
             Check(w.ground.bounds.max.y>groundY+.1f&&p.transform.position.y>playerY+.1f,"floor and player rise toward visible light");
             s.ClearWorkspace();yield return null;yield return null;groundY=w.ground.bounds.max.y;
             yield return new WaitForSeconds(.3f);Check(Mathf.Abs(w.ground.bounds.max.y-groundY)<.005f,"split holds raised floor");
-            groundY=w.ground.bounds.max.y;s.TryAcquireSentence("physical.floor.door","floor door move");yield return new WaitForSeconds(.3f);
+            groundY=w.ground.bounds.max.y;s.TryAcquireSentence("physical.floor.door","floor move door");yield return new WaitForSeconds(.3f);
             Check(w.ground.bounds.max.y>groundY+.1f,"floor rises toward door");
             s.ClearWorkspace();yield return null;yield return null;
             s.TryAcquireSentence("physical.dark.motion","light move");s.TryAcquireSentence("physical.dark.off","negative light");
@@ -207,7 +215,7 @@ namespace PuzzleApple.V5.Editor
             yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
             var held=lamps.ToDictionary(l=>l,l=>l.transform.position);yield return new WaitForSeconds(.3f);
             Check(held.All(x=>Vector3.Distance(x.Key.transform.position,x.Value)<.005f),"outdoor V4 darkness suspends movement");
-            var off=s.Groups.First(g=>g.RuleId=="light.off");s.ReturnToLibrary(off.Id,0,true);s.TryAcquireSentence("physical.dark.on","positive light");
+            yield return Until(()=>!s.Groups.Any(g=>g.RuleId=="light.off"),"off command retires");s.TryAcquireSentence("physical.dark.on","positive light");
             yield return Until(()=>w.stateSource.IsOn,"light restores movement");
             Check(held.Any(x=>Vector3.Distance(x.Key.transform.position,x.Value)>.1f),"on light resumes retained motion");
             s.ClearWorkspace();yield return null;yield return null;
@@ -224,6 +232,38 @@ namespace PuzzleApple.V5.Editor
             float radius=w.spawnSearchRadius;int attempts=w.spawnAttempts;w.spawnSearchRadius=0;w.spawnAttempts=1;
             count=w.field.ActiveCount;Check(!w.TrySpawnInView(screen)&&w.field.ActiveCount==count,"no safe position creates nothing");
             w.spawnSearchRadius=radius;w.spawnAttempts=attempts;
+        }
+        public static void RunCompletion(){
+            var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            Result="Running";e.StartCoroutine(Completion(e));
+        }
+        static IEnumerator Completion(WorldEntry e){
+            e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy,"unfold");
+            yield return WhiteAscentChecks.Leave(e);
+            var w=e.outdoor.World;var s=e.board.State;
+            e.sentenceRuntime.presentation.enabledShots=false;
+            var origin=w.transform.position;
+            var a=w.field.Spawn(origin+new Vector3(0,2,12),.3f);var b=w.field.Spawn(origin+new Vector3(5,2,12),.3f);
+            e.player.Teleport(origin+new Vector3(0,.1f,5),Quaternion.identity);
+            e.board.Panel.SetOpen(true);yield return Until(()=>e.board.Panel.FullyOpen,"board visible for ripple checks");
+            foreach(var syntax in new[]{"light move light","light move door","light move floor","door move light","door move floor","floor move light","floor move door"}){
+                if(syntax.StartsWith("floor move")){
+                    float top=w.ground.bounds.max.y;
+                    a.GetComponent<Rigidbody>().position=origin+new Vector3(0,top-origin.y+2,12);
+                    b.GetComponent<Rigidbody>().position=origin+new Vector3(5,top-origin.y+3,12);
+                    var door=w.door.GetComponent<Rigidbody>();
+                    door.position=new Vector3(door.position.x,top+3,door.position.z);
+                    Physics.SyncTransforms();yield return new WaitForFixedUpdate();
+                }
+                int weak=e.feedback.WeakCount,strong=e.feedback.StrongCount;
+                s.TryAcquireSentence("done."+syntax,syntax,out var group);
+                yield return Until(()=>s.Find(group.Id)==null,"retires "+syntax,40);
+                if(syntax.StartsWith("door move"))Check(e.feedback.WeakCount>weak && e.feedback.StrongCount==strong,"anchored door gives weak ripple "+syntax);
+                var held=a.transform.position;var floorHeight=w.ground.bounds.max.y;
+                yield return new WaitForSeconds(.22f);
+                Check(Vector3.Distance(a.transform.position,held)<.02f && Mathf.Abs(floorHeight-w.ground.bounds.max.y)<.01f,"end position retained "+syntax);
+            }
+            Result="PASS: all seven directional sentences retire, anchored door feedback is weak, end positions retained";
         }
         static void Drag(GameObject source,Vector2 target,bool pointerDown=false)
         {

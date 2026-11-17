@@ -12,6 +12,7 @@ namespace PuzzleApple.V5.Outdoor
         public OpeningLight appearanceSource;
         [System.NonSerialized] public bool illuminate = true;
         public Material AppearanceMaterial => runtimeMaterial;
+        public bool initiallyOff;
         public Color offColor = Color.black;
         [Min(0)] public float transitionDuration = 1.2f;
         public UnityEvent<bool> stateChanged = new UnityEvent<bool>();
@@ -42,6 +43,13 @@ namespace PuzzleApple.V5.Outdoor
             ApplyReveal();
             if(glow){glow.intensity=0;glow.enabled=false;}
         }
+        public void SetReveal(Material transparent,float amount)
+        {
+            surface.sharedMaterial=transparent;
+            RevealAmount=amount;
+            if(revealProperties==null)revealProperties=new MaterialPropertyBlock();
+            ApplyReveal();
+        }
         void ApplyReveal()
         {
             var source=appearanceSource.AppearanceMaterial;
@@ -68,6 +76,7 @@ namespace PuzzleApple.V5.Outdoor
             runtimeMaterial.EnableKeyword("_SPECULAR_SETUP");
             runtimeMaterial.SetColor("_SpecColor", new Color(.04f, .04f, .04f, 1));
             if (glow) onLightIntensity = glow.intensity;
+            if(initiallyOff){brightness=0;targetOn=false;ApplyAppearance();}
         }
         public void SetOn(bool value)
         {

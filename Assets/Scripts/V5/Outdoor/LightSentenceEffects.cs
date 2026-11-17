@@ -25,6 +25,7 @@ namespace PuzzleApple.V5.Outdoor
         readonly Dictionary<OpeningLight, OpeningLight> neighbours = new Dictionary<OpeningLight, OpeningLight>();
         readonly Dictionary<OpeningLight, Collider[]> colliders = new Dictionary<OpeningLight, Collider[]>();
         float nextRefresh;
+        readonly Dictionary<OpeningLight,float> blocked=new Dictionary<OpeningLight,float>();
 
 
         public void Apply(System.Func<CognitionSignal,bool> hasEffect)
@@ -33,7 +34,7 @@ namespace PuzzleApple.V5.Outdoor
                 hasEffect(CognitionSignal.LightWorldMove) ? CognitionSignal.LightWorldMove :
                 hasEffect(CognitionSignal.LightDoorMove) ? CognitionSignal.LightDoorMove :
                 hasEffect(CognitionSignal.LightLightMove) ? CognitionSignal.LightLightMove : CognitionSignal.Empty;
-            if (motion != Motion) neighbours.Clear();
+            if (motion != Motion)blocked.Clear();
             Motion = motion;
             if (field) field.SetMoving(CanOperate && Motion == CognitionSignal.LightMove);
             RefreshLamps();
@@ -48,7 +49,7 @@ namespace PuzzleApple.V5.Outdoor
         void RefreshLamps()
         {
             lamps.Clear();
-            if (field) { foreach (var lamp in field.ActiveLamps) if (lamp) lamps.Add(lamp); }
+            if (field) { foreach (var lamp in field.ActiveLamps) if (lamp && lamp.isActiveAndEnabled) lamps.Add(lamp); }
             else { foreach (var lamp in FindObjectsByType<OpeningLight>(FindObjectsSortMode.None))
                 if (lamp != stateSource) lamps.Add(lamp); }
             foreach (var lamp in lamps)
@@ -61,8 +62,7 @@ namespace PuzzleApple.V5.Outdoor
             foreach (var key in colliders.Keys) if (!key) stale.Add(key);
             foreach (var key in stale) { colliders.Remove(key); neighbours.Remove(key); }
         }
-        bool InRange(OpeningLight lamp) => lamp && lamp.isActiveAndEnabled &&
-            (!observer || (lamp.transform.position - observer.position).sqrMagnitude <= influenceRadius * influenceRadius);
+        bool InRange(OpeningLight lamp) => lamp && lamp.isActiveAndEnabled;
         public OpeningLight Nearest(Vector3 position, OpeningLight previous = null, OpeningLight exclude = null)
         {
             OpeningLight best = null; float distance = float.PositiveInfinity;
@@ -109,7 +109,7 @@ namespace PuzzleApple.V5.Outdoor
                 if(!lamp || !lamp.isActiveAndEnabled)continue;
                 if(motion==CognitionSignal.LightMove)return true;
                 if(lamp.GetComponent<LightMotion>().Launched || (motion!=CognitionSignal.LightFloorMove&&!InRange(lamp)))continue;
-                if(TryTarget(lamp,lamp.GetComponent<Rigidbody>(),lamp.GetComponent<Collider>(),motion,false,out _,out _))return true;
+                if((motion!=Motion || !blocked.TryGetValue(lamp,out var held) || held<.6f) && TryTarget(lamp,lamp.GetComponent<Rigidbody>(),lamp.GetComponent<Collider>(),motion,false,out _,out _))return true;
             }
             return false;
         }
@@ -142,7 +142,7 @@ namespace PuzzleApple.V5.Outdoor
             }
             delta = target - body.position;
             
-            return delta.magnitude > stopDistance;
+            return delta.magnitude > stopDistance+.003f;
         }
         void FixedUpdate()
         {
@@ -169,7 +169,9 @@ namespace PuzzleApple.V5.Outdoor
                     direction = (direction + separation * 2).normalized;
                 }
                 float speed=Motion==CognitionSignal.LightLightMove?clusterSpeed:directedSpeed;
-                DirectedMotion.Move(body, colliders[lamp], direction * Mathf.Min(speed * Time.fixedDeltaTime, distance-stopDistance), true);
+                float moved=DirectedMotion.Move(body, colliders[lamp], direction * Mathf.Min(speed * Time.fixedDeltaTime, distance-stopDistance), true);
+                blocked.TryGetValue(lamp,out var held);
+                blocked[lamp]=moved<.0001f?held+Time.fixedDeltaTime:0;
             }
         }
     }

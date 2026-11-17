@@ -87,6 +87,7 @@ namespace PuzzleApple.V5
         {
             blackBackground.transform.SetAsLastSibling();
             blackBackground.color=Color.black;
+            blackBackground.raycastTarget=false;
             blackBackground.gameObject.SetActive(true);
             if(blackFadeDuration>0)
             {
@@ -129,6 +130,7 @@ namespace PuzzleApple.V5
             opening.Open(player.transform);
             board.Panel.InputBlocked=false;
             yield return ShowFold(groupId,true,opening);
+            if(portableClosure)portableClosure.FinishOpening(opening);
             Busy=false;player.MovementLocked=false;worldGroup=-1; board.Panel.InputBlocked=false;
         }
         public void CloseWorldFromSentence(int groupId)
@@ -157,7 +159,7 @@ namespace PuzzleApple.V5
             if(groupId>=0)yield return LevelWorldView(groupId);
             if(portableClosure&&!portableClosure.CanFold)
             {
-                yield return FadeWorldShot();
+                yield return FadeWorldShot(true);
                 worldGroup=-1;ShowDialog();yield break;
             }
             if(portableClosure)portableClosure.Prepare();
@@ -170,18 +172,19 @@ namespace PuzzleApple.V5
         }
         IEnumerator ShowFold(int groupId,bool opening,FoldingRoom folding)
         {
-            if(!folding.Animating&&foldCaption){yield return FadeWorldShot();yield break;}
+            if(!folding.Animating&&foldCaption){yield return FadeWorldShot(!opening);yield break;}
             while(folding.Animating)
             {
                 if(foldCaption)
                 {
                     float remaining=opening?1-folding.Progress:folding.Progress;
                     if(board.Panel.IsOpen)remaining=0;
-                    SetWorldShotVisibility(Mathf.SmoothStep(0,1,remaining/.18f),Mathf.SmoothStep(0,1,remaining));
+                    SetWorldShotVisibility(opening?Mathf.SmoothStep(0,1,remaining/.18f):1,Mathf.SmoothStep(0,1,remaining));
                 }
                 yield return null;
             }
-            EndWorldShot();
+            if(opening)EndWorldShot();
+            else SetWorldShotVisibility(1,0);
         }
         IEnumerator LevelWorldView(int groupId)
         {
@@ -218,15 +221,17 @@ namespace PuzzleApple.V5
             foldCaption.alpha=captionAlpha??amount;
             sentenceRuntime.presentation.SetBarsHeight(.09f*amount);
         }
-        IEnumerator FadeWorldShot()
+        IEnumerator FadeWorldShot(bool keepBars=false)
         {
             if(!foldCaption)yield break;
             for(float t=0;t<.4f;t+=Time.unscaledDeltaTime)
             {
-                SetWorldShotVisibility(1-Mathf.SmoothStep(0,1,t/.4f));
+                float alpha=1-Mathf.SmoothStep(0,1,t/.4f);
+                SetWorldShotVisibility(keepBars?1:alpha,alpha);
                 yield return null;
             }
-            EndWorldShot();
+            if(keepBars)SetWorldShotVisibility(1,0);
+            else EndWorldShot();
         }
         void EndWorldShot()
         {
@@ -259,6 +264,7 @@ namespace PuzzleApple.V5
         {
             if(!ConfirmingExit || !DialogReady || Exiting)return;
             dialog.SetActive(false);
+            EndWorldShot();
             DialogReady=false;
             player.PointerUIActive=false;
             if(Entered)
@@ -276,6 +282,7 @@ namespace PuzzleApple.V5
         IEnumerator Quit()
         {
             Exiting=true; dialog.SetActive(false); player.CinematicLocked=true;
+            blackBackground.raycastTarget=true;
             blackBackground.gameObject.SetActive(true);blackBackground.transform.SetAsLastSibling();
             for(float t=0;t<blackFadeDuration;t+=Time.unscaledDeltaTime)
             {blackBackground.color=new Color(0,0,0,Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,blackFadeDuration)));yield return null;}

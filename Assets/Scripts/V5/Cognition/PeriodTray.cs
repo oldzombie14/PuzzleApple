@@ -9,10 +9,10 @@ namespace PuzzleApple.V5.Cognition
     [System.Serializable]
     public sealed class PeriodStyle
     {
-        [Min(8)] public float hitSize=32;
-        [Min(2)] public float diameter=11,spacing=16,snapRadius=36;
+        [Min(8)] public float hitSize=64;
+        [Min(2)] public float diameter=11,snapRadius=60;
         public Vector2 cornerInset=new Vector2(32,34);
-        [Min(.1f)] public float hintSeconds=.6f,guideCycle=2.2f;
+        [Min(.1f)] public float hintSeconds=.88f,guideCycle=2.2f;
         [Min(.01f)] public float guidePulseSeconds=.4f,guideFlightSeconds=.9f,guideHoldSeconds=.3f;
         [Min(0)] public float trailDelay=.027f;
         [Range(0,1)] public float restingOpacity=.86f,snapOpacity=.46f;
@@ -27,7 +27,7 @@ namespace PuzzleApple.V5.Cognition
     {
         CognitionBoard board;
         RectTransform layer;
-        PeriodGlyph corner,ghost,hint,ring;
+        PeriodGlyph corner,ghost,hint,ring,dragRipple;
         PeriodGlyph[] trail;
         readonly Dictionary<int,PeriodGlyph> attached=new Dictionary<int,PeriodGlyph>();
         HashSet<int> drafts=new HashSet<int>();
@@ -76,7 +76,7 @@ namespace PuzzleApple.V5.Cognition
                 }
                 attached.Remove(id);
             }
-            if(next.Except(drafts).Any())pulse=Style.hintSeconds;
+            if(next.Except(drafts).Any())pulse=0;
             drafts=next;
             corner.transform.SetAsLastSibling();
         }
@@ -90,8 +90,10 @@ namespace PuzzleApple.V5.Cognition
         public void Begin(int group,Vector2 screen)
         {
             if(!board.Panel.IsOpen||board.Panel.InputBlocked||board.IsDragging)return;
-            source=group;ghost=Glyph("Dragging period",layer,-1,false);ghost.gameObject.SetActive(true);
+            source=group;ghost=Glyph("Dragging period",layer,-1,false);ghost.born=Time.unscaledTime;ghost.gameObject.SetActive(true);
             ghost.rectTransform.localScale=Vector3.one*(group==0?Style.cornerScale:1);
+            dragRipple=Glyph("Dragging period ripple",ghost.rectTransform,-1,false);
+            dragRipple.ring=true;dragRipple.gameObject.SetActive(true);
             layer.SetAsLastSibling();
             if(source>0 && attached.TryGetValue(source,out var token))token.canvasRenderer.SetAlpha(Style.dragSourceOpacity);
             Move(screen);
@@ -137,17 +139,23 @@ namespace PuzzleApple.V5.Cognition
         {
             if(!board || !board.Panel.IsOpen)return;
             float dt=Time.unscaledDeltaTime;
-            pulse=Mathf.Max(0,pulse-dt);
+            bool ready=drafts.Count>0 && !ghost;
+            pulse=ready?Mathf.Repeat(pulse+dt,Style.hintSeconds*1.6f):0;
+            if(ghost){
+                float u=Mathf.Repeat((Time.unscaledTime-ghost.born)/Style.hintSeconds,1);
+                dragRipple.rectTransform.localScale=Vector3.one*(Style.rippleScale+u*Style.rippleGrowth);
+                dragRipple.canvasRenderer.SetAlpha((1-u)*.65f);
+            }
             bool show=!board.LearnedPeriod && drafts.Count>0 && !ghost;
             guide=show?Mathf.Repeat(guide+dt,Style.guideCycle):0;
-            float beat=Mathf.Max(Mathf.Sin(Mathf.PI*pulse/Style.hintSeconds),show && guide<Style.guidePulseSeconds?Mathf.Sin(Mathf.PI*guide/Style.guidePulseSeconds):0);
+            float beat=Mathf.Max(ready?Mathf.Sin(Mathf.PI*Mathf.Clamp01(pulse/Style.hintSeconds)):0,show && guide<Style.guidePulseSeconds?Mathf.Sin(Mathf.PI*guide/Style.guidePulseSeconds):0);
             corner.canvasRenderer.SetAlpha(Mathf.Lerp(Style.restingOpacity,1,beat));
             corner.rectTransform.localScale=Vector3.one*Style.cornerScale*(1+beat*(show?Style.guideScale:Style.hintScale));
             ring.gameObject.SetActive(beat>0);
             if(beat>0){ring.transform.position=corner.transform.position;ring.rectTransform.localScale=Vector3.one*(Style.rippleScale+beat*Style.rippleGrowth);ring.canvasRenderer.SetAlpha(beat*Style.rippleOpacity);}
             foreach(var token in attached.Values)if(token){
                 float u=Mathf.Clamp01((Time.unscaledTime-token.born)/Style.landSeconds);
-                token.rectTransform.localScale=Vector3.one*Mathf.Lerp(Style.landingScale,1,u);
+                token.rectTransform.localScale=Vector3.one*board.PeriodScale(token.group)*Mathf.Lerp(Style.landingScale,1,u);
             }
             var end=show?board.PeriodEnd(drafts.Min()):Vector3.zero;
             float land=Style.guidePulseSeconds+Style.guideFlightSeconds;
@@ -169,27 +177,33 @@ namespace PuzzleApple.V5.Cognition
     }
 
     [RequireComponent(typeof(CanvasRenderer))]
-    public sealed class PeriodGlyph : MaskableGraphic, IBeginDragHandler, IDragHandler, IEndDragHandler
+    public sealed class PeriodGlyph : MaskableGraphic, IInitializePotentialDragHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
         public PeriodTray owner;
         public int group;
         public float diameter,born;
         public bool ring;
+        public void OnInitializePotentialDrag(PointerEventData e){e.useDragThreshold=false;}
         public void OnBeginDrag(PointerEventData e){if(e.button==PointerEventData.InputButton.Left)owner.Begin(group,e.position);}
         public void OnDrag(PointerEventData e){owner.Move(e.position);}
         public void OnEndDrag(PointerEventData e){owner.End(e.position);}
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
             mesh.Clear();
-            for(int i=0;i<=32;i++){
-                float a=i*Mathf.PI/16;
-                var dir=new Vector2(Mathf.Cos(a),Mathf.Sin(a));
-                float r=diameter*.5f*(1+.06f*Mathf.Sin(3*a)+.035f*Mathf.Cos(7*a));
-                mesh.AddVert(dir*r,color,Vector2.zero);
-                mesh.AddVert(dir*(ring?r*.91f:0),color,Vector2.zero);
+            const int segments=48;
+            float radius=diameter*.5f;
+            Color clear=color;
+            clear.a=0;
+            for(int i=0;i<=segments;i++){
+                float angle=i*2*Mathf.PI/segments;
+                var direction=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));
+                mesh.AddVert(direction*(radius+.5f),clear,Vector2.zero);
+                mesh.AddVert(direction*(radius-.5f),color,Vector2.zero);
+                mesh.AddVert(direction*(ring?radius*.82f:0),ring?clear:color,Vector2.zero);
                 if(i==0)continue;
-                int n=i*2;
-                mesh.AddTriangle(n-2,n-1,n);mesh.AddTriangle(n,n-1,n+1);
+                int n=i*3;
+                mesh.AddTriangle(n-3,n-2,n);mesh.AddTriangle(n,n-2,n+1);
+                mesh.AddTriangle(n-2,n-1,n+1);mesh.AddTriangle(n+1,n-1,n+2);
             }
         }
     }

@@ -11,8 +11,102 @@ namespace PuzzleApple.V5.Editor
         public static string Result {get;private set;}
         static void Check(bool ok,string message){if(!ok){Result="FAIL: "+message;throw new Exception(Result);}}
         public static void Run(bool lightFirst=false){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(Run(e,lightFirst));}
-        static IEnumerator Until(Func<bool> predicate)
-        {float end=Time.realtimeSinceStartup+20;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout");}
+        static IEnumerator Until(Func<bool> predicate,[System.Runtime.CompilerServices.CallerLineNumber]int line=0)
+        {float end=Time.realtimeSinceStartup+20;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout at "+line);}
+
+        public static void RunPlatform()
+        {
+            Result="Running";
+            var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            e.StartCoroutine(CheckPlatform(e));
+        }
+        static IEnumerator CheckPlatform(WorldEntry e)
+        {
+            e.OpenWorld(-1);
+            yield return Until(()=>e.room.Opened&&!e.Busy);
+            var j=e.journey;
+            var platform=j.Platform;
+            var p=e.player;
+            var root=j.Root;
+            var state=e.board.State;
+            e.board.Panel.SetOpen(false);
+            // Leave the tutorial exit clear while exercising the rail puzzle in isolation.
+            j.Tutorial.Sphere.localPosition+=Vector3.back*6;
+            Physics.SyncTransforms();
+            float home=platform.transform.localPosition.z;
+            Check(Mathf.Approximately(platform.transform.localScale.z,j.PathWidth),"square deck");
+            yield return FallFrom(j,j.RoomStart-2,false);
+            Check(platform.transform.localPosition.z==home,"platform waits before collecting floor");
+            p.Teleport(root.TransformPoint(new Vector3(0,.12f,j.Tutorial.ExitZ-.4f)),root.rotation);
+            yield return Until(()=>p.GetComponent<CharacterController>().isGrounded);
+            p.view.LookAt(platform.Deck.bounds.center+Vector3.up*platform.Deck.bounds.extents.y);p.AdoptCurrentView();
+            Cursor.lockState=CursorLockMode.Locked;
+            yield return null;
+            var eyeRay=new Ray(p.view.position,p.view.forward);
+            e.chamberLight.PickStar(eyeRay,40,out var aimed);
+            Check(aimed.collider==platform.Deck,"platform sightline first hits "+(aimed.collider?aimed.collider.name:"empty"));
+            e.chamberLight.AdvancePointer(true,true,false,0);e.chamberLight.AdvancePointer(false,false,true,.03f);
+            yield return Until(()=>state.Knows("floor")&&!e.chamberLight.Collecting);
+            Check(platform.transform.localPosition.z==home,"collecting floor leaves platform parked");
+            e.board.Panel.SetOpen(false);
+            p.transform.rotation=root.rotation;
+            Walk(p,Vector2.up,true);
+            Check(p.StandingOn(platform.Deck),"normal jump boards the square");yield return null;
+
+            state.TryAcquireWord("platform.test.move",e.board.Catalog.Word("move"));
+            var floor=state.Spawn(e.board.Catalog.Word("floor"));
+            var move=state.Spawn(e.board.Catalog.Word("move"));
+            state.JoinAndSpeak(move.Id,floor.Id,false);
+            yield return Until(()=>platform.transform.localPosition.z>home+1);
+            yield return new WaitForEndOfFrame();
+            var cameraOffset=p.view.position-platform.transform.position;
+            float maxJitter=0;
+            Vector3 maximumOffset=Vector3.zero;
+            for(int frame=0;frame<90;frame++){
+                yield return new WaitForEndOfFrame();
+                var offset=p.view.position-platform.transform.position-cameraOffset;
+                if(offset.magnitude>maxJitter){maxJitter=offset.magnitude;maximumOffset=offset;}
+            }
+            Check(maxJitter<.003f,"rendered rider stays aligned, maximum offset "+maxJitter+" vector "+maximumOffset);
+            var localRider=platform.transform.InverseTransformPoint(p.transform.position);
+            yield return Until(()=>platform.transform.localPosition.z>home+2);
+            Check(Vector3.Distance(localRider,platform.transform.InverseTransformPoint(p.transform.position))<.05f,"grounded rider follows platform");
+            var detached=state.Detach(floor.Id,floor.Words.Last().Id);
+            float paused=platform.transform.localPosition.z;
+            yield return new WaitForSeconds(.25f);
+            Check(platform.transform.localPosition.z==paused,"split holds exact position");
+            p.transform.rotation=root.rotation;
+            Walk(p,Vector2.right,false);
+            Check(root.InverseTransformPoint(p.transform.position).y<-.3f,"walk sideways off the deck into the abyss");
+            yield return Until(()=>j.InTutorial);
+            p.Teleport(platform.Deck.bounds.center+Vector3.up*.3f,root.rotation);
+            yield return Until(()=>p.StandingOn(platform.Deck));
+            state.JoinAndSpeak(detached.Id,floor.Id,false);
+            yield return Until(()=>platform.transform.localPosition.z>paused+.2f);
+            yield return Until(()=>Vector3.Dot(platform.TravelDirection,root.forward)<0);
+            Check(p.StandingOn(platform.Deck),"rider reaches far dock through reversal");
+            p.transform.rotation=root.rotation;
+            Walk(p,Vector2.up,true);
+            yield return Until(()=>j.InSecondRoom);
+            yield return new WaitForEndOfFrame();
+            yield return FallFrom(j,j.RoomStart-3,true);
+            yield return FallFrom(j,j.Tutorial.ExitZ+3,false);
+            Result="PASS: floor click, jump aboard and ashore, ride, reverse, split and resume, three abyss returns, rendered offset "+maxJitter;
+        }
+        static void Walk(FirstPersonController player,Vector2 input,bool jump)
+        {
+            var advance=typeof(FirstPersonController).GetMethod("AdvanceMovement",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);
+            for(int i=0;i<126;i++)advance.Invoke(player,new object[]{input,true,1f/120,jump&&i==0});
+        }
+        static IEnumerator FallFrom(PassageJourney j,float z,bool expectFar)
+        {
+            var p=j.entry.player;
+            p.Teleport(j.Root.TransformPoint(new Vector3(j.PathWidth*.5f+1,.12f,z)),j.Root.rotation);
+            yield return Until(()=>j.Root.InverseTransformPoint(p.transform.position).y<-1);
+            yield return Until(()=>j.Root.InverseTransformPoint(p.transform.position).y>=0 && !j.Platform.Respawning);
+            float landing=j.Root.InverseTransformPoint(p.transform.position).z;
+            Check(expectFar?landing>j.RoomStart:landing<j.Tutorial.ExitZ,"abyss return at "+z);
+        }
         static IEnumerator Run(WorldEntry e,bool lightFirst)
         {
             bool background=Application.runInBackground;Application.runInBackground=true;
@@ -25,8 +119,12 @@ namespace PuzzleApple.V5.Editor
                 j.SetLights(true);yield return Until(()=>j.Brightness==1);yield return new WaitForEndOfFrame();
                 Check(floor.Surface.sharedMaterial.shader==j.whitePath.shader&&floor.Surface.sharedMaterial.GetFloat("_SurfaceMode")==2&&floor.Surface.sharedMaterial.GetFloat("_Brightness")==1,"shared surface shader preserves white lit floor effects");
                 e.player.view.rotation=Quaternion.LookRotation(Vector3.down,j.Root.forward);e.player.AdoptCurrentView();yield return null;
-                Cursor.lockState=CursorLockMode.Locked;Check(e.chamberLight.TryCollect(),"floor uses normal collection path");yield return Until(()=>!e.chamberLight.Collecting);
+                Cursor.lockState=CursorLockMode.Locked;Check(!e.chamberLight.TryCollect(),"ordinary floor cannot teach floor");
+                e.player.Teleport(j.Platform.Deck.bounds.center+Vector3.up*.32f,j.Root.rotation);
+                yield return null;e.player.view.LookAt(j.Platform.Deck.bounds.center);e.player.AdoptCurrentView();
+                Check(e.chamberLight.TryCollect(),"rail platform teaches floor");yield return Until(()=>!e.chamberLight.Collecting);
                 Check(e.board.State.Knows("floor"),"floor vocabulary learned");
+                e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);yield return null;
                 var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();
                 body.position=j.Root.TransformPoint(new Vector3(-4,.7f,j.RoomStart+8));lamp.direction=Vector3.down;Physics.SyncTransforms();
                 int impacts=floor.ImpactCount;yield return Until(()=>floor.ImpactCount>impacts&&lamp.direction.y>0);
@@ -47,7 +145,7 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>e.feedback.WeakCount>weak);
                 var before=body.position;
                 yield return new WaitForSeconds(.25f);
-                Check(group.Recognized&&!j.floorMotion.Active&&e.feedback.StrongCount==strong&&Vector3.Distance(body.position,before)>.02f,"dark sentence gives grammar feedback while cube drifts");
+                Check(group.Recognized&&!j.floorMotion.Active&&e.feedback.StrongCount==strong&&Vector3.Distance(body.position,before)<.015f,"dark directed sentence waits in place");
                 j.SetLights(true);
                 yield return Until(()=>j.floorMotion.Active);
                 yield return new WaitForFixedUpdate();
@@ -66,7 +164,7 @@ namespace PuzzleApple.V5.Editor
                     j.SetLights(false);yield return Until(()=>j.Brightness==0);
                     yield return new WaitForFixedUpdate();
                     before=body.position;yield return new WaitForSeconds(.2f);
-                    Check(!j.floorMotion.Active&&Vector3.Distance(body.position,before)>.02f,"extinguishing restores autonomous drift");
+                    Check(!j.floorMotion.Active&&Vector3.Distance(body.position,before)<.015f,"extinguishing pauses directed movement");
                 }
                 if(!lightFirst)
                 {
@@ -74,18 +172,21 @@ namespace PuzzleApple.V5.Editor
                     var moveWord=state.Detach(group.Id,group.Words.Last().Id);
                     before=body.position;
                     yield return new WaitForSeconds(.25f);
-                    Check(!e.sentenceRuntime.HasEffect(CognitionSignal.LightMove)&&!body.isKinematic&&Vector3.Distance(body.position,before)>.02f,"fully dismantled sentence preserves dark drift");
+                    Check(!e.sentenceRuntime.HasEffect(CognitionSignal.LightMove)&&body.isKinematic&&Vector3.Distance(body.position,before)<.015f,"fully dismantled directed sentence holds position");
                     state.JoinAndSpeak(moveWord.Id,group.Id,false);
                     state.JoinAndSpeak(floorWord.Id,group.Id,false);
                 }
                 e.board.Panel.SetOpen(false);
-                j.SetLights(true);yield return Until(()=>floor.HoleOpen);Physics.SyncTransforms();
+                j.SetLights(true);
+                yield return Until(()=>j.floorMotion.Completed);
+                yield return Until(()=>state.Find(group.Id)==null);Physics.SyncTransforms();
                 var centre=j.Root.TransformPoint(new Vector3(0,.2f,j.RoomStart+j.roomSize.z*.5f));
-                Check(!Physics.Raycast(centre,Vector3.down,2,~0,QueryTriggerInteraction.Ignore),"centre has no hidden collision floor");
-                Check(Physics.Raycast(centre+j.Root.right*(floor.holeSize*.5f+1),Vector3.down,2,~0,QueryTriggerInteraction.Ignore),"rim remains solid");
+                Check(!floor.HoleOpen && !floor.MuralAvailable,"no hole or wall mural after grounding");
+                Check(Physics.Raycast(centre,Vector3.down,2,~0,QueryTriggerInteraction.Ignore),"solid centre");
+                Check(Physics.Raycast(centre+j.Root.right*(floor.holeSize*.5f+1),Vector3.down,2,~0,QueryTriggerInteraction.Ignore),"solid rim");
                 e.player.Teleport(centre,j.Root.rotation);yield return new WaitForSecondsRealtime(1.2f);
-                Check(e.player.transform.position.y<centre.y-3||e.outdoor&&(e.outdoor.Transitioning||e.outdoor.IsOutside),"native player falls through centre opening into the outdoor passage");
-                Result="PASS (light first="+lightFirst+"): floor collection and native impacts, particles, lit and dark extension feedback, vertical trajectory, relight resumes, solid rim and native player fall";
+                Check(e.player.GetComponent<CharacterController>().isGrounded && !e.outdoor.IsOutside,"standing on the centre stays indoors");
+                Result="PASS: floor collection, impacts, directed movement, dark pause, retirement, solid centre and no mural";
             }
             finally{presentation.enabledShots=shots;Application.runInBackground=background;}
         }

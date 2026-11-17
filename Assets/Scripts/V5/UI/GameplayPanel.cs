@@ -70,7 +70,7 @@ namespace PuzzleApple.V5
             if (!InputBlocked && keyboard != null)
             {
                 if (keyboard.tabKey.wasPressedThisFrame) Toggle();
-                else if (IsOpen && library && library.IsOpen && keyboard.escapeKey.wasPressedThisFrame)
+                else if (IsOpen && library && library.IsOpen && keyboard.escapeKey.wasPressedThisFrame && !(TryGetComponent<ShapePicker>(out var picker) && picker.Open))
                     library.Show(false);
             }
             if (IsOpen || !history || !history.IsVisible)

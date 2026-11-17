@@ -50,7 +50,11 @@ namespace PuzzleApple.V5
             foreach(var pair in lights)if(pair.Key)pair.Key.cullingMask=pair.Value;
             renderers.Clear();lights.Clear();support.enabled=false;
             Isolated=false;entry.room.PortablePlacement=false;
-            if(entry.outdoor&&entry.outdoor.InChapter)SetChapterInterior(true);
+        }
+        public void FinishOpening(FoldingRoom opened)
+        {
+            if(opened==entry.room && opened.Opened && entry.outdoor && entry.outdoor.InChapter)
+                SetChapterInterior(true);
         }
         void SetChapterInterior(bool chapter)
         {

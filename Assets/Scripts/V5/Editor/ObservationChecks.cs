@@ -52,16 +52,18 @@ namespace PuzzleApple.V5.Editor
             Check(Vector3.Distance(before,stars[0].transform.position)>.01f,"stars drift before learning move");
             yield return Until(() =>
             {
+                if(entry.chamberLight.Collecting)return true;
                 foreach(var star in stars)
                 {
                     player.view.LookAt(star.transform);
                     player.AdoptCurrentView();
                     observer.Advance(false,0);
-                    if(observer.Target==journey.ActiveStars.Observation) return true;
+                    if(observer.Target!=journey.ActiveStars.Observation)continue;
+                    observer.Advance(true,journey.ActiveStars.Observation.lesson.holdDuration);
+                    return entry.chamberLight.Collecting;
                 }
                 return false;
             });
-            observer.Advance(true,1);
             Check(entry.chamberLight.Collecting,"hold starts observation collection");
             yield return Until(() => !entry.chamberLight.Collecting);
             Check(state.HasEffect(Cognition.CognitionSignal.LightMove) && entry.board.Panel.IsOpen,"observing a star grants the example");
@@ -74,8 +76,14 @@ namespace PuzzleApple.V5.Editor
             yield return new WaitForSeconds(.25f);
             Check(sphere.position==start && journey.Tutorial.ExitBlocked && !journey.Tutorial.IsLit(collider),
                 "opening with light move leaves the dark sphere blocking the exit");
-            Check(Vector3.Distance(before,small.position)>.01f && journey.Tutorial.IsLit(small.GetComponent<Collider>()),
-                "small lit sphere drifts with light move");
+            Check(small.position==before && journey.Tutorial.IsLit(small.GetComponent<Collider>()),
+                "learning move before opening suppresses the small sphere demonstration");
+            var learned=state.Groups.Single(g=>g.RuleId=="light.move");
+            Check((entry.sentenceRuntime.Scope(learned)&PassageJourney.LightSpace.SphereRoom)==0,"opening a door does not expand the old sentence");
+            player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.pathLength+3)),journey.Root.rotation);
+            yield return Until(()=>journey.InTutorial);
+            var verb=state.Detach(learned.Id,learned.Words.Last().Id);state.JoinAndSpeak(verb.Id,learned.Id,false);
+            yield return Until(()=>entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,PassageJourney.LightSpace.SphereRoom));
             state.TryAcquireSentence("tutorial.check.on","positive light",out var on);
             var lampLight=sphere.GetComponentInChildren<Light>();
             float fullSphere=journey.LightStyle.LampIntensity(sphere.localScale.x);
@@ -109,9 +117,23 @@ namespace PuzzleApple.V5.Editor
             before=sphere.position;
             smallBefore=small.position;
             yield return new WaitForSeconds(.25f);
-            Check(sphere.position==before && Vector3.Distance(smallBefore,small.position)>.01f,
-                "dark small sphere drifts independently while dark blocker holds");
+            Check(sphere.position==before && smallBefore==small.position,
+                "dark tutorial lamps stay still after the motion sentence is split");
+            journey.Tutorial.SetOn(true);
+            yield return Until(()=>!journey.Tutorial.WouldChange(true));
+            smallBefore=small.position;
+            yield return new WaitForSeconds(.25f);
+            Check(sphere.position==before && smallBefore==small.position,
+                "relighting alone leaves the tutorial lamps still");
             yield return CheckBlockedApproach(entry);
+            state.ClearWorkspace();
+            player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.RoomStart+3)),journey.Root.rotation);
+            yield return Until(()=>journey.InSecondRoom);
+            yield return new WaitForFixedUpdate();
+            var cube=journey.Lamps[0].GetComponent<Rigidbody>();
+            before=cube.position;
+            yield return new WaitForSeconds(.3f);
+            Check(cube.isKinematic && cube.position==before,"entering the drifting room with move learned and the sentence dismantled holds the lamps");
             Result = "PASS";
         }
         static IEnumerator CheckBlockedApproach(WorldEntry entry)
@@ -131,14 +153,16 @@ namespace PuzzleApple.V5.Editor
                 sphere.localPosition = start;
                 j.Tutorial.SetOn(true);
                 Physics.SyncTransforms();
-                entry.board.State.TryAcquireSentence("tutorial.check.approach","light door move");
+                entry.board.State.TryAcquireSentence("tutorial.check.approach","light move door");
                 yield return Until(()=>entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightDoorMove));
-                for (int i=0; i<700 && sphere.localPosition.z > j.pathLength+4; i++)
+                // The entire sphere must clear the obstacle, even if other lamps gather beyond it.
+                float beyondBarrier=block.transform.localPosition.z-block.transform.localScale.z*.5f-body.bounds.extents.x-.02f;
+                for (int i=0; i<700 && sphere.localPosition.z >= beyondBarrier; i++)
                 {
                     yield return new WaitForFixedUpdate();
                     CheckClear(body,block.GetComponent<Collider>());
                 }
-                Check(sphere.localPosition.z < j.pathLength+4,"sphere gets past partial barrier");
+                Check(sphere.localPosition.z < beyondBarrier,"sphere gets past partial barrier");
                 sphere.localPosition = start;
                 block.transform.localPosition = new Vector3(0,2.5f,j.pathLength+8);
                 block.transform.localScale = new Vector3(9,6,1);
@@ -241,6 +265,11 @@ namespace PuzzleApple.V5.Editor
                 var acquiredRect=e.board.GroupRect(group.Id);
                 Check(-acquiredRect.anchoredPosition.y>=e.board.Surface.rect.height*.12f,"acquired example stays below the top reserved area");
                 Check(-acquiredRect.anchoredPosition.y+acquiredRect.rect.height<=e.board.Surface.rect.height-7,"acquired example fits in the workspace");
+                if(s.RequirePeriod){
+                    s.Unsay(group.Id);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
+                    Check(!j.LampsMoving && j.Lamps.All(l=>l.GetComponent<Rigidbody>().isKinematic),"removing observed period stops every lamp");
+                    s.Speak(group.Id);yield return Until(()=>j.LampsMoving);
+                }
                 var detached=s.Detach(group.Id,group.Words[1].Id);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
                 Check(!j.LampsMoving&&j.Lamps.All(l=>l.GetComponent<Rigidbody>().isKinematic),"split stops whole group");
                 before=body.position;yield return new WaitForSeconds(.15f);Check(Vector3.Distance(before,body.position)<.001f,"stopped positions stable");
@@ -278,6 +307,14 @@ namespace PuzzleApple.V5.Editor
                 s.TryAcquireSentence("observe.check.relight","positive light");
                 yield return Until(()=>j.Brightness==1);
                 Check(j.LampsMoving&&Vector3.Distance(before,body.position)>.02f,"same movement sentence resumes after relighting");
+                s.ReturnToLibrary(s.Groups.Single(g=>g.RuleId=="light.move").Id,0,true);
+                yield return Until(()=>!j.LampsMoving);
+                j.SetLights(false);yield return Until(()=>j.Brightness==0);
+                j.SetLights(true);yield return Until(()=>j.Brightness==1);
+                before=body.position;
+                yield return new WaitForSeconds(.25f);
+                Check(!j.LampsMoving && body.isKinematic && Vector3.Distance(before,body.position)<.001f,
+                    "relighting without a motion sentence leaves controlled lamps stationary");
                 Result="PASS: dark prelearning motion; group ray; hold/release/look/panel interruption; acquisition and tab; split/rejoin; known observation; noun coexistence; on/off light";
             }
             finally{o.enabled=true;e.sentenceRuntime.presentation.enabledShots=shots;Application.runInBackground=background;}

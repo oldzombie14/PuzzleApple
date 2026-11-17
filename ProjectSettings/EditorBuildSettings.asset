@@ -26,6 +26,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/V5/ChapterI_Garden.unity
     guid: fbcc5bd9f28c40c40a1f04393475dd09
+  - enabled: 1
+    path: Assets/Scenes/V5/ChapterI_Vitruvian.unity
+    guid: 630b88fd85489024db300fb461549633
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

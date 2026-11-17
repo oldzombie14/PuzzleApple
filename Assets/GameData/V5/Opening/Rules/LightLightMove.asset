@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f936b4fc28ab47899e1d89c6f99e1d2a, type: 3}
   m_Name: LightLightMove
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.CognitionRule
-  id: light.light.move
+  id: light.move.light
   words:
   - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
-  - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
   - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+  - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
   effect: 15
   additionalEffects: 
   trigger: 0
-  kind: 0
+  kind: 1
   channel: light.motion

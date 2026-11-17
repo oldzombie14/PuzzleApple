@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace PuzzleApple.V5
 {
-    public sealed class MoveTutorialRoom : MonoBehaviour, ISwitchableLight, ISentenceMovable
+    public sealed class MoveTutorialRoom : MonoBehaviour, ISwitchableLight, ISentenceMovable, IBrightenableLight
     {
         // The shell is lit only by the spheres' real lights plus this room's RoomLightBalance fill.
         public RoomLightBalance Fill { get; private set; }
@@ -18,7 +18,10 @@ namespace PuzzleApple.V5
             public Light light;
             public Vector3 direction;
             public float level;
-            public bool isOn;
+            public bool isOn,parked;
+            public float blockedTime;
+            public CognitionSignal lastMotion;
+            public int relitRevision=-1;
         }
 
         PassageJourney journey;
@@ -38,6 +41,7 @@ namespace PuzzleApple.V5
         public Transform Sphere => sphere.surface.transform;
         public Renderer EntranceWall { get; private set; }
         public bool AnyLit => lamps.Exists(lamp => lamp.isOn);
+        bool IBrightenableLight.Lit => AnyLit;
         // Brightest sphere glow, 0 dark to 1 lit; drives the sphere-sourced "move" memory.
         public float SphereBrightness => Mathf.SmoothStep(0, 1, lamps.Count == 0 ? 0 : lamps.Max(lamp => lamp.level));
         public bool ExitBlocked
@@ -206,7 +210,7 @@ namespace PuzzleApple.V5
 
         public bool CanDirect(CognitionSignal signal)
         {
-            return lamps.Exists(lamp => lamp.isOn && CanDirect(lamp,signal));
+            return lamps.Exists(lamp => lamp.isOn && (lamp.lastMotion!=signal || lamp.blockedTime<.45f) && CanDirect(lamp,signal));
         }
         // light move drifts any lit sphere; directed motions need a sphere that can reach its target.
         public bool CanMove(CognitionSignal motion) => motion==CognitionSignal.LightMove ? AnyLit
@@ -218,12 +222,29 @@ namespace PuzzleApple.V5
             var ext=t.localScale*.5f;
             switch(signal)
             {
+                case CognitionSignal.LightLightMove:return (ClusterTarget(lamp)-t.localPosition).sqrMagnitude>.0001f;
                 case CognitionSignal.LightFloorMove:return t.localPosition.y>ext.y+.031f;
                 case CognitionSignal.LightDoorMove:return Vector3.Distance(t.localPosition,new Vector3(0,ext.y+.03f,journey.pathLength+ext.z+.3f))>.01f;
                 default:return false;
             }
         }
 
+        Vector3 ClusterTarget(Lamp lamp)
+        {
+            var p=lamp.surface.transform.localPosition;
+            Lamp nearest=null;
+            float best=float.PositiveInfinity;
+            foreach(var other in lamps){
+                if(other==lamp || !other.isOn)continue;
+                float distance=(other.surface.transform.localPosition-p).sqrMagnitude;
+                if(distance<best){nearest=other;best=distance;}
+            }
+            if(nearest==null)return p;
+            var delta=nearest.surface.transform.localPosition-p;
+            float stop=(lamp.size+nearest.size)*.5f+.15f;
+            return p+delta.normalized*Mathf.Max(0,delta.magnitude-stop);
+        }
+        public bool IsFloor(Collider hit)=>hit && shell.Contains(hit.GetComponent<Renderer>()) && hit.name.EndsWith("Floor");
         public bool IsLit(Collider hit) => lamps.Exists(lamp => hit==lamp.collider && lamp.isOn);
         // Spheres currently showing motion, observable for learning "move".
         public Collider[] MovingSpheres() => lamps.Where(Moving).Select(lamp => lamp.collider).ToArray();
@@ -232,14 +253,17 @@ namespace PuzzleApple.V5
             targetOn = on;
             fading = true;
             foreach(var lamp in lamps)
-                if (on || lamp.level == 0) lamp.isOn = on;
+            {
+                if(on && !lamp.isOn && lamp!=sphere)lamp.relitRevision=journey.RelitDriftRevision(PassageJourney.LightSpace.SphereRoom);
+                if(on || lamp.level==0)lamp.isOn=on;
+            }
         }
         public void Hold() { fading=false; }
 
         void Render(Lamp lamp)
         {
             float level = Mathf.SmoothStep(0,1,lamp.level);
-            float boost = journey.entry.sentenceRuntime ? journey.entry.sentenceRuntime.LampMultiplier : 1;
+            float boost = journey.entry.sentenceRuntime ? journey.entry.sentenceRuntime.LampBoost(PassageJourney.LightSpace.SphereRoom) : 1;
             properties.Clear();
             properties.SetColor("_BaseColor",Color.Lerp(new Color(.12f,.12f,.12f),baseColor,level));
             properties.SetColor("_EmissionColor",emission*(level*boost));
@@ -274,17 +298,24 @@ namespace PuzzleApple.V5
 
         bool Moving(Lamp lamp)
         {
-            if (lamp != sphere) return journey.DemonstrationLampMoving(lamp.isOn);
-            return lamp.isOn && journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightMove);
+            if (lamp.parked && !journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightMove,PassageJourney.LightSpace.SphereRoom))return false;
+            if (lamp != sphere) return journey.DemonstrationLampMoving(lamp.isOn,lamp.relitRevision,PassageJourney.LightSpace.SphereRoom);
+            return lamp.isOn && journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightMove,PassageJourney.LightSpace.SphereRoom);
         }
 
         void FixedUpdate()
         {
             if (journey.entry.portableClosure && journey.entry.portableClosure.Isolated) return;
             if (journey.entry.sentenceRuntime.MotionFrozen) return;
-            bool connected = journey.InTutorial || journey.InCorridor && (journey.InReturnPath || journey.DoorProgress > 0);
+            bool connected = journey.enabled;
             if (connected)
                 foreach(var lamp in lamps) Step(lamp);
+        }
+
+        void Impact(Lamp lamp, Vector3 point, Vector3 normal)
+        {
+            // Let the wave expand well beyond the silhouette of the lamp that made it.
+            if(lamp.isOn)edges.Impact(point,normal,journey.floorSurface,1.6f+lamp.size*.85f);
         }
 
         void Step(Lamp lamp)
@@ -295,6 +326,13 @@ namespace PuzzleApple.V5
             Vector3 hi=new Vector3(HalfWidth,height,ExitZ-.15f)-ext;
             var runtime=journey.entry.sentenceRuntime;
             float step=journey.entry.chamberLight.moveSpeed*Time.fixedDeltaTime;
+            const PassageJourney.LightSpace space=PassageJourney.LightSpace.SphereRoom;
+            var motion=runtime.HasEffect(CognitionSignal.LightFloorMove,space)?CognitionSignal.LightFloorMove:
+                runtime.HasEffect(CognitionSignal.LightDoorMove,space)?CognitionSignal.LightDoorMove:
+                runtime.HasEffect(CognitionSignal.LightLightMove,space)?CognitionSignal.LightLightMove:CognitionSignal.Empty;
+            if(lamp.lastMotion!=motion){lamp.blockedTime=0;lamp.lastMotion=motion;}
+            if(motion!=CognitionSignal.Empty)lamp.parked=true;
+            if(runtime.HasEffect(CognitionSignal.LightMove,space))lamp.parked=false;
             bool drifting=Moving(lamp);
             Vector3 target;
             if(drifting)
@@ -304,8 +342,9 @@ namespace PuzzleApple.V5
                 target = p + direction * step;
             }
             else if(!lamp.isOn)return;
-            else if(runtime.HasEffect(CognitionSignal.LightFloorMove))target=Vector3.MoveTowards(p,new Vector3(p.x,ext.y+.03f,p.z),step);
-            else if(runtime.HasEffect(CognitionSignal.LightDoorMove))target=Vector3.MoveTowards(p,new Vector3(0,ext.y+.03f,journey.pathLength+ext.z+.3f),step);
+            else if(motion==CognitionSignal.LightLightMove)target=Vector3.MoveTowards(p,ClusterTarget(lamp),step);
+            else if(runtime.HasEffect(CognitionSignal.LightFloorMove,PassageJourney.LightSpace.SphereRoom))target=Vector3.MoveTowards(p,new Vector3(p.x,ext.y+.03f,p.z),step);
+            else if(runtime.HasEffect(CognitionSignal.LightDoorMove,PassageJourney.LightSpace.SphereRoom))target=Vector3.MoveTowards(p,new Vector3(0,ext.y+.03f,journey.pathLength+ext.z+.3f),step);
             else return;
             // The sphere starts seated in the opening. Allow its first motion to slide clear.
             if(p.z>hi.z)hi.z=p.z;
@@ -320,18 +359,24 @@ namespace PuzzleApple.V5
                 lamp.direction=Vector3.Reflect(lamp.direction,normal);
                 var contact=target;
                 contact[axis]-=normal[axis]*ext[axis];
-                if(lamp.isOn)edges.Impact(journey.Root.TransformPoint(contact),journey.Root.TransformDirection(normal),journey.floorSurface);
+                Impact(lamp,journey.Root.TransformPoint(contact),journey.Root.TransformDirection(normal));
             }
             Vector3 offset = journey.Root.TransformVector(target - p);
-            if (lamp.isOn && !drifting && runtime.HasEffect(CognitionSignal.LightDoorMove))
+            if (lamp.isOn && !drifting && runtime.HasEffect(CognitionSignal.LightDoorMove,PassageJourney.LightSpace.SphereRoom))
                 offset = DirectedMotion.ApproachStep(offset, d => DirectedMotion.SphereStepClear(lamp.collider,d,false));
-            else if (!DirectedMotion.SphereStepClear(lamp.collider,offset,false,out var worldNormal))
+            else if (!DirectedMotion.SphereStepClear(lamp.collider,offset,false,out var worldNormal,out var obstacle))
             {
                 var normal=journey.Root.InverseTransformDirection(worldNormal);
                 if (drifting && normal.sqrMagnitude>0 && Vector3.Dot(lamp.direction,normal)<0)
+                {
                     lamp.direction=Vector3.Reflect(lamp.direction,normal);
+                    if (obstacle && (shell.Contains(obstacle.GetComponent<Renderer>()) || obstacle.transform==journey.Door))
+                        Impact(lamp,obstacle.ClosestPoint(t.position),worldNormal);
+                }
+                if(!drifting)lamp.blockedTime+=Time.fixedDeltaTime;
                 return;
             }
+            if(!drifting)lamp.blockedTime=offset.sqrMagnitude<.0000001f?lamp.blockedTime+Time.fixedDeltaTime:0;
             t.position += offset;
         }
     }

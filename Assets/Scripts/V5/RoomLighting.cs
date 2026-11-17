@@ -22,14 +22,17 @@ namespace PuzzleApple.V5
         [Range(0,1)] public float unfoldedSpotContribution=.25f;
         [Tooltip("Measures the unfolded chamber's lights; its style sets the shared room fill rule.")]
         public RoomLightBalance chamberFill;
-        [Tooltip("Share of the far room's fill that reaches the corridor through the fully open door.")]
-        [Range(0,1)] public float openDoorFill=.9f;
+        [Tooltip("Share of the sphere room's fill that reaches the corridor through the fully open door.")]
+        [Range(0,1)] public float openDoorFill=1;
         public static float AdvanceLevel(float current, float target, float step)
         {
             float dark = 1 - Mathf.Clamp01(current);
-            if (target < current) step *= 1 + 2.5f*dark*dark;
+            if (target < current) step *= 1 + 1.5f*dark*dark;
             return Mathf.MoveTowards(current,target,step);
         }
+        public Color FoldingAmbient(Color unfolded, float blend)=>Color.Lerp(closedAmbient,unfolded,blend);
+        public float FoldingIntensity(float unfolded, float blend)=>Mathf.Lerp(closedIntensity,unfolded,blend);
+
         void LateUpdate()
         {
             // Indoor lighting must not inherit the outdoor scene's coloured gradient.
@@ -40,7 +43,7 @@ namespace PuzzleApple.V5
                 if(spotlights[i])
                 {
                     float scale=openIntensityMultipliers!=null&&i<openIntensityMultipliers.Length?Mathf.Max(0,openIntensityMultipliers[i]):1;
-                    spotlights[i].intensity=Mathf.Lerp(closedIntensity,openIntensity*scale*unfoldedSpotContribution,blend)*lamp;
+                    spotlights[i].intensity=FoldingIntensity(openIntensity*scale*unfoldedSpotContribution,blend)*lamp;
                 }
             if(interiorFill)
             {
@@ -55,12 +58,18 @@ namespace PuzzleApple.V5
             var view=journey?journey.entry.player.view:Camera.main?Camera.main.transform:null;
             if(view&&RoomLightBalance.FillAt(view.position,out float fill,out float weight))
                 outside=Color.Lerp(dim,Color.white*fill,weight);
-            if(journey&&journey.FarRoomFill&&journey.InCorridor)
+            // In a corridor, take the fill of the room it opens into: the sphere room through the
+            // white door, the far room through its always-open doorway.
+            if(journey&&journey.InCorridor)
             {
-                float far=Mathf.Lerp(dim.r,journey.FarRoomFill.Fill,openDoorFill*journey.DoorProgress);
+                var ahead=journey.InReturnPath?journey.FarRoomFill:journey.Tutorial?journey.Tutorial.Fill:null;
+                float open=journey.InReturnPath?1:journey.DoorProgress;
+                float far=ahead?Mathf.Lerp(dim.r,ahead.Fill,openDoorFill*open):dim.r;
                 if(far>outside.r)outside=Color.white*far;
             }
-            RenderSettings.ambientLight=Color.Lerp(closedAmbient,outside,blend);
+            RenderSettings.ambientLight=FoldingAmbient(outside,blend);
+            // Room surfaces (World Surface) take their own room's fill; the chamber fades in as it unfolds.
+            if(chamberFill){chamberFill.closedFill=closedAmbient;chamberFill.openness=blend;}
             // Keep the fog shader variant ready from the initial menu frame.
             RenderSettings.fog=true;RenderSettings.fogColor=Color.black;RenderSettings.fogMode=FogMode.ExponentialSquared;
             RenderSettings.fogDensity=journey&&journey.ViewBeyondChamber&&room.Opened?

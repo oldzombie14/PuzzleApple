@@ -44,42 +44,7 @@ Shader "PuzzleApple/V5/Folding Panel"
                 return float4(0,0,0,1);
             return VisibleFace(cs,normalOS);
         }
-        // Keep the part descending through the opening visible against the ground.
-        // Preserve its projected silhouette and its occlusion by objects above ground.
-        float4 GroundDepth(float4 cs,float3 ws)
-        {
-            if(_PreserveMeshDepth>.5)return cs;
-            float below=_PanelGroundY+.075-ws.y;
-            if(below>0)
-            {
-                float3 view=GetWorldSpaceNormalizeViewDir(ws);
-                if(view.y>.001)
-                {
-                    // Compress the depth below grade into a thin layer. Its ordering
-                    // stays strictly monotonic, including across adjacent panel faces.
-                    float lift=.985*below;
-                    float3 contact=ws+view*min(lift/view.y,distance(ws,GetCameraPositionWS())*.99);
-                    float4 groundCS=TransformWorldToHClip(contact);
-                    cs.z=cs.w*groundCS.z/groundCS.w;
-                }
-            }
-            return cs;
-        }
-        float CutDepth(float2 xz)
-        {
-            float2 p=xz-_PanelSink.xy;
-            float radius=length(p);
-            float reach=max(_PanelSink.z,.001);
-            float t=1-_PanelOpacity;
-            float swell=.34*sin(dot(p,float2(.68,.29))+2*t)
-                       +.17*sin(dot(p,float2(-.35,.84))-1.4*t);
-            float u=saturate(radius/reach);
-            return radius + 4*u*(1-u)*swell - _PanelSink.w;
-        }
-        void ClipPanel(float2 xz)
-        {
-            if(_PanelOpacity<1)clip(min(_PanelOpacity-.000001,-CutDepth(xz)));
-        }
+        #include "PanelCut.hlsl"
         ENDHLSL
         Pass
         {
@@ -102,7 +67,7 @@ Shader "PuzzleApple/V5/Folding Panel"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
             float4 _InteriorTint,_ContactSeams;
-            float _P5FloorGlow;
+            #include "SentenceGlow.hlsl"
             float _ClosedWeight,_DarkLevel,_SeamCore,_CoreWidthPixels;
             Varyings PanelVertex(Attributes input)
             {
@@ -127,7 +92,7 @@ Shader "PuzzleApple/V5/Folding Panel"
                 float inward=step(.99,dot(normalize(n),_InteriorNormal.xyz));
                 float closed=inward*_ClosedWeight;
                 result.rgb=lerp(result.rgb,_InteriorTint.rgb*_DarkLevel,closed);
-                if(_InteriorNormal.y>.9)result.rgb+=_P5FloorGlow*inward;
+                if(_InteriorNormal.y>.9)result.rgb+=FloorSentenceGlow(input.positionWS)*inward;
                 float2 width=max(sqrt(ddx(input.uv)*ddx(input.uv)+ddy(input.uv)*ddy(input.uv)),.000001);
                 float4 dist=float4(input.uv.x,1-input.uv.x,input.uv.y,1-input.uv.y)/width.xxyy;
                 float4 bands=saturate(_CoreWidthPixels+.5-dist)*_ContactSeams;

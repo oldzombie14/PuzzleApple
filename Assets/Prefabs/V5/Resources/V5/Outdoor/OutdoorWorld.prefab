@@ -287,7 +287,6 @@ MonoBehaviour:
   collectionDistance: 65
   spawnDistance: 42
   suspendedHeight: 18
-  releaseLandingTolerance: 0.5
   rippleMaterial: {fileID: 0}
   rippleDuration: 2.4
   rippleRadius: 12
@@ -804,6 +803,7 @@ GameObject:
   - component: {fileID: 8532679947210715084}
   - component: {fileID: 571962348360965690}
   - component: {fileID: 1252194603931915316}
+  - component: {fileID: 78165300344190012}
   m_Layer: 0
   m_Name: OutdoorWorld
   m_TagString: Untagged
@@ -966,10 +966,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Outdoor.DoorSentenceEffects
   door: {fileID: 8993058665766572989}
   appearance: {fileID: 7797622950857480738}
-  lights: {fileID: 569272943747219410}
   ground: {fileID: 3434786923376003867}
-  pursuitSpeed: 3.5
-  arrivalDistance: 1.4
 --- !u!114 &571962348360965690
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1451,3 +1448,20 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 7416219976241568263, guid: 5ef9e88056e49a8418734cafb53cf764, type: 3}
   m_PrefabInstance: {fileID: 4143722818009993328}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &78165300344190012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3173975111226390605}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17ea2e55e5114af6949d1408c5965b63, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.WorldDropRegion
+  allowInstantiation: 1
+  words:
+  - light
+  shapes: 000000000100000002000000
+  maxInstances: 24

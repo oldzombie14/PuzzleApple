@@ -16,6 +16,18 @@ namespace PuzzleApple.V5
         readonly Dictionary<int,string> conflicts=new Dictionary<int,string>();
         readonly Dictionary<int,string> pendingTakeovers=new Dictionary<int,string>();
         readonly HashSet<CognitionSignal> applied=new HashSet<CognitionSignal>();
+        sealed class MotionScope
+        {
+            public int owner;
+            public string rule;
+            public PassageJourney.LightSpace rooms;
+        }
+        readonly List<MotionScope> pausedScopes=new List<MotionScope>();
+        readonly Dictionary<long,MotionScope> motionScopes=new Dictionary<long,MotionScope>();
+        readonly Dictionary<long,PassageJourney.LightSpace> scopes=new Dictionary<long,PassageJourney.LightSpace>();
+        readonly Dictionary<CognitionSignal,PassageJourney.LightSpace> appliedScopes=new Dictionary<CognitionSignal,PassageJourney.LightSpace>();
+        public PassageJourney.LightSpace Scope(CognitionState.Group group)=>scopes.TryGetValue(group.Established,out var space)?space:0;
+        public bool HasEffect(CognitionSignal signal,PassageJourney.LightSpace space)=>appliedScopes.TryGetValue(signal,out var scope)&&(scope&space)!=0;
         readonly HashSet<long> requested=new HashSet<long>();
         readonly HashSet<long> rejected=new HashSet<long>();
         int revision;
@@ -26,6 +38,7 @@ namespace PuzzleApple.V5
         static SentenceKind Kind(CognitionState.Group g)=>g.Rule?g.Rule.Kind:SentenceKind.Sustained;
         static bool WorldFlow(CognitionState.Group g)=>Kind(g)==SentenceKind.WorldFlow;
         static bool Motion(CognitionState.Group g)=>g.Rule&&g.Rule.Motion;
+        public float WorldExposure=>illumination?illumination.WorldExposure:0;
         public float FloorIllumination=>illumination?illumination.FloorIllumination:0;
 
         float runningTimeScale;
@@ -47,19 +60,30 @@ namespace PuzzleApple.V5
 
         public void ChangeSpace()
         {
-            // A retained room command does not re-fire merely because the player arrived.
-            lightState.ChangeSpace(entry.board.State.Groups);doorState.ChangeSpace();
+            pausedScopes.Clear();
+            doorState.ChangeSpace();
             illumination.Apply(this);
         }
         bool observationTransferred;
         public float LampMultiplier => illumination ? illumination.LampMultiplier : 1;
+        public float LampBoost(PassageJourney.LightSpace space)=>illumination?illumination.LampBoost(space):1;
         public bool HasEffect(CognitionSignal effect)=>applied.Contains(effect);
+        public bool Owns(CognitionSignal signal,PassageJourney.LightSpace space,long established)
+        {
+            foreach(var g in entry.board.State.Groups)
+                if(g.Established==established && g.Effective && previous.TryGetValue(g.Id,out var rule) && rule==g.RuleId && g.Signal==signal && (Scope(g)&space)!=0)return true;
+            return false;
+        }
+        public int LightMotionRevision(PassageJourney.LightSpace space)=>motion.Revision(space);
+        public bool HasLampMotion(PassageJourney.LightSpace space)=>motion.HasLampMotion(space);
+        public bool ControlsLamps(PassageJourney.LightSpace space)=>motion!=null&&motion.Controls(space);
         public bool PlayerDirectedLampMotion=>motion!=null&&motion.PlayerDirectedLampMotion;
         public void Initialize(WorldEntry owner)
         {
             entry=owner;
             entry.feedback.runtime=this;
             illumination=gameObject.AddComponent<IlluminationEffects>();
+            illumination.Bind(this);
             lightState=new LightStateEffect(owner);
             doorState=new DoorStateEffect(owner);
             motion=new MotionEffect(owner);
@@ -69,6 +93,39 @@ namespace PuzzleApple.V5
             if(!presentation.settings)presentation.settings=Resources.Load<SentencePresentationSettings>("V5/SentencePresentation");
             var lesson=entry.journey&&entry.journey.movementObservation?entry.journey.movementObservation.lesson:null;
             observationTransferred=lesson&&entry.board.State!=null&&entry.board.State.HasAcquired(lesson.acquisitionId);
+        }
+        PassageJourney.LightSpace ResumeScope(CognitionState.Group group,PassageJourney.LightSpace here)
+        {
+            int index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && p.owner==group.Id);
+            if(index<0)index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && (p.rooms&here)!=0);
+            if(index<0)return 0;
+            var saved=pausedScopes[index];pausedScopes.RemoveAt(index);
+            return (saved.rooms&here)!=0?saved.rooms:0;
+        }
+        void LockScopes(CognitionState state)
+        {
+            foreach(var key in scopes.Keys.Where(key=>!state.Groups.Any(g=>g.Recognized && (g.Established==key || g.PausedEstablishment==key))).ToArray()){
+                if(motionScopes.TryGetValue(key,out var saved)){
+                    pausedScopes.RemoveAll(p=>p.rule==saved.rule && p.rooms==saved.rooms);
+                    pausedScopes.Add(saved);motionScopes.Remove(key);
+                }
+                scopes.Remove(key);
+            }
+            foreach(var group in state.Groups.Where(g=>g.Recognized && g.Established>0)){
+                if(scopes.ContainsKey(group.Established))continue;
+                PassageJourney.LightSpace rooms;
+                if(group.PausedEstablishment>0 && scopes.TryGetValue(group.PausedEstablishment,out rooms)){
+                    scopes.Remove(group.PausedEstablishment);
+                    motionScopes.Remove(group.PausedEstablishment);
+                    group.PausedEstablishment=0;
+                }else{
+                    var here=entry.journey?entry.journey.PlayerSpace:PassageJourney.LightSpace.Chamber;
+                    rooms=Motion(group)?ResumeScope(group,here):0;
+                    if(rooms==0)rooms=entry.journey?entry.journey.SentenceScope():here;
+                }
+                scopes[group.Established]=rooms;
+                if(Motion(group))motionScopes[group.Established]=new MotionScope{owner=group.Id,rule=group.RuleId,rooms=rooms};
+            }
         }
         public void Refresh(CognitionChange kind)
         {
@@ -80,7 +137,7 @@ namespace PuzzleApple.V5
                 .Where(g=>!MotionFrozen || !WorldFlow(g)
                     || (previous.TryGetValue(g.Id,out var activeRule) && activeRule==g.RuleId))
                 .OrderBy(g=>g.Established).ToArray();
-            lightState.Rescope(groups);
+            LockScopes(state);
             if(state.RequirePeriod){
                 var acceptedIds=groups.Select(g=>g.Established);
                 var rejectedIds=state.Groups.Where(g=>g.Conflicted).Select(g=>g.Established);
@@ -146,13 +203,14 @@ namespace PuzzleApple.V5
         bool VisibleChange(CognitionState.Group g)
         {
             if(MotionFrozen&&Motion(g))return false;
-            if(g.Signals.All(s=>applied.Contains(s)))return false;
+            if(g.Signals.All(s=>appliedScopes.TryGetValue(s,out var active) && (active&Scope(g))==Scope(g)))return false;
             return HasSceneEffect(g);
         }
 
         public bool SustainsFeedback(CognitionState.Group g)
         {
-            if(Kind(g)!=SentenceKind.Sustained)return false;
+            if(Kind(g)!=SentenceKind.Sustained || (g.Signal!=CognitionSignal.FreezeMotion && g.Signal!=CognitionSignal.IlluminateWorld && (Scope(g)&entry.journey.PlayerSpace)==0))return false;
+            if(Motion(g) && !motion.CanMove(g,HasEffect,Scope(g)&entry.journey.PlayerSpace))return false;
             return EffectInProgress(g);
         }
 
@@ -164,7 +222,7 @@ namespace PuzzleApple.V5
             if(!previous.TryGetValue(g.Id,out var rule)||rule!=g.RuleId||g.Signals.Count==0)return false;
             // One applied effect has one feedback owner. A surviving duplicate can take over.
             foreach(var other in entry.board.State.Groups)
-                if(other.Effective && other.RuleId==rule && other.Established<g.Established)return false;
+                if(other.Effective && other.RuleId==rule && other.Established<g.Established && (Scope(other)&Scope(g))==Scope(g))return false;
             return HasSceneEffect(g);
         }
         bool HasSceneEffect(CognitionState.Group g)
@@ -172,28 +230,14 @@ namespace PuzzleApple.V5
             if(g.Signal==CognitionSignal.FreezeMotion)return true;
             if(LightStateEffect.Handles(g))return lightState.WouldChange(g);
             if(DoorStateEffect.Handles(g))return doorState.WouldChange(g);
+            if(g.Signal==CognitionSignal.MirrorCopy || g.Signal==CognitionSignal.MirrorMove){
+                var pass=entry.outdoor;
+                var room=(Scope(g)&PassageJourney.LightSpace.Gallery)!=0?pass.Chapter:
+                    (Scope(g)&PassageJourney.LightSpace.Vitruvian)!=0?pass.Vitruvian:null;
+                return room && room.mirrors && room.mirrors.HasTargets;
+            }
             if(MotionEffect.Handles(g))return motion.CanMove(g,HasEffect);
-            if(entry.outdoor&&entry.outdoor.InChapter)
-            {
-                var chapter=entry.outdoor.CurrentRoom;
-                switch(g.RuleId)
-                {
-                    case "light.light":return chapter.Brightness>0;
-                }
-                return g.Signals.Any(s=>s==CognitionSignal.IlluminateWorld||s==CognitionSignal.IlluminateDoor||s==CognitionSignal.IlluminateFloor);
-            }
-            var j=entry.journey;
-            switch(g.Signal)
-            {
-                case CognitionSignal.IlluminateLight:
-                    if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.stateSource.Brightness>0;
-                    if(j&&j.InTutorial)return j.Tutorial.AnyLit;
-                    if(j&&j.InCorridor)return j.CorridorBrightness>0;
-                    return j&&j.InSecondRoom?j.Brightness>0:entry.chamberLight.Brightness>0;
-                case CognitionSignal.IlluminateWorld:
-                case CognitionSignal.IlluminateDoor:
-                case CognitionSignal.IlluminateFloor:return true;
-            }
+            if(IlluminationEffects.Handles(g))return illumination.WouldChange(g);
             return false;
         }
         public void FinishCommand(int id)
@@ -201,15 +245,20 @@ namespace PuzzleApple.V5
             var group=entry.board.State.Find(id);
             if(group!=null)StartCoroutine(Retire(group,group.Established));
         }
-        IEnumerator Retire(CognitionState.Group group,long established)
+        public void RetireFoldedReflection(CognitionState.Group group)
+        {
+            StartCoroutine(Retire(group,group.Established,true));
+        }
+        IEnumerator Retire(CognitionState.Group group,long established,bool finished=false)
         {
             var board=entry.board;
             float elapsed=0,duration=Mathf.Max(.1f,entry.feedback.duration);
             yield return null;
             while(board.State.Find(group.Id)==group && group.Established==established && group.Effective)
             {
-                bool inProgress=lightState.TrySettling(group,out bool settling)?settling:EffectInProgress(group);
-                if(inProgress){yield return null;continue;}
+                bool inProgress=!finished && (lightState.TrySettling(group,out bool settling)?settling:EffectInProgress(group));
+                if(Motion(group) && (MotionFrozen || motion.WaitingForLight(group,Scope(group))))inProgress=true;
+                if(inProgress){elapsed=0;board.SetSentenceOpacity(group.Id,1);yield return null;continue;}
                 if(LightStateEffect.Commands(group,false) && !board.Panel.IsOpen) elapsed=duration;
                 else elapsed+=Time.unscaledDeltaTime;
                 float opacity=1-Mathf.SmoothStep(0,1,elapsed/duration);
@@ -231,14 +280,20 @@ namespace PuzzleApple.V5
             committedRevision=revision;
             previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
             foreach(var g in groups)pendingTakeovers.Remove(g.Id);
-            applied.Clear();foreach(var g in groups)foreach(var signal in g.Signals)applied.Add(signal);
-            motion.Commit(entry.board.State,HasEffect);
+            applied.Clear();appliedScopes.Clear();
+            foreach(var g in groups)foreach(var signal in g.Signals) {
+                applied.Add(signal);
+                appliedScopes.TryGetValue(signal,out var mask);
+                appliedScopes[signal]=mask|Scope(g);
+            }
+            motion.Commit(entry.board.State,groups);
             illumination.Apply(this);
             lightState.Commit(groups,added);
             if(entry.outdoor&&entry.outdoor.IsOutside)entry.outdoor.World.ApplyMotion(HasEffect,kind==CognitionChange.Split);
             doorState.Commit(groups,added);
             foreach(var g in added)
             {
+                if(g.Signal==CognitionSignal.DoorMove && (Scope(g)&PassageJourney.LightSpace.FarRoom)!=0)entry.journey.EndingDoor?.StartCycle(g.Established);
                 if(Kind(g)==SentenceKind.Command)FinishCommand(g.Id);
                 else if(WorldFlow(g)&&g.Signals.Contains(CognitionSignal.WorldOn))entry.OpenWorld(g.Id);
                 else if(WorldFlow(g)&&g.Signals.Contains(CognitionSignal.WorldOff))entry.CloseWorldFromSentence(g.Id);

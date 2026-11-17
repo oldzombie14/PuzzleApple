@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 namespace PuzzleApple.V5
 {
-    public sealed class ChamberLight : MonoBehaviour, ISwitchableLight, ISentenceMovable
+    public sealed class ChamberLight : MonoBehaviour, ISwitchableLight, ISentenceMovable, IBrightenableLight
     {
         public WorldEntry entry;
         public Renderer surface;
@@ -32,9 +32,10 @@ namespace PuzzleApple.V5
         ObservableBehaviour cubeMotion;
         Vector3 moveDirection,roomMin,roomMax;
         public bool Moving=>Brightness>0&&entry&&entry.Entered&&entry.room.Opened&&entry.sentenceRuntime&&
-            entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)&&
-            (!entry.journey||!entry.journey.BeyondChamber)&&(!entry.outdoor||!entry.outdoor.IsOutside)&&
+            entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,PassageJourney.LightSpace.Chamber)&&
+            (!entry.outdoor||!entry.outdoor.IsOutside&&!entry.outdoor.InChapter)&&
             (!entry.portableClosure||!entry.portableClosure.Isolated);
+        public Vector3 RoomCentre=>(roomMin+roomMax)*.5f;
         Material material;
         Color onEmission,onColor;
         readonly RaycastHit[] collectionHits=new RaycastHit[32];
@@ -43,7 +44,7 @@ namespace PuzzleApple.V5
         Color eyeColor;
         [Min(.05f)] public float clickDuration=.25f;
         string pressedWord;
-        bool pointerGesture;
+        bool pointerGesture,altarPressed;
         float pointerDuration;
         void Awake(){material=surface.material;onEmission=material.GetColor("_EmissionColor");onColor=material.GetColor("_BaseColor");material.EnableKeyword("_EMISSION");hoverEye.gameObject.SetActive(false);collectionSymbol.gameObject.SetActive(false);if(reticle)reticle.SetActive(false);}
         void Start()
@@ -74,7 +75,7 @@ namespace PuzzleApple.V5
             var own=GetComponent<Collider>();if(own)Physics.IgnoreCollision(own,entry.player.GetComponent<CharacterController>());
             moveDirection=new Vector3(.6f,.65f,.45f).normalized;
             roomMin=new Vector3(-14,0,-14);roomMax=new Vector3(14,15.92f,14);
-            edges=FindObjectsByType<OuterRoomEdges>(FindObjectsSortMode.None).FirstOrDefault(e=>e.surfaces?.Length==6);
+            edges=FindObjectsByType<OuterRoomEdges>(FindObjectsSortMode.None).FirstOrDefault(e=>e.surfaces?.Length==6 && !e.GetComponentInParent<PassageJourney>());
             if(edges&&edges.surfaces!=null)
             {
                 foreach(var wall in edges.surfaces)
@@ -131,6 +132,7 @@ namespace PuzzleApple.V5
         public bool WouldChange(bool on)=>Mathf.Abs(Brightness-(on?1:0))>.001f;
         public bool Settling(bool on)=>Brightness!=(on?1:0);
         void ISwitchableLight.Hold()=>HoldCurrentState();
+        bool IBrightenableLight.Lit=>Brightness>0;
         public bool CanMove(Cognition.CognitionSignal motion)=>motion==Cognition.CognitionSignal.LightMove&&Brightness>0;
         public bool LookingAtLight()
         {
@@ -149,6 +151,7 @@ namespace PuzzleApple.V5
             if(!hit.collider)return null;
             if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.CurrentRoom.WordAt(hit.collider,out emitter);
             if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null){if(word=="light")emitter=hit.collider.GetComponent<Renderer>();return word;}}
+            if(hit.distance<=7 && entry.board.State.Knows("floor") && edges && edges.surfaces.Contains(hit.collider.GetComponent<Renderer>()) && hit.normal.y>.9f && hit.point.y<RoomCentre.y)return "floor";
             if((!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
             return null;
         }
@@ -165,19 +168,24 @@ namespace PuzzleApple.V5
                 if(hits[i].distance<closest){hit=hits[i];closest=hits[i].distance;}
                 if(entry.journey&&!entry.journey.IsRail(hits[i].collider))starReach=Mathf.Min(starReach,hits[i].distance);
             }
+            var ascent=entry.journey?entry.journey.Ascent:null;
+            if(ascent && ascent.Stars && entry.journey.enabled && !ascent.Playing && !entry.journey.EndingDoor.Paused){
+                var star=ascent.Stars.Pick(ray,Mathf.Min(reach,closest));
+                if(star)return star;
+            }
             return entry.journey && entry.journey.InCorridor && entry.journey.ActiveStars
                 ? entry.journey.ActiveStars.Pick(ray,starReach) : null;
         }
         void Update()
         {
             if(TransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,TargetOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,fadeDuration));
-            material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness)*entry.sentenceRuntime.LampMultiplier);
+            material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness)*entry.sentenceRuntime.LampBoost(PassageJourney.LightSpace.Chamber));
             material.SetColor("_BaseColor",Color.Lerp(new Color(.015f,.015f,.015f),onColor,Brightness));
             if(cubeMotion)cubeMotion.Available=Moving&&TargetOn&&Brightness>=.999f;
             var mouse=Mouse.current;
             AdvancePointer(mouse!=null&&mouse.leftButton.wasPressedThisFrame,
                 mouse!=null&&mouse.leftButton.isPressed,mouse!=null&&mouse.leftButton.wasReleasedThisFrame,Time.unscaledDeltaTime);
-            string word=LookedAtWord();bool target=word!=null;
+            string word=LookedAtWord();bool target=word!=null || entry.journey && entry.journey.Ascent && entry.journey.Ascent.LookingAtSymbol();
             bool showingKnown=knownSymbol&&knownSymbol.gameObject.activeSelf;
             bool action=observer&&observer.Showing;
             hoverEye.gameObject.SetActive((target||action)&&!showingKnown);
@@ -187,6 +195,13 @@ namespace PuzzleApple.V5
         // Ordinary nouns collect on press; observable targets reserve release for click/hold arbitration.
         public void AdvancePointer(bool pressed,bool held,bool released,float deltaTime)
         {
+            if(entry.journey && entry.journey.Ascent && entry.journey.Ascent.LookingAtSymbol()){
+                if(pressed){altarPressed=true;pointerGesture=false;pressedWord=null;pointerDuration=0;}
+                if(altarPressed && (held||released))pointerDuration+=deltaTime;
+                if(released && altarPressed){altarPressed=false;if(pointerDuration<clickDuration)entry.journey.Ascent.Ignite();}
+                return;
+            }
+            altarPressed=false;
             if(pressed)
             {
                 pointerGesture=entry.player.CanInteractWithWorld&&!Collecting&&!entry.Busy&&!entry.ConfirmingExit;
@@ -280,7 +295,6 @@ namespace PuzzleApple.V5
         IEnumerator Collect(string id,Cognition.ObservationLesson lesson=null,bool wordOnly=false)
         {
             Collecting=true;hoverEye.gameObject.SetActive(false);if(reticle)reticle.SetActive(false);
-            var p=entry.player;bool locked=p.MovementLocked;p.MovementLocked=true;
             entry.board.Panel.InputBlocked=true;
             var word=entry.board.Catalog.Word(id);
             var rect=collectionSymbol.rectTransform;collectionSymbol.sprite=word.Symbol;collectionSymbol.gameObject.SetActive(true);
@@ -298,7 +312,7 @@ namespace PuzzleApple.V5
             if(lesson&&!wordOnly)entry.board.State.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence,out acquired);
             else entry.board.State.TryAcquireWord("collect."+id,word);
             if(acquired!=null)entry.board.PlaceAcquiredSentence(acquired.Id);
-            p.MovementLocked=locked;entry.board.Panel.InputBlocked=false;Collecting=false;
+            entry.board.Panel.InputBlocked=false;Collecting=false;
             if(acquired!=null)
             {
                 var panel=entry.board.Panel;

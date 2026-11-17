@@ -8,6 +8,7 @@ namespace PuzzleApple.V5
         public Material floorMaterial;
         [Header("Carved wall mural")]
         [Tooltip("Linear RGB tangent normals, alpha recess occlusion. Uses the bundled bake when empty.")]
+        public bool showMural;
         public Texture2D muralNormal;
         public Vector2 muralSize=new Vector2(11,3.1875f);
         [UnityEngine.Serialization.FormerlySerializedAs("hintHeight")]
@@ -15,7 +16,7 @@ namespace PuzzleApple.V5
         [Range(0,1)] public float muralRelief=.7f,muralCavity=.42f;
         [Tooltip("Local mural shading direction: horizontal, vertical, out of wall.")]
         public Vector3 muralLightDirection=new Vector3(-.42f,.64f,.64f);
-        public bool MuralAvailable=>muralNormal;
+        public bool MuralAvailable=>showMural && muralNormal;
         [Min(.1f)] public float rippleDuration=1.2f,rippleSpeed=1.6f;
         [Range(1,4)] public int ringCount=2;
         [Min(.01f)] public float ringSpacing=.34f,ringWidth=.03f;
@@ -56,7 +57,6 @@ namespace PuzzleApple.V5
         public void Build(Renderer surface)
         {
             Surface=surface;FloorCollider=surface.GetComponent<Collider>();
-            if(!muralNormal)muralNormal=Resources.Load<Texture2D>("V5/Murals/GravityMuralNormal");
             ink=new Material(floorMaterial);Surface.sharedMaterial=ink;
             for(int i=0;i<hits.Length;i++)hits[i]=new Vector4(0,0,0,-1000);
             var go=new GameObject("Floor impact squares",typeof(ParticleSystem));go.transform.SetParent(journey.Root,false);
@@ -77,7 +77,7 @@ namespace PuzzleApple.V5
                 if(child.name!="Room far wall"&&child.name!="Room side wall"&&child.name!="Door wall"&&child.name!="Door lintel"&&child.name!="Room ceiling")continue;
                 var wall=new WallInk{collider=child.GetComponent<Collider>(),material=new Material(floorMaterial),plane=child.name=="Room ceiling"?0:child.name=="Room side wall"?2:1};
                 wall.material.SetFloat("_Plane",wall.plane);wall.material.SetVector("_Hole",Vector4.zero);
-                bool mural=child.name=="Room far wall"&&muralNormal;
+                bool mural=showMural && child.name=="Room far wall"&&muralNormal;
                 wall.material.SetFloat("_MuralEnabled",mural?1:0);
                 if(mural)
                 {
@@ -108,25 +108,28 @@ namespace PuzzleApple.V5
             if(HoleOpen||holeOpening||!FloorCollider)return;
             holeOpening=true;
             for(int i=0;i<4;i++)Rim(Vector3.zero,Vector3.one);
-            UpdateHole(0);FloorCollider.enabled=false;
+            UpdateHole();FloorCollider.enabled=false;
         }
         public float HoleWidth=>Mathf.Clamp(holeSize,1,Mathf.Min(journey.roomSize.x,journey.roomSize.z)-2);
+        public event System.Action<float> OpeningResized;
+        public float OpenWidth=>HoleWidth*Mathf.SmoothStep(0,1,HoleProgress);
         public float HoleCentreZ=>journey.RoomStart+journey.roomSize.z*.5f;
         public bool FitsOpening(Vector3 local,float radius)
         {
-            float clearance=HoleWidth*.5f*Mathf.SmoothStep(0,1,HoleProgress)-radius;
+            float clearance=OpenWidth*.5f-radius;
             return clearance>0&&Mathf.Abs(local.x)<clearance&&Mathf.Abs(local.z-HoleCentreZ)<clearance;
         }
-        void UpdateHole(float progress)
+        void UpdateHole()
         {
-            float size=HoleWidth*Mathf.SmoothStep(0,1,progress);
-            float half=size*.5f,width=journey.roomSize.x,front=journey.RoomStart-.1f,back=journey.RoomStart+journey.roomSize.z;
+            float size=OpenWidth;
+            float half=size*.5f,width=journey.roomSize.x,front=journey.RoomStart-.15f,back=journey.RoomStart+journey.roomSize.z;
             float centre=HoleCentreZ;
             SetRim(0,new Vector3(-(width*.5f+half)*.5f,-.15f,(front+back)*.5f),new Vector3((width-size)*.5f,.3f,back-front));
             SetRim(1,new Vector3((width*.5f+half)*.5f,-.15f,(front+back)*.5f),new Vector3((width-size)*.5f,.3f,back-front));
             SetRim(2,new Vector3(0,-.15f,(front+centre-half)*.5f),new Vector3(Mathf.Max(.001f,size),.3f,centre-half-front));
             SetRim(3,new Vector3(0,-.15f,(centre+half+back)*.5f),new Vector3(Mathf.Max(.001f,size),.3f,back-centre-half));
-            ink.SetVector("_Hole",new Vector4(0,centre,half,progress>0?1:0));
+            ink.SetVector("_Hole",new Vector4(0,centre,half,HoleProgress>0?1:0));
+            OpeningResized?.Invoke(size);
         }
         void SetRim(int index,Vector3 position,Vector3 size)
         {var box=(BoxCollider)rim[index];box.transform.localPosition=position;box.size=size;}
@@ -173,7 +176,7 @@ namespace PuzzleApple.V5
         void LateUpdate()
         {
             if(!ink)return;
-            if(holeOpening){HoleProgress=Mathf.MoveTowards(HoleProgress,1,Time.deltaTime/holeOpenDuration);UpdateHole(HoleProgress);if(HoleProgress>=1){holeOpening=false;HoleOpen=true;}}
+            if(holeOpening){HoleProgress=Mathf.MoveTowards(HoleProgress,1,Time.deltaTime/holeOpenDuration);UpdateHole();if(HoleProgress>=1){holeOpening=false;HoleOpen=true;}}
             Configure(ink,hits);
             foreach(var wall in walls)Configure(wall.material,hits);
         }
@@ -182,6 +185,7 @@ namespace PuzzleApple.V5
             ink.SetMatrix("_WorldToFloor",journey.Root.worldToLocalMatrix);ink.SetVectorArray("_Impacts",impacts);
             ink.SetVector("_RoomBounds",new Vector4(journey.roomSize.x*.5f-.15f,journey.roomSize.y,journey.RoomStart+.15f,journey.roomSize.z-.3f));
             ink.SetFloat("_RoomOpeningWidth",journey.PathWidth);
+            ink.SetFloat("_RoomExitWidth",journey.EndingDoor?journey.EndingDoor.MouthWidth:0);
             ink.SetFloat("_Brightness",1);
             ink.SetFloat("_RippleDuration",rippleDuration);ink.SetFloat("_RippleSpeed",rippleSpeed);
             ink.SetFloat("_RingCount",ringCount);ink.SetFloat("_RingSpacing",ringSpacing);ink.SetFloat("_RingWidth",ringWidth);ink.SetFloat("_RippleStrength",rippleStrength);

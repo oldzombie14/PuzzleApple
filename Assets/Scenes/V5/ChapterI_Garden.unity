@@ -1952,6 +1952,61 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 849290239}
   m_Mesh: {fileID: -632075202380717846, guid: 7c6ac9c87b3823045b8300489748ee67, type: 3}
+--- !u!1 &871217122
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 871217123}
+  - component: {fileID: 871217124}
+  m_Layer: 0
+  m_Name: Portrait room fill
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &871217123
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 871217122}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 1000, y: 9.505, z: -5.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1950599796}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &871217124
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 871217122}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 742c599eee1a49b4fa58c2b6b08df054, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.RoomLightBalance
+  style: {fileID: 11400000, guid: 47f4311313ef1804ea26889e82b66be5, type: 2}
+  interior:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 13.15, y: 9.5, z: 13.65}
+  blendDistance: 1.5
+  reflectance: 0.1
+  lightsInside: 3
+  lightOutput: 88.1459
+  surfaceArea: 3472.7798
+  fill: 1.1199187
+  tint: {r: 1, g: 0.8866573, b: 0.7781217, a: 1}
 --- !u!1 &885579947
 GameObject:
   m_ObjectHideFlags: 0
@@ -6202,8 +6257,8 @@ Light:
   serializedVersion: 12
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 2
-  m_Range: 4
+  m_Intensity: 3.4000003
+  m_Range: 11.063454
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -6497,6 +6552,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1416191278}
   - component: {fileID: 1416191279}
+  - component: {fileID: 78165300344190012}
   m_Layer: 0
   m_Name: Garden entry
   m_TagString: Untagged
@@ -6533,7 +6589,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.ChapterRoom
   arrival: {fileID: 1895601552}
-  returnFrame: {fileID: 0}
   gardenThreshold: {fileID: 0}
   paintingFixture: {fileID: 0}
   paintingLens: {fileID: 0}
@@ -6546,6 +6601,8 @@ MonoBehaviour:
   emitter: {fileID: 963884908}
   bulb: {fileID: 1329055677}
   artLights: []
+  roomFill: {fileID: 871217124}
+  boxFill: {fileID: 0}
 --- !u!64 &1590380604
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -7176,6 +7233,7 @@ Transform:
   - {fileID: 660101321}
   - {fileID: 683110234}
   - {fileID: 1166188804}
+  - {fileID: 871217123}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1966460118
@@ -7615,3 +7673,20 @@ SceneRoots:
   m_Roots:
   - {fileID: 1416191278}
   - {fileID: 1950599796}
+--- !u!114 &78165300344190012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1416191276}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17ea2e55e5114af6949d1408c5965b63, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.WorldDropRegion
+  allowInstantiation: 0
+  words:
+  - light
+  shapes: 000000000100000002000000
+  maxInstances: 24

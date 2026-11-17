@@ -1436,10 +1436,12 @@ MonoBehaviour:
     m_Center: {x: 0, y: 0, z: 0}
     m_Extent: {x: 14, y: 7.96, z: 14}
   blendDistance: 2
+  reflectance: 1
   lightsInside: 5
   lightOutput: 1.9858894
   surfaceArea: 3351.04
-  fill: 0.11275437
+  fill: 0.123950884
+  tint: {r: 1, g: 1, b: 1, a: 1}
 --- !u!4 &272402998
 Transform:
   m_ObjectHideFlags: 0
@@ -3332,7 +3334,7 @@ MonoBehaviour:
   lightStyle: {fileID: 0}
   emissionStrength: 1.8
   lampSpeed: 1.2
-  lightFadeDuration: 1.5
+  lightFadeDuration: 1.7
   doorDuration: 1.65
   openAngle: 135
   doorCollectionDistance: 10
@@ -6335,7 +6337,7 @@ MonoBehaviour:
   closedAmbient: {r: 0.006, g: 0.006, b: 0.006, a: 1}
   unfoldedSpotContribution: 0.4
   chamberFill: {fileID: 272402997}
-  openDoorFill: 0.9
+  openDoorFill: 1
 --- !u!4 &806281953
 Transform:
   m_ObjectHideFlags: 0
@@ -11791,7 +11793,7 @@ MonoBehaviour:
   hud: {fileID: 916423651}
   observer: {fileID: 1885891472}
   collectionDistance: 40
-  fadeDuration: 1.2
+  fadeDuration: 1.4
   wordDisplayDuration: 1.6
   wordFadeInDuration: 0.3
   wordFlyDuration: 0.6

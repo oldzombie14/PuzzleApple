@@ -26,6 +26,7 @@ namespace PuzzleApple.V5.Cognition
             public bool Independent => words.Count == 1;
             public bool Recognized { get; internal set; }
             public bool Conflicted { get; internal set; }
+            public int RejectedAttempts {get; internal set;}
             public bool Spoken { get; internal set; }
             public bool Effective => Recognized && Spoken && !Conflicted;
             public long PausedEstablishment { get; internal set; }
@@ -65,6 +66,7 @@ namespace PuzzleApple.V5.Cognition
         public void SetPeriodMode(bool enabled){
             if(RequirePeriod==enabled)return;
             RequirePeriod=enabled;
+            foreach(var group in groups)group.RejectedAttempts=0;
             Commit(CognitionChange.Join);
         }
         public CognitionState(CognitionCatalog catalog,bool requirePeriod=false)
@@ -111,6 +113,7 @@ namespace PuzzleApple.V5.Cognition
             foreach (var d in definitions) learned.Add(d.Id);
             acquired=NewGroup(definitions.Select(d => new Word(++nextWord, d)));
             acquired.Spoken=true;
+            if(RequirePeriod && !rules.ContainsKey(Key(acquired.words)))acquired.RejectedAttempts=1;
             Commit(CognitionChange.Add,acquired);
             return true;
         }
@@ -131,7 +134,7 @@ namespace PuzzleApple.V5.Cognition
         {
             var g=Find(groupId);
             if(!RequirePeriod || g==null || g.Independent || g.Spoken)return false;
-            if(!g.Recognized){RecordAttempt(g);Changed?.Invoke(CognitionChange.Layout);return false;}
+            if(!g.Recognized)g.RejectedAttempts++;
             g.Spoken=true;
             Commit(CognitionChange.Join,g);
             return true;
@@ -142,6 +145,7 @@ namespace PuzzleApple.V5.Cognition
             if(!RequirePeriod || g==null || !g.Spoken)return false;
             g.PausedEstablishment=g.Established;
             g.Spoken=false;
+            g.RejectedAttempts=0;
             Commit(CognitionChange.Split);
             return true;
         }
@@ -149,6 +153,7 @@ namespace PuzzleApple.V5.Cognition
         {
             if(!RequirePeriod)return;
             group.Spoken=false;
+            group.RejectedAttempts=0;
             group.PausedEstablishment=0;
         }
         public void ReturnToLibrary(int groupId, int wordId, bool whole)
@@ -235,7 +240,7 @@ namespace PuzzleApple.V5.Cognition
                 group.Signals = group.Recognized ? rules[key].Effects.Distinct().ToArray() : Array.Empty<CognitionSignal>();
                 group.Rule = group.Recognized ? rules[key] : null;
                 group.RuleId = group.Recognized ? rules[key].Id : null;
-                if(!RequirePeriod || !group.Recognized)group.Spoken=group.Recognized;
+                if(!RequirePeriod)group.Spoken=group.Recognized;
                 if(!group.Recognized || !group.Spoken)group.Established=0;
                 else if(group.RuleId!=previousRule || group.Established==0)group.Established=++chronology;
                 group.Conflicted = false;

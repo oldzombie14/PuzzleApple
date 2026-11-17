@@ -10,6 +10,9 @@ namespace PuzzleApple.V5
         public Shader floorPortalShader;
         public UnityEngine.Rendering.Volume glowVolume;
         [Min(8)] public float pathLength=26;
+        [Min(0)] public float platformDockGap=.8f;
+        [Min(.1f)] public float platformSpeed=2.2f;
+        public PassagePlatform Platform {get;private set;}
         public Vector3 roomSize=new Vector3(16,8,18);
         [Range(2,24)] public int lampCount=10;
         public Vector2 lampScaleRange=new Vector2(.12f,.35f);
@@ -31,14 +34,29 @@ namespace PuzzleApple.V5
         public ObservableBehaviour movementObservation;
         public FloorImpactSurface floorSurface;
         public FloorDirectedMotion floorMotion;
-        public bool LampsMoving=>DemonstrationLampMoving(Brightness > 0);
+        public bool LampsMoving=>entry && entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(LightSpace.FarRoom)
+            ? entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,LightSpace.FarRoom)
+            : DemonstrationLampMoving(Brightness>0);
+        // A brightness command preserves an autonomous drift until the player changes the motion sentence.
+        public int RelitDriftRevision(LightSpace space)=>entry.sentenceRuntime.HasLampMotion(space)?-1:entry.sentenceRuntime.LightMotionRevision(space);
         // Shared by the drifting room and the corridor stars: learning only the verb
         // does not transfer the preset motion to player-owned sentences.
-        public bool DemonstrationLampMoving(bool isOn)=>entry&&entry.board&&entry.board.State!=null&&movementObservation&&
-            (entry.sentenceRuntime&&(entry.sentenceRuntime.PlayerDirectedLampMotion||
-                movementObservation.lesson&&entry.board.State.HasAcquired(movementObservation.lesson.acquisitionId))
-                ? !isOn||entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove)
-                : movementObservation.HasEffect(entry.board.State,entry.board.Catalog,Cognition.CognitionSignal.LightMove));
+        LightSpace roomsIntroduced, roomsWithMoveKnown;
+        void IntroduceRoom(LightSpace space)
+        {
+            if((roomsIntroduced & space)!=0)return;
+            roomsIntroduced |= space;
+            if(entry.board.State.Knows("move"))roomsWithMoveKnown |= space;
+        }
+        public bool DemonstrationLampMoving(bool isOn,int relitRevision=-1,LightSpace space=LightSpace.FarRoom)
+        {
+            if((roomsWithMoveKnown & space)!=0)
+                return isOn && entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,space);
+            return entry&&entry.board&&entry.board.State!=null&&movementObservation&&
+            (entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(space)
+                ? !isOn||relitRevision==entry.sentenceRuntime.LightMotionRevision(space)||entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,space)
+                : movementObservation.Demonstrates(entry.board.Catalog,Cognition.CognitionSignal.LightMove));
+        }
         [Tooltip("Prototype choice, not a final design restriction.")]
         public bool allowCorridorClosure=true;
         public bool BeyondChamber {get;private set;}
@@ -48,6 +66,7 @@ namespace PuzzleApple.V5
         public bool InTutorial {get;private set;}
         public bool InReturnPath {get;private set;}
         public bool InCorridor=>BeyondChamber&&!InSecondRoom&&!InTutorial;
+        public CorridorStars ReturnStars=>secondStars;
         public CorridorStars ActiveStars=>InReturnPath?secondStars:Stars;
         [SerializeField] CorridorStars firstStars, secondStars;
         public float DoorwayLighting {get;private set;}
@@ -55,11 +74,13 @@ namespace PuzzleApple.V5
         public bool DoorOpen {get;private set;}
         public float DoorProgress {get;private set;}
         public bool LightsOn {get;private set;}
-        public bool LampsLit=>LightsOn&&Brightness>=.999f;
+        public bool LampsLit=>Brightness>0;
         public float Brightness {get;private set;}
         public bool LightTransitionEnabled {get;private set;}
         public bool DoorTransitionEnabled {get;private set;}
         public Transform Root {get;private set;}
+        public WhiteAscent Ascent {get;private set;}
+        public ChargeDoor EndingDoor {get;private set;}
         public Transform Door {get;private set;}
         public IReadOnlyList<DriftingLight> Lamps=>lamps;
         readonly List<DriftingLight> lamps=new List<DriftingLight>();
@@ -80,12 +101,13 @@ namespace PuzzleApple.V5
         bool cycleOpening = true;
 
         readonly List<Renderer> roomEdges=new List<Renderer>();
-        Renderer doorLeaf;
+        Renderer doorLeaf,hingePin;
         MaterialPropertyBlock doorSurface;
         Mesh doorMesh;
-        Material[] openDoorMaterials, closedDoorMaterials;
-        bool doorConcealed;
-        MaterialPropertyBlock backSurface;
+        MaterialPropertyBlock backSurface, coverSurface;
+        // The room-side face keeps the wall's material; an overlay with the handle side's finish fades in as the door opens.
+        Renderer doorCover;
+        Material coverMaterial;
 
         Color emission;
         Color initialBackground;
@@ -107,7 +129,7 @@ namespace PuzzleApple.V5
             float pathStart=wallThickness*.5f;
             corridorMaterial=new Material(whitePath);
             if(openingEdgeMaterial)doorEdge=new Material(openingEdgeMaterial);
-            BuildPath(pathStart, pathLength-.1f, openingHeight, corridorMaterial, doorEdge);
+            BuildPath(pathStart, pathLength-.15f, openingHeight, corridorMaterial, doorEdge);
             lampInk=new Material(lampMaterial);emission=lampInk.GetColor("_EmissionColor");
             lampInk.EnableKeyword("_EMISSION");
             lampInk.SetFloat("_EnvironmentReflections",0);lampInk.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
@@ -116,12 +138,12 @@ namespace PuzzleApple.V5
             Tutorial.Build(this, openingHeight,lampInk);
             returnMaterial=new Material(whitePath);
             if(openingEdgeMaterial)returnEdge=new Material(openingEdgeMaterial);
-            BuildPath(Tutorial.ExitZ, RoomStart, openingHeight, returnMaterial, returnEdge);
+            BuildPath(Tutorial.ExitZ+.15f, RoomStart-.15f, openingHeight, returnMaterial, returnEdge, true);
             // The entrance, path, door leaf and destination opening share one size.
             float doorWidth=width,doorHeight=openingHeight;
             doorHinge=new GameObject("Door hinge").transform;
             doorHinge.SetParent(Root,false);
-            doorHinge.localPosition=new Vector3(-doorWidth*.5f,0,pathLength-.15f);
+            doorHinge.localPosition=new Vector3(-doorWidth*.5f,0,pathLength-.23f);
             doorLeaf=Block("White hinged door",new Vector3(0,doorHeight*.5f,pathLength),new Vector3(doorWidth,doorHeight,.3f),corridorMaterial);
             Door=doorLeaf.transform;
             Door.SetParent(doorHinge,true);
@@ -130,7 +152,7 @@ namespace PuzzleApple.V5
             var knob=GameObject.CreatePrimitive(PrimitiveType.Sphere);
             knob.name="Round handle";
             knob.transform.SetParent(doorHinge,false);
-            knob.transform.localPosition=new Vector3(doorWidth-.32f,doorHeight*.43f,-.10f);
+            knob.transform.localPosition=new Vector3(doorWidth-.32f,doorHeight*.43f,-.02f);
             knob.transform.localScale=Vector3.one*.26f;
             knob.gameObject.layer=29;
             var knobRenderer=knob.GetComponent<Renderer>();
@@ -139,6 +161,14 @@ namespace PuzzleApple.V5
             knobInk.SetFloat("_CorridorPureWhite",pureWhiteCorridor?1:0);
             knobInk.SetFloat("_RoundOutline",1);
             knobRenderer.SetPropertyBlock(knobInk);
+            var pin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pin.name = "Door hinge pin";
+            pin.transform.SetParent(doorHinge, false);
+            pin.transform.localPosition = Vector3.up * (doorHeight * .5f);
+            pin.transform.localScale = new Vector3(.25f, doorHeight * .39f, .25f);
+            pin.layer = Door.gameObject.layer;
+            hingePin=pin.GetComponent<Renderer>();
+            hingePin.sharedMaterial=doorLeaf.sharedMaterial;
             doorColliders = doorHinge.GetComponentsInChildren<Collider>();
             doorPlayer = entry.player.GetComponent<CharacterController>();
             UpdateDoorAppearance();
@@ -154,7 +184,7 @@ namespace PuzzleApple.V5
                     if(depth>0){roomEdges.Add(upright);roomEdges.Add(cross);upright.enabled=cross.enabled=false;}
                 }
             }
-            float roomStart=RoomStart-.1f;
+            float roomStart=RoomStart-.15f;
             float sideWidth=(roomSize.x-doorWidth)*.5f;
             foreach(float side in new[]{-1f,1f})
                 RoomBlock("Door wall",new Vector3(side*(doorWidth*.5f+sideWidth*.5f),roomSize.y*.5f,RoomStart),new Vector3(sideWidth,roomSize.y,.3f),Vector3.forward);
@@ -162,9 +192,16 @@ namespace PuzzleApple.V5
             RoomBlock("Room floor",new Vector3(0,-.15f,(roomStart+RoomStart+roomSize.z)*.5f),new Vector3(roomSize.x,.3f,RoomStart+roomSize.z-roomStart),Vector3.up);
             if(floorSurface)floorSurface.Build(Root.Find("Room floor").GetComponent<Renderer>());
             RoomBlock("Room ceiling",new Vector3(0,roomSize.y+.15f,RoomStart+roomSize.z*.5f),new Vector3(roomSize.x,.3f,roomSize.z),Vector3.down);
-            RoomBlock("Room far wall",new Vector3(0,roomSize.y*.5f,RoomStart+roomSize.z),new Vector3(roomSize.x,roomSize.y,.3f),Vector3.back);
+            EndingDoor=Instantiate(Resources.Load<GameObject>("V5/IntroEnding"),Root,false).GetComponent<ChargeDoor>();
+            EndingDoor.Build(this);
+            Ascent=EndingDoor.GetComponentInChildren<WhiteAscent>();Ascent.Build(this,EndingDoor);
+            float farZ=RoomStart+roomSize.z,opening=EndingDoor.MouthWidth,top=EndingDoor.MouthHeight;
+            float wing=(roomSize.x-opening)*.5f;
+            foreach(float side in new[]{-1f,1f})RoomBlock("Room far wall",new Vector3(side*(opening+wing)*.5f,roomSize.y*.5f,farZ),new Vector3(wing,roomSize.y,.3f),Vector3.back);
+            RoomBlock("Room far wall",new Vector3(0,(top+roomSize.y)*.5f,farZ),new Vector3(opening,roomSize.y-top,.3f),Vector3.back);
             foreach(float side in new[]{-1f,1f})RoomBlock("Room side wall",new Vector3(side*roomSize.x*.5f,roomSize.y*.5f,RoomStart+roomSize.z*.5f),new Vector3(.3f,roomSize.y,roomSize.z),Vector3.left*side);
             if(floorSurface)floorSurface.BuildWalls();
+            EndingDoor.BindSurfaces(Root.Find("Room far wall").GetComponent<Renderer>(),Root.Find("Room floor").GetComponent<Renderer>());
             FarRoomFill=RoomLightBalance.Create(Root,"Far room light balance",new Vector3(0,roomSize.y*.5f,RoomStart+roomSize.z*.5f),roomSize,LightStyle);
             for(int i=0;i<lampCount;i++)
             {
@@ -172,7 +209,7 @@ namespace PuzzleApple.V5
                 var r=Block("Drifting light "+i,new Vector3(Random.Range(-roomSize.x*.4f,roomSize.x*.4f),Random.Range(1,roomSize.y-1),RoomStart+Random.Range(1,roomSize.z-1)),Vector3.one*scale,lampInk);
                 var go=r.gameObject;go.layer=29;go.transform.rotation=Quaternion.FromToRotation(Vector3.one.normalized,Vector3.down);
                 go.GetComponent<BoxCollider>().enabled=false;Destroy(go.GetComponent<BoxCollider>());var sphere=go.AddComponent<SphereCollider>();sphere.radius=.65f;
-                var motion=go.AddComponent<DriftingLight>();motion.journey=this;motion.speed=lampSpeed;
+                var motion=go.AddComponent<DriftingLight>();motion.journey=this;motion.speed=lampSpeed;motion.SlotIndex=i;
                 var lightObject=new GameObject("Soft local light",typeof(Light));lightObject.transform.SetParent(go.transform,false);
                 var light=lightObject.GetComponent<Light>();light.type=LightType.Point;light.range=LightStyle.LampRange(LightStyle.LampIntensity(scale));light.intensity=0;light.shadows=LightShadows.Soft;light.cullingMask=~0;motion.glow=light;
                 r.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;lamps.Add(motion);
@@ -188,10 +225,17 @@ namespace PuzzleApple.V5
             secondStars.Bind(this, Tutorial.ExitZ, openingHeight, .3f, returnMaterial, returnEdge);
             ApplyLight();
         }
-        void BuildPath(float pathStart,float roomStart,float h,Material pathMaterial,Material edge)
+        void BuildPath(float pathStart,float roomStart,float h,Material pathMaterial,Material edge,bool movingFloor=false)
         {
             float centre=(pathStart+roomStart)*.5f, length=roomStart-pathStart;
-            var path=Block("White path",new Vector3(0,-.15f,(pathStart+roomStart)*.5f),new Vector3(pathWidth,.3f,roomStart-pathStart),pathMaterial);
+            float inset=Mathf.Min(length*.5f,pathWidth*.5f+platformDockGap);
+            var path=Block(movingFloor?"Rail platform":"White path",new Vector3(0,-.15f,movingFloor?pathStart+inset:centre),
+                new Vector3(pathWidth,.3f,movingFloor?pathWidth:length),pathMaterial);
+            if(movingFloor)
+            {
+                Platform=path.gameObject.AddComponent<PassagePlatform>();
+                Platform.Bind(this,pathStart+inset,roomStart-inset);
+            }
             var pathSurface=new MaterialPropertyBlock();pathSurface.SetFloat("_FrontWhite",0);
             pathSurface.SetColor("_ShadeColor",new Color(.42f,.42f,.42f,1));
             pathSurface.SetFloat("_CorridorPureWhite",pureWhiteCorridor?1:0);path.SetPropertyBlock(pathSurface);
@@ -199,16 +243,18 @@ namespace PuzzleApple.V5
             foreach(float side in new[]{-1f,1f})
             {
                 Block("Black surround",new Vector3(side*14,5,centre),new Vector3(.2f,14,length),blackSurround);
+                if(movingFloor)continue;
                 var rail=Block("Path boundary",new Vector3(side*(pathWidth*.5f+.1f),2,centre),new Vector3(.2f,4,length),blackSurround);
                 rail.enabled=false;
                 rails.Add(rail.GetComponent<Collider>());
             }
             Block("Black above",new Vector3(0,12,centre),new Vector3(28,.2f,length),blackSurround);
-            Block("Black below",new Vector3(0,-2,centre),new Vector3(28,.2f,length),blackSurround);
+            var below=Block("Black below",new Vector3(0,movingFloor?-8:-2,centre),new Vector3(28,.2f,length),blackSurround);
+            if(movingFloor)below.GetComponent<Collider>().enabled=false;
             if(!edge)return;
-            if(pathStart>1)
+            if(movingFloor)
             {
-                foreach(float end in new[]{pathStart,roomStart})
+                foreach(float end in new[]{Tutorial.ExitZ,RoomStart})
                 foreach(float depth in new[]{-.16f,.16f})
                 foreach(float sign in new[]{-1f,1f})
                 {
@@ -285,8 +331,67 @@ namespace PuzzleApple.V5
             public MotionTarget(System.Func<Cognition.CognitionSignal,bool> test) { canMove=test; }
             public bool CanMove(Cognition.CognitionSignal motion) => canMove(motion);
         }
+        // "light light" targets per space; the lamps read SentenceRuntime.LampMultiplier themselves.
+        BrightenTarget corridorGlow, farRoomGlow;
+        public IBrightenableLight CorridorGlow => corridorGlow ??= new BrightenTarget(() => CorridorBrightness>0);
+        public IBrightenableLight FarRoomGlow => farRoomGlow ??= new BrightenTarget(() => Brightness>0);
+        sealed class BrightenTarget : IBrightenableLight
+        {
+            readonly System.Func<bool> lit;
+            public BrightenTarget(System.Func<bool> test) { lit=test; }
+            public bool Lit => lit();
+        }
         [System.Flags]
-        public enum LightSpace { Chamber=1, FirstPath=2, SphereRoom=4, ReturnPath=8, FarRoom=16, All=31 }
+        public enum LightSpace { Chamber=1, FirstPath=2, SphereRoom=4, ReturnPath=8, FarRoom=16, All=31, Outdoor=32, Gallery=64, Garden=128, Vitruvian=256 }
+
+        [Min(1)] public float maxScopeDistance=30;
+        [Range(5,90)] public float scopeHalfAngle=60;
+        public LightSpace PlayerSpace {
+            get {
+                var outdoor=entry.outdoor;
+                if(outdoor && outdoor.InChapter)return outdoor.CurrentRoom.Space;
+                if(outdoor && outdoor.IsOutside)return LightSpace.Outdoor;
+                if(!BeyondChamber || entry.portableClosure && entry.portableClosure.Isolated)return LightSpace.Chamber;
+                if(InSecondRoom)return LightSpace.FarRoom;
+                if(InTutorial)return LightSpace.SphereRoom;
+                return InReturnPath?LightSpace.ReturnPath:LightSpace.FirstPath;
+            }
+        }
+
+        bool InSight(Vector3 point)
+        {
+            var eye=entry.player.view;
+            var delta=point-eye.position;
+            if(delta.magnitude>maxScopeDistance || Vector3.Angle(Vector3.ProjectOnPlane(eye.forward,Vector3.up),Vector3.ProjectOnPlane(delta,Vector3.up))>scopeHalfAngle)return false;
+            return !Physics.Raycast(eye.position,delta.normalized,Mathf.Max(0,delta.magnitude-.25f),Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore);
+        }
+        public LightSpace SentenceScope()
+        {
+            var here=PlayerSpace;
+            if(here==LightSpace.Outdoor)return here;
+            if(here==LightSpace.Gallery || here==LightSpace.Garden || here==LightSpace.Vitruvian)return here;
+            if(!Root || !Tutorial)return here;
+            var connected=ConnectedLights();
+            var scope=here;
+            float z=Root.InverseTransformPoint(entry.player.view.position).z;
+            void Include(LightSpace room,float near,float far) {
+                if(room==here || (connected&room)==0)return;
+                var point=Root.TransformPoint(new Vector3(0,1.4f,Mathf.Clamp(z,near,far)));
+                if(InSight(point))scope|=room;
+            }
+            Include(LightSpace.Chamber,-2,-.2f);
+            Include(LightSpace.FirstPath,.2f,pathLength-.3f);
+            Include(LightSpace.SphereRoom,pathLength+.3f,Tutorial.ExitZ-.25f);
+            Include(LightSpace.ReturnPath,Tutorial.ExitZ+.25f,RoomStart-.25f);
+            Include(LightSpace.FarRoom,RoomStart+.3f,RoomStart+roomSize.z);
+            if(scope==here && (here==LightSpace.FirstPath || here==LightSpace.ReturnPath)){
+                bool first=here==LightSpace.FirstPath;
+                float middle=first?pathLength*.5f:(Tutorial.ExitZ+RoomStart)*.5f;
+                var end=z<middle?(first?LightSpace.Chamber:LightSpace.SphereRoom):(first?LightSpace.SphereRoom:LightSpace.FarRoom);
+                scope|=connected&end;
+            }
+            return scope;
+        }
 
         public LightSpace ConnectedLights()
         {
@@ -320,7 +425,11 @@ namespace PuzzleApple.V5
             public FarRoomLights(PassageJourney owner) { journey=owner; }
             public bool WouldChange(bool on) => Mathf.Abs(journey.Brightness-(on?1:0))>.001f;
             public bool Settling(bool on) => journey.Brightness!=(on?1:0);
-            public void SetOn(bool on) { journey.LightsOn=on; journey.LightTransitionEnabled=true; }
+            public void SetOn(bool on)
+            {
+                journey.LightsOn=on;
+                journey.LightTransitionEnabled=true;
+            }
             public void Hold() { journey.LightTransitionEnabled=false; }
         }
 
@@ -341,10 +450,12 @@ namespace PuzzleApple.V5
         }
         public string WordAt(Collider target,float distance)
         {
+            if(EndingDoor && target.transform.IsChildOf(EndingDoor.transform) && distance<=doorCollectionDistance && EndingDoor.Owns(target))return "door";
             if(InTutorial&&Tutorial.IsLit(target))return "light";
             if(target.transform.IsChildOf(doorHinge)&&distance<=doorCollectionDistance)
                 return DoorProgress<=0&&Root.InverseTransformPoint(entry.player.view.position).z>pathLength?null:"door";
-            if(InSecondRoom&&floorSurface&&floorSurface.Owns(target)&&distance<=7)return "floor";
+            if(Platform && target==Platform.Deck && distance<=7)return "floor";
+            if(distance<=7 && entry.board.State.Knows("floor") && ((floorSurface && floorSurface.Owns(target)) || target.transform==Root.Find("White path") || Tutorial.IsFloor(target)))return "floor";
             if(InSecondRoom&&LampsLit&&target.GetComponent<DriftingLight>())return "light";
             return null;
         }
@@ -354,8 +465,9 @@ namespace PuzzleApple.V5
             if(!entry.portableClosure||!entry.portableClosure.Isolated)
             {
                 var p=Root.InverseTransformPoint(entry.player.transform.position);
-                BeyondChamber=p.z>chamberBoundary&&p.z<RoomStart+roomSize.z+1&&Mathf.Abs(p.x)<(p.z>=pathLength&&p.z<=Tutorial.ExitZ?Tutorial.HalfWidth:roomSize.x*.5f)+1;
+                BeyondChamber=p.z>chamberBoundary&&(p.z<RoomStart+roomSize.z+1 || EndingDoor && EndingDoor.OnStairSide(p))&&Mathf.Abs(p.x)<(p.z>=pathLength&&p.z<=Tutorial.ExitZ?Tutorial.HalfWidth:roomSize.x*.5f)+1;
                 InSecondRoom=BeyondChamber&&p.z>RoomStart+.3f;
+                if(InSecondRoom)IntroduceRoom(LightSpace.FarRoom);
                 InTutorial=BeyondChamber&&p.z>pathLength+.15f&&p.z<Tutorial.ExitZ;
                 InReturnPath=InCorridor&&p.z>=Tutorial.ExitZ;
             }
@@ -364,20 +476,24 @@ namespace PuzzleApple.V5
             ViewBeyondChamber=BeyondChamber&&viewZ>chamberBoundary;
             CorridorBlend=ViewBeyondChamber?Mathf.SmoothStep(0,1,Mathf.InverseLerp(chamberBoundary,chamberBoundary+2,viewZ)):0;
             float viewDepth=viewZ-RoomStart;
-            DoorwayLighting=BeyondChamber?Mathf.SmoothStep(0,1,Mathf.InverseLerp(-2,2,viewDepth)):0;
+            // The far room is visible along the whole second corridor, so its glow and fog build up over that walk.
+            DoorwayLighting=BeyondChamber?Mathf.SmoothStep(0,1,Mathf.InverseLerp(Tutorial.ExitZ+2-RoomStart,2,viewDepth)):0;
             UpdateDoorSwing();
             // Both doorway faces remain visible while open, regardless of the viewing side.
             foreach(var edge in roomEdges)edge.enabled=DoorProgress>0;
             if(LightTransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,LightsOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,lightFadeDuration));ApplyLight();
             UpdateDoorAppearance();
-            if(movementObservation)movementObservation.Available=InSecondRoom&&LampsMoving&&(!entry.portableClosure||!entry.portableClosure.Isolated);
+            if(movementObservation)movementObservation.Available=InSecondRoom&&!entry.sentenceRuntime.MotionFrozen&&LampsMoving&&(!entry.portableClosure||!entry.portableClosure.Isolated);
             float sphereRoomBloom = InTutorial ? 1 : 0;
             if (InCorridor)
                 sphereRoomBloom=InReturnPath ? Mathf.SmoothStep(0,1,Mathf.InverseLerp(Tutorial.ExitZ+2,Tutorial.ExitZ,viewZ))
-                    : DoorProgress*Mathf.SmoothStep(0,1,Mathf.InverseLerp(pathLength-2,pathLength,viewZ));
+                    : DoorProgress; // seen through the open door, the sphere room keeps its in-room glow
             // Ten bright spheres can overlap in the entrance view. Blend in only a little of the wide lamp bloom.
             RoomBloom=Mathf.Max(.065f*sphereRoomBloom,DoorwayLighting);
-            if(glowVolume)glowVolume.weight=entry.portableClosure&&entry.portableClosure.Isolated?0:RoomBloom;
+            if(glowVolume){
+                float niche=InSecondRoom && EndingDoor?EndingDoor.NicheBloomWeight(entry.player.view):1;
+                glowVolume.weight=entry.portableClosure&&entry.portableClosure.Isolated?0:RoomBloom*niche;
+            }
             entry.player.view.GetComponent<Camera>().backgroundColor=ViewBeyondChamber?Color.black:initialBackground;
             if(cameraData)cameraData.renderPostProcessing=initialPostProcessing;
         }
@@ -389,8 +505,8 @@ namespace PuzzleApple.V5
         {
             var runtime = entry.sentenceRuntime;
             bool cycling = !DoorTransitionEnabled && CanCycleDoor && runtime &&
-                runtime.HasEffect(Cognition.CognitionSignal.DoorMove) &&
-                !runtime.HasEffect(Cognition.CognitionSignal.DoorOn) && !runtime.HasEffect(Cognition.CognitionSignal.DoorOff);
+                runtime.HasEffect(Cognition.CognitionSignal.DoorMove,LightSpace.FirstPath|LightSpace.SphereRoom) &&
+                !runtime.HasEffect(Cognition.CognitionSignal.DoorOn,LightSpace.FirstPath|LightSpace.SphereRoom) && !runtime.HasEffect(Cognition.CognitionSignal.DoorOff,LightSpace.FirstPath|LightSpace.SphereRoom);
             if (cycling)
             {
                 if (DoorProgress <= 0) cycleOpening = true;
@@ -402,6 +518,7 @@ namespace PuzzleApple.V5
                 ? Mathf.MoveTowards(DoorProgress, target, Time.deltaTime / Mathf.Max(.01f, doorDuration))
                 : DoorProgress;
             bool opening = next > DoorProgress;
+            if(opening)IntroduceRoom(LightSpace.SphereRoom);
             if (opening && !ignoringDoorPlayer) SetDoorPlayerCollision(true);
             if (opening || next < DoorProgress && !PlayerBlocksSwing(next))
             {
@@ -432,19 +549,20 @@ namespace PuzzleApple.V5
             Vector3 centre=Root.InverseTransformPoint(motor.bounds.center)-doorHinge.localPosition;
             if(centre.y-motor.height*.5f>Door.localScale.y||centre.y+motor.height*.5f<0)return false;
             float padding=motor.radius+.16f;
-            if(Mathf.Abs(centre.z-.15f)<padding&&centre.x>=-padding&&centre.x<=pathWidth+padding)return true;
+            float leafZ=Door.localPosition.z,halfDepth=Door.localScale.z*.5f;
+            if(Mathf.Abs(centre.z-leafZ)<padding&&centre.x>=-padding&&centre.x<=pathWidth+padding)return true;
             float angle=Mathf.Atan2(-centre.z,centre.x)*Mathf.Rad2Deg;
             angle=Mathf.Clamp(angle,SwingAngle(Mathf.Min(next,DoorProgress)),SwingAngle(Mathf.Max(next,DoorProgress)));
             Vector3 local=Quaternion.Euler(0,-angle,0)*centre;
             float x=Mathf.Clamp(local.x,0,pathWidth);
-            float z=Mathf.Clamp(local.z,0,.3f);
+            float z=Mathf.Clamp(local.z,leafZ-halfDepth,leafZ+halfDepth);
             return new Vector2(local.x-x,local.z-z).sqrMagnitude<padding*padding;
         }
         void ApplyLight()
         {
             if(!lampInk)return;
             float amount=Mathf.SmoothStep(0,1,Brightness);
-            float boosted=amount*(entry.sentenceRuntime?entry.sentenceRuntime.LampMultiplier:1);
+            float boosted=amount*(entry.sentenceRuntime?entry.sentenceRuntime.LampBoost(LightSpace.FarRoom):1);
             lampInk.SetColor("_BaseColor",Color.Lerp(new Color(.12f,.12f,.12f),Color.white,amount));
             lampInk.SetColor("_EmissionColor",emission*(boosted*emissionStrength));
             foreach(var l in lamps)l.glow.intensity=LightStyle.LampIntensity(l.transform.localScale.x)*boosted;
@@ -461,18 +579,30 @@ namespace PuzzleApple.V5
             doorSurface.SetFloat("_LightStepBlend",floorSurface&&floorSurface.steppedLighting?floorSurface.lightStepBlend:0);
             doorSurface.SetFloat("_LightBandEdge",floorSurface?floorSurface.lightBandEdge:.45f);
             doorLeaf.SetPropertyBlock(doorSurface);
-            bool closed = DoorProgress == 0;
-            if (closed != doorConcealed)
-            {
-                doorLeaf.sharedMaterials = closed ? closedDoorMaterials : openDoorMaterials;
-                if (!closed) doorLeaf.SetPropertyBlock(null, 1);
-                doorConcealed = closed;
-            }
-            if (closed)
-            {
-                Tutorial.EntranceWall.GetPropertyBlock(backSurface);
-                doorLeaf.SetPropertyBlock(backSurface, 1);
-            }
+            doorSurface.SetFloat("_RoundOutline",2);
+            hingePin.SetPropertyBlock(doorSurface);
+            doorSurface.SetFloat("_RoundOutline",0);
+            // Closed, the room side is indistinguishable from the entrance wall. Opening fades in
+            // the handle side's white finish; closing fades it back out. No material swap, no jump.
+            Tutorial.EntranceWall.GetPropertyBlock(backSurface);
+            doorLeaf.SetPropertyBlock(backSurface, 1);
+            float open = Mathf.SmoothStep(0, 1, DoorProgress);
+            doorCover.enabled = open > 0;
+            if (!doorCover.enabled) return;
+            coverMaterial.CopyPropertiesFromMaterial(corridorMaterial);
+            SetCoverBlend();
+            coverSurface.Clear();
+            coverSurface.SetFloat("_IsDoorLeaf",1);
+            coverSurface.SetFloat("_CorridorPureWhite",pureWhiteCorridor?1:0);
+            coverSurface.SetFloat("_Dissolve",1-open);
+            doorCover.SetPropertyBlock(coverSurface);
+        }
+        void SetCoverBlend()
+        {
+            coverMaterial.SetFloat("_SrcBlend",(float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            coverMaterial.SetFloat("_DstBlend",(float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            coverMaterial.SetFloat("_ZWrite",0);
+            coverMaterial.renderQueue=(int)UnityEngine.Rendering.RenderQueue.Transparent;
         }
         void PrepareDoorBack()
         {
@@ -494,17 +624,31 @@ namespace PuzzleApple.V5
             doorMesh.SetTriangles(front, 0);
             doorMesh.SetTriangles(back, 1);
             filter.sharedMesh = doorMesh;
-            openDoorMaterials = new[] {corridorMaterial, corridorMaterial};
-            closedDoorMaterials = new[] {corridorMaterial, Tutorial.EntranceWall.sharedMaterial};
+            doorLeaf.sharedMaterials = new[] {corridorMaterial, Tutorial.EntranceWall.sharedMaterial};
+            coverSurface = new MaterialPropertyBlock();
+            coverMaterial = new Material(corridorMaterial);
+            SetCoverBlend();
+            var cover = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            cover.name = "Door room-side finish";
+            DestroyImmediate(cover.GetComponent<Collider>());
+            cover.layer = 29;
+            cover.transform.SetParent(Door, false);
+            // Just proud of the room-side face, facing into the room.
+            cover.transform.localPosition = new Vector3(0, 0, .5f + .01f);
+            cover.transform.localRotation = Quaternion.Euler(0, 180, 0);
+            doorCover = cover.GetComponent<Renderer>();
+            doorCover.sharedMaterial = coverMaterial;
+            doorCover.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            doorCover.enabled = false;
         }
         public Vector3 ConstrainMovement(Vector3 position,Vector3 motion)
         {
-            if(!Root||!InCorridor)return motion;
+            if(!Root||!InCorridor||InReturnPath)return motion;
             var p=Root.InverseTransformPoint(position);var delta=Root.InverseTransformDirection(motion);
             // Restrict horizontal travel to the path, retaining vertical motion for the entry jump.
             var desired=p+delta;desired.x=Mathf.Clamp(desired.x,-pathWidth*.5f+.3f,pathWidth*.5f-.3f);
             return Root.TransformVector(desired-p);
         }
-        void OnDestroy(){if(returnMaterial)Destroy(returnMaterial);if(returnEdge)Destroy(returnEdge);if(doorMesh)Destroy(doorMesh);if(corridorMaterial)Destroy(corridorMaterial);if(lampInk)Destroy(lampInk);if(doorEdge)Destroy(doorEdge);}
+        void OnDestroy(){if(returnMaterial)Destroy(returnMaterial);if(returnEdge)Destroy(returnEdge);if(doorMesh)Destroy(doorMesh);if(corridorMaterial)Destroy(corridorMaterial);if(coverMaterial)Destroy(coverMaterial);if(lampInk)Destroy(lampInk);if(doorEdge)Destroy(doorEdge);}
     }
 }

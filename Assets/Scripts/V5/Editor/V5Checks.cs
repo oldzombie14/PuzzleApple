@@ -58,8 +58,11 @@ namespace PuzzleApple.V5.Editor
                 Require(!on.Recognized&&e.room.Progress==0&&e.feedback.StrongCount==0,"invalid order remains inert");
                 s.Swap(on.Id,on.Words[0].Id,on.Words[1].Id);
                 if(s.RequirePeriod)s.Speak(on.Id);
-                yield return Until(()=>b.GroupRect(on.Id) && b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha<.95f);
-                Require(b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha>0 && b.Panel.IsOpen,"world command visibly fades during feedback");
+                yield return Until(()=>e.Busy && e.feedback.StrongCount==1);
+                Require(b.Panel.IsOpen && on.Effective && b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha>.95f,"spoken command remains visible during initial feedback");
+                yield return Until(()=>e.room.Progress>.2f && e.room.Progress<.8f);
+                var subtitle=UnityEngine.Object.FindObjectsByType<CanvasGroup>(FindObjectsSortMode.None).FirstOrDefault(x=>x.name=="Sentence caption");
+                Require(subtitle && subtitle.alpha>0 && subtitle.alpha<1 && !b.Panel.IsOpen,"world caption fades as the box unfolds");
                 yield return Until(()=>e.room.Opened&&!e.Busy);
                 Require(e.room.Opened&&!e.Busy&&e.feedback.StrongCount==1,"on world opens via UI token state");
                 Require(!b.Panel.IsOpen&&!e.player.PanelOpen,"world unfold finishes without reopening the panel");
@@ -88,6 +91,7 @@ namespace PuzzleApple.V5.Editor
                 while(!e.DialogReady)
                 {
                     intermediate|=dialogInk.alpha>0&&dialogInk.alpha<1;
+                    Require(GameObject.Find("V5 sentence letterbox").transform.Find("Top").gameObject.activeSelf,"exit keeps cinematic bars during confirmation");
                     Require(Vector3.Distance(frozen,e.player.transform.position)<.0001f,"position remains locked during dialog fade");
                     yield return null;
                 }
@@ -96,10 +100,12 @@ namespace PuzzleApple.V5.Editor
                 Require(Vector3.Distance(frozen,e.player.transform.position)<.0001f,"closing never teleports player");
                 yield return new WaitForEndOfFrame();
                 e.cancelButton.onClick.Invoke();yield return null;
+                Require(!GameObject.Find("V5 sentence letterbox").transform.Find("Top").gameObject.activeSelf,"cancel clears the exit bars");
                 Require(!e.ConfirmingExit&&!e.player.MovementLocked&&e.room.Progress==0,"OFF cancels and leaves room closed");
                 s.Spawn(b.Catalog.Word("world"));yield return new WaitForSecondsRealtime(.2f);
                 Require(!e.ConfirmingExit&&!e.Busy&&e.room.Progress==0,"unrelated edit and old ON do not retrigger");
-                Require(!s.Groups.Any(g=>g.RuleId=="world.off"),"finished close command leaves the board");
+                yield return Until(()=>!s.Groups.Any(g=>g.RuleId=="world.off"));
+                Require(!e.Busy && e.room.Progress==0,"close command retires after its configured fade without reopening");
                 s.TryAcquireSentence("check.on.again","positive world");
                 yield return Until(()=>e.room.Opened&&!e.Busy);
                 Require(e.room.Opened,"reformed ON opens again");

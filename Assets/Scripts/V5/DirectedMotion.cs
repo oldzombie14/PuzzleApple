@@ -13,7 +13,11 @@ namespace PuzzleApple.V5
             => SphereStepClear(sphere,offset,ignorePlayer,out _);
 
         public static bool SphereStepClear(SphereCollider sphere, Vector3 offset, bool ignorePlayer, out Vector3 contactNormal)
+            => SphereStepClear(sphere,offset,ignorePlayer,out contactNormal,out _);
+
+        public static bool SphereStepClear(SphereCollider sphere, Vector3 offset, bool ignorePlayer, out Vector3 contactNormal, out Collider obstacle)
         {
+            obstacle = null;
             contactNormal = Vector3.zero;
             var t = sphere.transform;
             Vector3 centre = t.TransformPoint(sphere.center);
@@ -30,6 +34,7 @@ namespace PuzzleApple.V5
                 if (!Physics.ComputePenetration(sphere,t.position,t.rotation,other,pose.position,pose.rotation,
                     out _,out float current) || next > current + .000001f)
                 {
+                    obstacle = other;
                     contactNormal = normal;
                     return false;
                 }

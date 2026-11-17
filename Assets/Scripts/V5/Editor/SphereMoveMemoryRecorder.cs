@@ -7,8 +7,7 @@ using UnityEngine;
 namespace PuzzleApple.V5.Editor
 {
     // Records the sphere-sourced "move" memory from the real move tutorial room, once lit and once dark.
-    // The floating spheres are posed on bouncing straight-line paths whose bounce counts divide the clip,
-    // so the last frame leads straight into the first. The blocking sphere stays where the room seats it.
+    // The floating spheres cross the portrait on staggered paths, wrapping outside the view.
     // Requires a fresh P5 Play session.
     public static class SphereMoveMemoryRecorder
     {
@@ -31,16 +30,9 @@ namespace PuzzleApple.V5.Editor
         sealed class Path
         {
             public Transform sphere;
-            public Vector3 start, centre, amplitude, phase, cycles;
-            public Vector3 At(float t)
-            {
-                var p = centre;
-                for (int axis = 0; axis < 3; axis++)
-                    p[axis] += amplitude[axis] * Triangle(phase[axis] + cycles[axis] * t);
-                return p;
-            }
-            // Linear travel with a reflection at each extreme, period 1.
-            static float Triangle(float x) => 1 - 4 * Mathf.Abs(Mathf.Repeat(x + .25f, 1) - .5f);
+            public Vector3 start, from, to;
+            public float phase;
+            public Vector3 At(float t) => Vector3.Lerp(from, to, Mathf.Repeat(t + phase, 1));
         }
 
         struct Shot { public Vector3 eye; public Quaternion look; public float fieldOfView; }
@@ -63,6 +55,7 @@ namespace PuzzleApple.V5.Editor
             bool background = Application.runInBackground;
             Application.runInBackground = true;
             var paths = new List<Path>();
+            var backgroundSpheres = new List<Renderer>();
             try
             {
                 entry.EnterWorld();
@@ -81,45 +74,47 @@ namespace PuzzleApple.V5.Editor
                 yield return new WaitForSecondsRealtime(.5f);
 
                 float height = journey.Root.Find("Move tutorial Ceiling").localPosition.y - .15f;
-                float seconds = Frames / FramesPerSecond;
-                var random = new System.Random(5);
-                for (int i = 1; ; i++)
-                {
-                    var sphere = journey.Root.Find("Move tutorial small sphere " + i);
-                    if (!sphere) break;
-                    Vector3 ext = sphere.localScale * .5f;
-                    Vector3 lo = new Vector3(-room.HalfWidth, 0, journey.pathLength + .15f) + ext;
-                    Vector3 hi = new Vector3(room.HalfWidth, height, room.ExitZ - .15f) - ext;
-                    // Keep clear of the camera standing at the entrance.
-                    lo.z = Mathf.Max(lo.z, journey.pathLength + 2.2f);
-                    var direction = new Vector3((float)random.NextDouble() * 2 - 1, (float)random.NextDouble() * 2 - 1,
-                        (float)random.NextDouble() * 2 - 1).normalized;
-                    var path = new Path { sphere = sphere, start = sphere.localPosition };
-                    float travel = entry.chamberLight.moveSpeed * seconds;
-                    for (int axis = 0; axis < 3; axis++)
-                    {
-                        // One bounce cycle covers 4 amplitudes; add bounces until the path fits the room.
-                        float span = Mathf.Max(0, (hi[axis] - lo[axis]) * .5f);
-                        float distance = travel * Mathf.Abs(direction[axis]);
-                        int cycles = Mathf.Max(1, Mathf.CeilToInt(distance / Mathf.Max(.01f, 4 * span * .8f)));
-                        float amplitude = Mathf.Min(distance / (4 * cycles), span);
-                        path.amplitude[axis] = amplitude;
-                        path.cycles[axis] = cycles * Mathf.Sign(direction[axis] == 0 ? 1 : direction[axis]);
-                        path.centre[axis] = Mathf.Clamp(path.start[axis], lo[axis] + amplitude, hi[axis] - amplitude);
-                        path.phase[axis] = (float)random.NextDouble();
-                    }
-                    paths.Add(path);
-                }
-                if (paths.Count == 0) { Result = "FAIL: no tutorial spheres"; yield break; }
+                // Look across the left side of the room. The exit and its blocking sphere
+                // sit behind the right edge of this portrait view.
+                var focus = new Vector3(-room.HalfWidth * .65f, height * .5f, journey.pathLength + room.HalfWidth);
+                float halfHeight = Mathf.Min(height * .39f, room.HalfWidth * .6f);
+                float halfWidth = halfHeight * Width / Height;
+                const float fieldOfView = 42;
+                var eye = focus + Vector3.right * (halfHeight / Mathf.Tan(fieldOfView * .5f * Mathf.Deg2Rad));
+                shot = new Shot {
+                    eye = journey.Root.TransformPoint(eye),
+                    look = Quaternion.LookRotation(-journey.Root.right, journey.Root.up),
+                    fieldOfView = fieldOfView
+                };
 
+                // Portrait coordinates, measured in half-frame widths and heights. Leave room
+                // beyond each edge for the entire sphere and its bloom before wrapping.
+                Vector3 InFrame(float x, float y) => focus + new Vector3(0, y * halfHeight, x * halfWidth);
+                var crossings = new[] {
+                    (from: InFrame(-1.55f, .72f), to: InFrame(1.55f, .29f), phase: .24f),
+                    (from: InFrame(1.8f, -.54f), to: InFrame(-1.8f, .43f), phase: .47f),
+                    (from: InFrame(-.84f, -1.4f), to: InFrame(.69f, 1.4f), phase: .81f)
+                };
+                for (int i = 0; i < crossings.Length; i++)
+                {
+                    var sphere = journey.Root.Find("Move tutorial small sphere " + (i + 1));
+                    if (!sphere) throw new InvalidOperationException("Missing tutorial sphere " + (i + 1));
+                    paths.Add(new Path {
+                        sphere = sphere, start = sphere.localPosition,
+                        from = crossings[i].from, to = crossings[i].to, phase = crossings[i].phase
+                    });
+                }
+                // Unposed lamps spawn at random and can otherwise sit motionless in the shot.
+                for (int i = crossings.Length + 1; ; i++)
+                {
+                    var other = journey.Root.Find("Move tutorial small sphere " + i);
+                    if (!other) break;
+                    var surface = other.GetComponent<Renderer>();
+                    if (!surface.enabled) continue;
+                    backgroundSpheres.Add(surface);
+                    surface.enabled = false;
+                }
                 var camera = player.view.GetComponent<Camera>();
-                // Frame the whole room from the entrance, wide enough that every floating sphere stays in view.
-                float depth = room.ExitZ - journey.pathLength;
-                var eye = journey.Root.TransformPoint(new Vector3(0, height * .55f, journey.pathLength + .2f));
-                var focus = journey.Root.TransformPoint(new Vector3(0, height * .45f, journey.pathLength + depth * .55f));
-                float horizontal = 2 * Mathf.Atan(room.HalfWidth / (depth * .5f));
-                float vertical = 2 * Mathf.Atan(Mathf.Tan(horizontal * .5f) / ((float)Width / Height)) * Mathf.Rad2Deg;
-                shot = new Shot { eye = eye, look = Quaternion.LookRotation(focus - eye, journey.Root.up), fieldOfView = Mathf.Min(100, vertical) };
                 room.SetOn(true);
                 yield return Until(() => !room.Changing && room.SphereBrightness >= .999f);
                 var lit = Capture(camera, paths, "lit");
@@ -146,6 +141,7 @@ namespace PuzzleApple.V5.Editor
             finally
             {
                 foreach (var path in paths) if (path.sphere) path.sphere.localPosition = path.start;
+                foreach (var surface in backgroundSpheres) if (surface) surface.enabled = true;
                 presentation.enabledShots = shots;
                 Application.runInBackground = background;
                 if (Result == "Running") Result = "FAIL: interrupted";

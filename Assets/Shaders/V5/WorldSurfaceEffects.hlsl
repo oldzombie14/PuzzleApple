@@ -6,8 +6,9 @@ float4 _ShadeColor,_ShadowColor,_DoorBackColor;
 float4 _FloorColor,_Impacts[16],_Hole,_RoomBounds;
 float4x4 _WorldToFloor;
 float _Brightness,_RippleDuration,_RippleSpeed,_RingCount,_RingSpacing,_RingWidth,_RippleStrength,_Plane;
-float _RoomOpeningWidth;
+float _RoomOpeningWidth,_RoomExitWidth;
 float4 _RippleTaper;
+float _ImpactScales[16];
 float _LightSteps,_LightStepBlend,_LightBandEdge,_CorridorPureWhite;
 TEXTURE2D(_MuralNormal);SAMPLER(sampler_MuralNormal);
 TEXTURE2D(_HintLight);SAMPLER(sampler_HintLight);
@@ -26,7 +27,9 @@ float RoomPerimeterDistance(float3 positionWS)
     {
         // Distance to the two front-wall segments, including their doorway endpoints.
         float front=length(float2(max(0,_RoomOpeningWidth*.5-abs(local.x)),local.z-_RoomBounds.z));
-        edge.z=min(front,_RoomBounds.z+_RoomBounds.w-local.z);
+        float farZ=_RoomBounds.z+_RoomBounds.w-local.z;
+        float back=_RoomExitWidth>0?length(float2(max(0,_RoomExitWidth*.5-abs(local.x)),farZ)):farZ;
+        edge.z=min(front,back);
     }
     return _Plane<.5?min(edge.x,edge.z):(_Plane<1.5?min(edge.x,edge.y):min(edge.z,edge.y));
 }
@@ -43,14 +46,16 @@ float ContactRipple(float3 local)
     for(int n=0;n<16;n++)
     {
         float age=_Time.y-_Impacts[n].w;
-        if(age<0||age>_RippleDuration)continue;
-        float distance=length(local-_Impacts[n].xyz);
+        float scale=max(1,_ImpactScales[n]);
+        float duration=_RippleDuration*sqrt(scale);
+        if(age<0||age>duration)continue;
+        float distance=length(local-_Impacts[n].xyz)/scale;
         float pixelWidth=max(.0001,fwidth(distance));
-        float fade=1-smoothstep(.35*_RippleDuration,_RippleDuration,age);
+        float fade=1-smoothstep(.35*duration,duration,age);
         for(int ring=0;ring<4;ring++)
         {
             if(ring>=_RingCount)break;
-            float radius=age*_RippleSpeed-ring*_RingSpacing;
+            float radius=age*_RippleSpeed/sqrt(scale)-ring*_RingSpacing;
             if(radius<0)continue;
             float taper=smoothstep(_RippleTaper.x,_RippleTaper.x+max(.01,_RippleTaper.y),radius);
             float innerWeight=_RingCount>1 ? ring/(_RingCount-1) : 1;

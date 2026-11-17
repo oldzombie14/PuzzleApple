@@ -5,13 +5,14 @@ namespace PuzzleApple.V5
     public sealed class FloorDirectedMotion : MonoBehaviour
     {
         public PassageJourney journey;
+        public bool openHoleWhenGrounded;
         [Min(.1f)] public float speed=2.5f;
         [Min(0)] public float surfaceClearance=.025f,stopDistance=.04f;
         public bool Active => journey && journey.Brightness > 0 && journey.entry && journey.entry.board && journey.entry.board.State != null &&
-            (journey.entry.sentenceRuntime ? journey.entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightFloorMove) :
+            (journey.entry.sentenceRuntime ? journey.entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightFloorMove,PassageJourney.LightSpace.FarRoom) :
                 journey.entry.board.State.HasEffect(Cognition.CognitionSignal.LightFloorMove));
         public int ArrivedCount {get;private set;}
-        public bool Completed=>journey&&journey.floorSurface&&journey.floorSurface.HoleOpen;
+        public bool Completed=>journey && journey.Lamps.Count>0 && ArrivedCount==journey.Lamps.Count;
         public bool IsArrived(DriftingLight lamp)
         {
             if(!lamp||!lamp.isActiveAndEnabled||!journey||!journey.floorSurface||!journey.floorSurface.Surface)return false;
@@ -27,14 +28,27 @@ namespace PuzzleApple.V5
             float target=journey.floorSurface.Surface.bounds.max.y+(body.position.y-collider.bounds.min.y)+surfaceClearance;
             float remaining=body.position.y-target;
             if(remaining<=stopDistance)return;
-            DirectedMotion.Move(body,colliders,Vector3.down*Mathf.Min(speed*Time.fixedDeltaTime,remaining-stopDistance),true);
+            float step=speed*Time.fixedDeltaTime;
+            float travel=DirectedMotion.Move(body,colliders,Vector3.down*Mathf.Min(step,remaining-stopDistance),true);
+            if(travel>.0001f || IsArrived(lamp))return;
+            // A lamp directly below can block a vertical descent. Slide around its footprint.
+            foreach(var other in journey.Lamps){
+                if(other==lamp || !other)continue;
+                Vector3 gap=body.position-other.GetComponent<Rigidbody>().position;
+                float clearance=collider.bounds.extents.x+other.GetComponent<Collider>().bounds.extents.x+.08f;
+                var lateral=Vector3.ProjectOnPlane(gap,Vector3.up);
+                if(gap.y<=0 || gap.y>clearance+step || lateral.sqrMagnitude>clearance*clearance)continue;
+                if(lateral.sqrMagnitude<.0001f)lateral=Quaternion.AngleAxis(lamp.SlotIndex*137.5f,Vector3.up)*journey.Root.right;
+                DirectedMotion.Move(body,colliders,lateral.normalized*step,true);
+                break;
+            }
         }
         void LateUpdate()
         {
-            if(!journey||!journey.floorSurface||!journey.floorSurface.Surface||Completed)return;
+            if(!journey||!journey.floorSurface||!journey.floorSurface.Surface)return;
             ArrivedCount=0;
             foreach(var lamp in journey.Lamps)if(IsArrived(lamp))ArrivedCount++;
-            if(journey.Lamps.Count>0&&ArrivedCount==journey.Lamps.Count&&journey.LightsOn)journey.floorSurface.OpenHole();
+            if(openHoleWhenGrounded&&Completed&&journey.LightsOn)journey.floorSurface.OpenHole();
         }
     }
 }

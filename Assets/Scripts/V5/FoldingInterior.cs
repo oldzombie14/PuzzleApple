@@ -24,6 +24,7 @@ namespace PuzzleApple.V5
         [Range(.5f,3)] public float edgeWidthPixels=1.5f;
         [Range(0,1)] public float handoffStart=.05f,handoffEnd=.8f;
         public float ClosedWeight=>1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(handoffStart,Mathf.Max(handoffStart+.001f,handoffEnd),room?room.Progress:0));
+        public Vector4 SinkProfile {get;private set;}
         MaterialPropertyBlock properties;
         internal static FoldingInterior Active { get; private set; }
         sealed class Face
@@ -119,6 +120,7 @@ namespace PuzzleApple.V5
                 }
                 sink=new Vector4(feet.x,feet.z,reach,radius);
             }
+            SinkProfile=sink;
             if(room&&room.floorPanel)
                 weight=Mathf.Max(weight,.3f*(1-Mathf.SmoothStep(0,1,room.FloorFinishProgress*2)));
             Shader.SetGlobalColor("_P5OutlineInk",tint*((darkLevel+coreBrightness)*weight));
@@ -157,7 +159,7 @@ namespace PuzzleApple.V5
             if(Application.isPlaying)Shader.SetGlobalVector("_P5BoxWave",Vector4.zero);
             if(surfaces==null)return;
             if(properties==null)properties=new MaterialPropertyBlock();
-            foreach(var s in surfaces)if(s.renderer){s.renderer.GetPropertyBlock(properties);properties.SetFloat("_ClosedWeight",0);properties.SetFloat("_PanelOpacity",1);s.renderer.SetPropertyBlock(properties);}
+            foreach(var s in surfaces)if(s.renderer){s.renderer.GetPropertyBlock(properties);properties.SetFloat("_ClosedWeight",0);properties.SetFloat("_PanelOpacity",Application.isPlaying && room ? room.PanelCoverage : 1);s.renderer.SetPropertyBlock(properties);}
         }
     }
 }

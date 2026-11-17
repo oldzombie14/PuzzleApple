@@ -27,7 +27,10 @@ namespace PuzzleApple.V5.Outdoor
             if (Moving == value) return;
             Moving = value;
             if(Launched)return;
-            if (value) { direction = Random.onUnitSphere; body.isKinematic = false; }
+            if (value) {
+                if (direction == Vector3.zero) direction = Random.onUnitSphere;
+                body.isKinematic = false;
+            }
             else { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; body.isKinematic = true; }
         }
         public void Launch(Vector3 velocity,Collider ground)

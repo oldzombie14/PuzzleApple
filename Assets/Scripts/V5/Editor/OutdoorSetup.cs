@@ -121,11 +121,12 @@ namespace PuzzleApple.V5.Editor
                 frame.GetComponent<Rigidbody>().isKinematic=true;frame.GetComponent<Rigidbody>().useGravity=false;
                 var appearance=frame.AddComponent<O.DoorStateEffects>();
                 var lightEffects=root.AddComponent<O.LightSentenceEffects>();lightEffects.field=field;lightEffects.stateSource=state;lightEffects.ground=ground;lightEffects.door=door;
-                var doorEffects=root.AddComponent<O.DoorSentenceEffects>();doorEffects.door=door;doorEffects.appearance=appearance;doorEffects.lights=lightEffects;doorEffects.ground=ground;
+                var doorEffects=root.AddComponent<O.DoorSentenceEffects>();doorEffects.door=door;doorEffects.appearance=appearance;doorEffects.ground=ground;
                 var worldEffects=root.AddComponent<O.WorldSentenceEffects>();worldEffects.environment=environment;worldEffects.ground=ground;worldEffects.door=door;worldEffects.lights=lightEffects;
                 var exit=new GameObject("Horizontal exit").transform;exit.SetParent(frame.transform,false);exit.localPosition=new Vector3(0,1.2f,.6f);
                 var region=new GameObject("Outdoor closure region",typeof(BoxCollider),typeof(ClosureRegion));region.transform.SetParent(root.transform,false);
                 region.GetComponent<BoxCollider>().isTrigger=true;region.GetComponent<BoxCollider>().center=new Vector3(0,100,0);region.GetComponent<BoxCollider>().size=new Vector3(2000,400,2000);region.GetComponent<ClosureRegion>().priority=10;
+                root.AddComponent<WorldDropRegion>().allowInstantiation=true;
                 var outdoor=root.AddComponent<O.OutdoorWorld>();outdoor.ground=ground;outdoor.sun=sun;outdoor.environment=environment;outdoor.clouds=clouds;outdoor.stateSource=state;outdoor.field=field;outdoor.door=door;outdoor.lights=lightEffects;outdoor.doors=doorEffects;outdoor.world=worldEffects;outdoor.exit=exit;
                 var oldMusic=AssetDatabase.LoadAssetAtPath<PuzzleApple.V4.MusicTrack>("Assets/Audio/V4/Music/IntroMusic.asset");
                 const string musicPath="Assets/Audio/V5/Outdoor/IntroMusic.asset";Folder("Assets/Audio/V5/Outdoor");
@@ -154,12 +155,13 @@ namespace PuzzleApple.V5.Editor
         }
         internal static string[] V5Words(PuzzleApple.V4.Cognition.CognitionRule rule)
         {
-            if(rule.Id=="light.ground.move")return new[]{"light","move","floor"};
-            return rule.Words.Select(w=>w.Id=="ground"?"floor":w.Id).ToArray();
+            var words=rule.Words.Select(w=>w.Id=="ground"?"floor":w.Id).ToArray();
+            if(words.Length==3 && words[2]=="move") (words[1],words[2])=(words[2],words[1]);
+            return words;
         }
 
         static string V5RuleId(PuzzleApple.V4.Cognition.CognitionRule rule)=>
-            rule.Id=="light.ground.move"?"light.move.floor":rule.Id.Replace("ground","floor");
+            rule.Words.Count==3 && rule.Words[2].Id=="move"?string.Join(".",V5Words(rule)):rule.Id.Replace("ground","floor");
 
         public static void MigrateGrammar()
         {
@@ -177,7 +179,7 @@ namespace PuzzleApple.V5.Editor
                 // Scheduling metadata lives on the rule asset; copy it from an existing V5 rule with the same effect.
                 var template=rules.FirstOrDefault(r=>r&&r.Effect==effect);
                 if(!template)Debug.LogWarning("MigrateGrammar: set kind/channel by hand on new rule "+old.name);
-                so.FindProperty("kind").intValue=template?(int)template.Kind:(int)SentenceKind.Sustained;
+                so.FindProperty("kind").intValue=ids.Length==3 && ids[1]=="move"?(int)SentenceKind.Command:template?(int)template.Kind:(int)SentenceKind.Sustained;
                 so.FindProperty("channel").stringValue=template&&!string.IsNullOrEmpty(template.Channel)?template.Channel:old.ExclusionKey;so.ApplyModifiedPropertiesWithoutUndo();
                 AssetDatabase.CreateAsset(rule,"Assets/GameData/V5/Opening/Rules/"+old.name+".asset");rules.Add(rule);
             }
@@ -189,7 +191,7 @@ namespace PuzzleApple.V5.Editor
             {
                 if(!old||!old.rule)continue;var id=V5RuleId(old.rule);
                 if(shots.Any(s=>s.rule==id))continue;
-                var focus=id=="floor.move"?SentencePresentation.Focus.Sky:id.StartsWith("door.")||id=="light.door.move"?SentencePresentation.Focus.Door:
+                var focus=id=="floor.move"?SentencePresentation.Focus.Sky:id.StartsWith("door.")||id=="light.move.door"?SentencePresentation.Focus.Door:
                     id.StartsWith("floor.")?SentencePresentation.Focus.Floor:SentencePresentation.Focus.LightGroup;
                 shots.Add(new SentencePresentation.Shot(id,focus,old.followTarget){enter=old.enterDuration,hold=old.holdDuration,exit=old.exitDuration,
                     letterbox=old.letterboxHeight,followSpeed=old.maxFollowDegreesPerSecond,offset=old.targetOffset});

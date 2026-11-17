@@ -41,6 +41,11 @@ namespace PuzzleApple.V5
                     ? Mathf.Max(0,hit) : float.PositiveInfinity;
             }
 
+            public void ResumeFlight(){
+                home=shape.localPosition;
+                travel=0;
+                roadContact=road.IntersectRay(new Ray(home,direction),out float hit)?Mathf.Max(0,hit):float.PositiveInfinity;
+            }
             public float AdvanceFlight(bool moving, float delta, float visualDelta)
             {
                 if (moving) travel = Mathf.Min(roadContact,travel+speed*delta);
@@ -99,11 +104,33 @@ namespace PuzzleApple.V5
         }
 
         Star[] stars;
+        bool parked;
+        Vector3 GatherPoint(int id){
+            float angle=(id+.5f)*Mathf.PI*2/stars.Length;
+            return new Vector3(Mathf.Sin(angle)*(journey.PathWidth*.5f+.4f),2+Mathf.Cos(angle)*1.75f,journey.pathLength-.7f-(id%3)*.12f);
+        }
+        public bool NeedsGather{
+            get{
+                if(!On || stars==null)return false;
+                for(int i=0;i<stars.Length;i++)if((stars[i].shape.localPosition-GatherPoint(i)).sqrMagnitude>.0001f)return true;
+                return false;
+            }
+        }
         MaterialPropertyBlock glow;
         PassageJourney journey;
         Vector4 depthPlane;
         float visibleLength;
         Material pathInk, edgeInk;
+        public Vector3 FocusNear(Vector3 point){
+            Vector3 nearest=point;
+            float best=float.PositiveInfinity;
+            foreach(var star in stars){
+                if(!star.renderer.enabled || star.Opacity<.05f)continue;
+                float distance=(star.shape.position-point).sqrMagnitude;
+                if(distance<best){best=distance;nearest=star.shape.position;}
+            }
+            return nearest;
+        }
         public bool On { get; private set; } = true;
         public bool TransitionEnabled { get; private set; }
         public float Brightness { get; private set; } = 1;
@@ -114,7 +141,7 @@ namespace PuzzleApple.V5
         public bool Settling(bool on) => Brightness!=(on?1:0) || SwitchPending(on);
         public ObservableBehaviour Observation { get; private set; }
         public bool Moving => journey && journey.entry.sentenceRuntime && !journey.entry.sentenceRuntime.MotionFrozen &&
-            journey.DemonstrationLampMoving(true);
+            journey.DemonstrationLampMoving(true,-1,this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath);
 
         public void Bind(PassageJourney owner, float startZ, float doorHeight, float entranceThickness,
             Material pathMaterial, Material edgeMaterial)
@@ -182,9 +209,10 @@ namespace PuzzleApple.V5
         }
         void LateUpdate()
         {
+            if(!journey || stars==null)return;
             bool visible=journey.isActiveAndEnabled&&
                 (!journey.entry.portableClosure||!journey.entry.portableClosure.Isolated);
-            Color emission=Color.white*(1.6f*journey.entry.sentenceRuntime.LampMultiplier);
+            Color emission=Color.white*(1.6f*journey.entry.sentenceRuntime.LampBoost(this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath));
             var view=journey.entry.player.view;
             if (TransitionEnabled)
             {
@@ -193,13 +221,21 @@ namespace PuzzleApple.V5
                 pathInk.SetFloat("_CorridorLight",Mathf.Lerp(.065f,1,level));
                 if(edgeInk)edgeInk.SetFloat("_Visibility",Mathf.Lerp(.09f,1,level));
             }
-            bool moving = visible && Moving && On;
+            var runtime=journey.entry.sentenceRuntime;
+            bool gather=this==journey.Stars && runtime.HasEffect(Cognition.CognitionSignal.LightDoorMove,PassageJourney.LightSpace.FirstPath);
+            if(gather)parked=true;
+            if(this==journey.Stars && runtime.HasEffect(Cognition.CognitionSignal.LightMove,PassageJourney.LightSpace.FirstPath)){
+                if(parked)foreach(var s in stars)s.ResumeFlight();
+                parked=false;
+            }
+            bool moving = visible && Moving && On && !parked;
             for(int i=0;i<stars.Length;i++)
             {
                 var star=stars[i];
                 star.Advance(Time.unscaledDeltaTime,On,TransitionEnabled,journey.lightFadeDuration,view.position);
+                if(gather && On && !journey.EndingDoor.Paused)star.shape.localPosition=Vector3.MoveTowards(star.shape.localPosition,GatherPoint(i),4*Time.deltaTime);
                 if(!visible){star.renderer.enabled=false;continue;}
-                float flight = star.AdvanceFlight(moving,Time.deltaTime,Time.unscaledDeltaTime);
+                float flight=parked?1:star.AdvanceFlight(moving,Time.deltaTime,Time.unscaledDeltaTime);
                 float reveal=star.Opacity*flight;
                 star.shape.localScale=Vector3.one*(star.height*star.size*Mathf.Lerp(.4f,1,flight));
                 Vector3 fromView=star.shape.position-view.position;

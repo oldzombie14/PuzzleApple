@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 namespace PuzzleApple.V5.Outdoor
 {
-    public sealed class OutdoorWorld : MonoBehaviour, ISwitchableLight, ISwitchableDoor, ISentenceMovable
+    public sealed class OutdoorWorld : MonoBehaviour, ISwitchableLight, ISwitchableDoor, ISentenceMovable, IBrightenableLight
     {
         public Collider ground;
         public Light sun;
@@ -35,6 +35,7 @@ namespace PuzzleApple.V5.Outdoor
         bool ISwitchableLight.Settling(bool on)=>((ISwitchableLight)this).WouldChange(on);
         void ISwitchableLight.SetOn(bool on)=>stateSource.SetOn(on);
         void ISwitchableLight.Hold()=>stateSource.HoldCurrentState();
+        bool IBrightenableLight.Lit=>stateSource.Brightness>0;
         // Outdoor threshold door: glows on/off once revealed. Its state follows the effective
         // DoorOn/DoorOff signals in DoorSentenceEffects.Apply (ApplyMotion), so SetOpen/Hold are not
         // driven separately here; retiring the command releases the state-driven hold.
@@ -49,9 +50,7 @@ namespace PuzzleApple.V5.Outdoor
             {
                 case CognitionSignal.LightMove:case CognitionSignal.LightFloorMove:
                 case CognitionSignal.LightDoorMove:case CognitionSignal.LightLightMove:return lights.CanMove(motion);
-                case CognitionSignal.DoorLightMove:return door.Revealed&&doors.CanPursue(lights.Nearest(door.transform.position));
                 case CognitionSignal.WorldLightMove:case CognitionSignal.WorldDoorMove:return world.CanRise(motion);
-                case CognitionSignal.DoorWorldMove:return door.Revealed&&!door.Landed;
                 case CognitionSignal.DoorMove:return door.Revealed;
                 case CognitionSignal.WorldMove:return true;
                 default:return false;
@@ -88,9 +87,8 @@ namespace PuzzleApple.V5.Outdoor
             RenderSettings.sun=sun;RenderSettings.skybox=environment.daySky;
             var camera=entry.player.view.GetComponent<Camera>();camera.clearFlags=CameraClearFlags.Skybox;camera.farClipPlane=1500;
             var data=camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();if(data)data.renderPostProcessing=true;
-            Audio=gameObject.AddComponent<SessionAudio>();Audio.Play(music);
+            Audio=entry.gameObject.AddComponent<SessionAudio>();Audio.Play(music);
             // Keep one board, its acquisition IDs, notes and sentences across the passage.
-            foreach(var id in new[]{"light","floor"})if(!entry.board.State.Knows(id))entry.board.State.TryAcquireWord("outdoor.previous."+id,entry.board.Catalog.Word(id));
             ApplyMotion(entry.board.State.HasEffect,false);
         }
         public void ApplyMotion(System.Func<CognitionSignal,bool> hasEffect,bool split)
@@ -107,7 +105,7 @@ namespace PuzzleApple.V5.Outdoor
             var hit=hits.Where(h=>!h.collider.transform.IsChildOf(Entry.player.transform)).OrderBy(h=>h.distance).FirstOrDefault();
             if(hit.collider)
             {
-                if(hit.collider==ground&&hit.distance<=7)return "floor";
+                if(hit.collider==ground&&hit.distance<=7&&Entry.board.State.Knows("floor"))return "floor";
                 if(chapterFrame&&hit.collider.transform.IsChildOf(chapterFrame)&&hit.distance<=7)return "door";
                 var lamp=hit.collider.GetComponentInParent<OpeningLight>();
                 if(lamp&&lamp!=stateSource&&lamp.TargetOn&&lamp.Brightness>=.999f&&lamp.RevealAmount>=.99f&&hit.distance<=7){emitter=lamp.surface;return "light";}
@@ -118,13 +116,17 @@ namespace PuzzleApple.V5.Outdoor
             return stateSource.TargetOn&&stateSource.Brightness>=.999f&&environment.NightBlend<.98f&&
                 Vector3.Dot(ray.direction,-sun.transform.forward)>=.9995f?"light":null;
         }
-        public bool TrySpawnInView(Vector2 screen)
+        public bool TrySpawnInView(Vector2 screen){if(!Active || !Entry)return false;var camera=Entry.player.view.GetComponent<Camera>();return TrySpawnInView(camera.ScreenPointToRay(screen),GeometryUtility.CalculateFrustumPlanes(camera),InstanceShape.Cube,GetComponent<WorldDropRegion>());}
+        public bool TrySpawnInView(Ray ray,Plane[] frustum,InstanceShape shape,WorldDropRegion region)
         {
             if(!Active||!Entry||!Entry.outdoor||Entry.outdoor.Transitioning||Entry.Busy||Entry.ConfirmingExit||
                 Entry.portableClosure&&Entry.portableClosure.Isolated)return false;
-            var camera=Entry.player.view.GetComponent<Camera>();
-            var ray=camera.ScreenPointToRay(screen);
-            float radius=field.scaleRange.y*.8661f+spawnClearance;
+            return TryPlaceLamp(ray,frustum,shape,region,field,ground);
+        }
+        public bool TryPlaceLamp(Ray ray,Plane[] frustum,InstanceShape shape,WorldDropRegion region,OpeningLightField field,Collider ground)
+        {
+            if(!region || !region.Accepts("light") || System.Array.IndexOf(region.shapes,shape)<0 || field.PlayerCount>=region.maxInstances)return false;
+            float radius=OpeningLightField.Radius(field.scaleRange.y,shape)+spawnClearance;
             Vector3 preferred=ray.GetPoint(airSpawnDistance);
             if(Physics.Raycast(ray,out var hit,35,~0,QueryTriggerInteraction.Ignore))preferred=hit.point+hit.normal*radius;
             preferred.y=Mathf.Max(preferred.y,ground.bounds.max.y+radius);
@@ -132,15 +134,14 @@ namespace PuzzleApple.V5.Outdoor
             {
                 // Search from near to far; spacing constrains creation, never later clustering.
                 var point=preferred+(i==0?Vector3.zero:Random.onUnitSphere*spawnSearchRadius*Mathf.Sqrt((float)i/spawnAttempts));
-                if(point.y<ground.bounds.max.y+radius||(point-camera.transform.position).sqrMagnitude<1)continue;
+                if(point.y<ground.bounds.max.y+radius||(point-ray.origin).sqrMagnitude<1)continue;
                 if(!ground.Raycast(new Ray(point+Vector3.up*2,Vector3.down),out var support,1000))continue;
-                var view=camera.WorldToViewportPoint(point);
-                if(view.z<=0||view.x<.05f||view.x>.95f||view.y<.05f||view.y>.95f)continue;
+                if(!GeometryUtility.TestPlanesAABB(frustum,new Bounds(point,Vector3.one*radius*2)))continue;
                 if(Physics.CheckSphere(point,radius,~0,QueryTriggerInteraction.Ignore))continue;
                 if(field.ActiveLamps.Any(l=>l&&(l.transform.position-point).sqrMagnitude<minimumLampSpacing*minimumLampSpacing))continue;
-                var delta=point-camera.transform.position;
-                if(Physics.Raycast(camera.transform.position,delta.normalized,delta.magnitude-.1f,~0,QueryTriggerInteraction.Ignore))continue;
-                return field.Spawn(point)!=null;
+                var delta=point-ray.origin;
+                if(Physics.Raycast(ray.origin,delta.normalized,delta.magnitude-.1f,~0,QueryTriggerInteraction.Ignore))continue;
+                return field.Spawn(point,0,shape,region)!=null;
             }
             return false;
         }

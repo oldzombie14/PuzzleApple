@@ -1465,6 +1465,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b000e845dfdf4889a8ed2a1a8c6ccb42, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.CognitionBoard
+  requirePeriod: 1
   panel: {fileID: 1860358082260171772}
   catalog: {fileID: 11400000, guid: e891ea58d6544f04b068c26c1b8dc7a4, type: 2}
   chalkFont: {fileID: 12800000, guid: 7fd48d2af1bc417aaaf6bcf13f4d7262, type: 3}

@@ -57,6 +57,7 @@ namespace PuzzleApple.V5.Editor
                 var on=s.Groups.Single();
                 Require(!on.Recognized&&e.room.Progress==0&&e.feedback.StrongCount==0,"invalid order remains inert");
                 s.Swap(on.Id,on.Words[0].Id,on.Words[1].Id);
+                if(s.RequirePeriod)s.Speak(on.Id);
                 yield return Until(()=>b.GroupRect(on.Id) && b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha<.95f);
                 Require(b.GroupRect(on.Id).GetComponent<CanvasGroup>().alpha>0 && b.Panel.IsOpen,"world command visibly fades during feedback");
                 yield return Until(()=>e.room.Opened&&!e.Busy);

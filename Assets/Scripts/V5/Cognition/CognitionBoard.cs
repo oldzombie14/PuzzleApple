@@ -22,13 +22,18 @@ namespace PuzzleApple.V5.Cognition
         [SerializeField, Min(12)] float wordGap = 18;
         [SerializeField, Range(0, 20)] float wordFloatAmplitude = 8;
         [SerializeField, Min(.01f)] float handleFadeDuration = .16f;
+        [Header("Experimental punctuation")]
+        public bool requirePeriod;
+        public PeriodStyle punctuation=new PeriodStyle();
+        PeriodTray periods;
+        internal bool LearnedPeriod {get;set;}
         public CognitionState State { get; private set; }
         public CognitionCatalog Catalog => catalog;
         public GameplayPanel Panel => panel;
         public Font ChalkFont => chalkFont;
         [SerializeField] RectTransform surface;
         public RectTransform Surface => surface;
-        public bool IsDragging => drag != null;
+        public bool IsDragging => drag != null || periods && periods.Dragging;
         public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
         public void SetSentenceOpacity(int id,float opacity)
         {
@@ -153,7 +158,7 @@ namespace PuzzleApple.V5.Cognition
             public float Width, Height, AnimationStart;
             public int Scratches;
             public bool Recognized;
-            public bool Conflicted;
+            public bool Conflicted, Spoken;
             public string Signature;
             public float FontScale = 1;
             public float TextCenterY;
@@ -192,12 +197,13 @@ namespace PuzzleApple.V5.Cognition
         {
             if (!panel) panel = GetComponent<GameplayPanel>();
             if (!chalkFont) chalkFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            State = new CognitionState(catalog);
+            State = new CognitionState(catalog,requirePeriod);
         }
         void Start()
         {
             snapHint.gameObject.SetActive(false);
             previewBullet.gameObject.SetActive(false);
+            if(State.RequirePeriod){periods=gameObject.AddComponent<PeriodTray>();periods.Initialize(this,dragLayer,ChalkColor);}
             State.Changed += Refresh;
             panel.OpenChanged.AddListener(OnPanelChanged);
             lastSurfaceSize = Surface.rect.size;
@@ -210,6 +216,13 @@ namespace PuzzleApple.V5.Cognition
             if (panel) panel.OpenChanged.RemoveListener(OnPanelChanged);
         }
         void OnPanelChanged(bool open) { if (!open) { CancelDrag(); ClearRemovalEffects(); } }
+        public Vector3 PeriodEnd(int id)
+        {
+            var v=views[id];
+            return v.Root.TransformPoint(new Vector3(v.Root.rect.xMin+v.TextEnd+punctuation.spacing*v.FontScale,
+                v.Root.rect.center.y,0));
+        }
+        bool Dim(CognitionState.Group g)=>g.Conflicted || (State.RequirePeriod && !g.Independent && !g.Spoken);
         bool CanFit(IEnumerable<CognitionState.Word> words)
         {
             var tokens = words.ToArray();
@@ -239,7 +252,7 @@ namespace PuzzleApple.V5.Cognition
             {
                 views.TryGetValue(group.Id, out var old);
                 string signature = string.Join(" ", group.Words.Select(w => w.Id));
-                bool changed = old == null || old.Signature != signature || old.Recognized != group.Recognized || old.Conflicted != group.Conflicted;
+                bool changed = old == null || old.Signature != signature || old.Recognized != group.Recognized || old.Conflicted != Dim(group) || old.Spoken!=group.Spoken;
                 if (!changed) { next[group.Id] = old; continue; }
                 Vector2 position = old != null ? old.Position : wordPositions.TryGetValue(group.Words[0].Id, out var p) ? p : NewPosition(next.Count);
                 int scratches = group.Independent || group.Recognized ? 0 : (old != null ? old.Scratches : 0) + 1;
@@ -268,16 +281,17 @@ namespace PuzzleApple.V5.Cognition
             foreach (var v in views.Values) v.Position = Clamp(v.Position, v.Width, v.Height);
             if (kind == CognitionChange.Add)
                 foreach (var v in views.Values) v.Position = FindFree(v, v.Position);
+            if(periods)periods.Refresh();
             if (snapHint) snapHint.transform.SetAsLastSibling();
         }
         View BuildView(CognitionState.Group group, Vector2 position, int scratches, string signature)
         {
             var v = new View { Group = group, Position = position, DisplayPosition = position,
                 Scratches = scratches, AnimationStart = Time.unscaledTime,
-                Recognized = group.Recognized, Conflicted = group.Conflicted, Signature = signature };
+                Recognized = group.Recognized, Conflicted = Dim(group), Spoken=group.Spoken, Signature = signature };
             v.Root = Instantiate(groupPrefab,Surface);v.Root.name="Group "+group.Id;
             v.Fade = v.Root.GetComponent<CanvasGroup>();
-            v.Fade.alpha = group.Conflicted ? ConflictAlpha : 1;
+            v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1;
             v.Mask = (RectTransform)v.Root.Find("Chalk reveal");
             float textStart = group.Independent ? 0 : SentenceIndent;
             float x = textStart;
@@ -292,7 +306,7 @@ namespace PuzzleApple.V5.Cognition
                 x += width + wordGap;
             }
             float textEnd = x - wordGap;
-            x = textEnd;
+            x = textEnd+(State.RequirePeriod && !group.Independent?punctuation.spacing+punctuation.hitSize*.5f:0);
             v.FontScale = Mathf.Min(1, (Surface.rect.width - 8) / Mathf.Max(1, x));
             v.Width = x * v.FontScale; v.Height = WordHeight * v.FontScale;
             v.Mask.localScale = Vector3.one * v.FontScale;
@@ -334,8 +348,19 @@ namespace PuzzleApple.V5.Cognition
             return v;
         }
         Vector2 NewPosition(int count) => new Vector2(18 + (count % 2) * 55, 24 + (count % 7) * 82);
+        public void SetPeriodMode(bool enabled)
+        {
+            requirePeriod=enabled;
+            if(State.RequirePeriod==enabled)return;
+            CancelDrag();
+            if(enabled){periods=gameObject.AddComponent<PeriodTray>();periods.Initialize(this,dragLayer,ChalkColor);}
+            else if(periods){periods.Remove();Destroy(periods);periods=null;}
+            foreach(var view in views.Values)view.Signature="mode changed";
+            State.SetPeriodMode(enabled);
+        }
         void Update()
         {
+            if(State.RequirePeriod!=requirePeriod)SetPeriodMode(requirePeriod);
             UpdateRemovalEffects();
             if (!Surface) return;
             if ((lastSurfaceSize - Surface.rect.size).sqrMagnitude > 1 && drag == null)
@@ -419,7 +444,7 @@ namespace PuzzleApple.V5.Cognition
         }
         public void BeginDrag(int groupId, int wordId, bool whole, Vector2 screen,bool fromLibrary=false)
         {
-            if (!panel.IsOpen || panel.InputBlocked || drag != null || !views.TryGetValue(groupId, out var v)) return;
+            if (!panel.IsOpen || panel.InputBlocked || IsDragging || !views.TryGetValue(groupId, out var v)) return;
             centerFirstWord = false;
             int index = whole ? 0 : v.Group.Words.ToList().FindIndex(w => w.Id == wordId);
             if (index < 0) return;
@@ -585,6 +610,7 @@ namespace PuzzleApple.V5.Cognition
         }
         public void CancelDrag()
         {
+            if(periods)periods.Cancel();
             if (drag == null) return;
             if (views.TryGetValue(drag.GroupId, out var v))
             { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = ChalkColor; }

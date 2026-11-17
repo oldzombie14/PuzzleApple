@@ -67,7 +67,7 @@ namespace PuzzleApple.V5.Editor
                 float held = journey.DoorProgress;
                 yield return new WaitForSeconds(.25f);
                 Check(held == journey.DoorProgress,"splitting door move holds angle");
-                state.Join(detached.Id,cycle.Id,false);
+                state.JoinAndSpeak(detached.Id,cycle.Id,false);
                 yield return Until(() => journey.DoorProgress == 1);
                 yield return Until(() => journey.DoorProgress < .8f);
                 Result = "PASS";
@@ -100,7 +100,7 @@ namespace PuzzleApple.V5.Editor
                 var word=state.Detach(off.Id,off.Words.Last().Id);
                 yield return new WaitForSeconds(.2f);
                 Check(Mathf.Abs(brightness-e.chamberLight.Brightness)<.0001f,"split holds partial brightness");
-                state.Join(word.Id,off.Id,false);
+                state.JoinAndSpeak(word.Id,off.Id,false);
                 state.TryAcquireSentence("check.on","positive light");
                 var on=state.Groups.First(g=>g.RuleId=="light.on");
                 Check(off.Effective&&on.Conflicted,"opposite light state uses earlier sentence");
@@ -126,7 +126,7 @@ namespace PuzzleApple.V5.Editor
                 var surface=new MaterialPropertyBlock();j.Door.GetComponent<Renderer>().GetPropertyBlock(surface);
                 Check(surface.GetFloat("_Dissolve")==0,"swinging leaf stays opaque");
                 Check(Mathf.Abs(j.Door.position.y-doorPosition.y)<.001f,"swing stays level");
-                state.Join(token.Id,doorOn.Id,false);yield return Until(()=>j.DoorProgress>=1);
+                state.JoinAndSpeak(token.Id,doorOn.Id,false);yield return Until(()=>j.DoorProgress>=1);
                 Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled,"open leaf remains solid and visible");
                 Check(Mathf.Abs(Vector3.Angle(j.Root.forward,j.Door.forward)-j.openAngle)<.05f,"fully open leaf reaches its configured swing angle");
                 yield return Until(()=>state.Find(doorOn.Id)==null);
@@ -329,12 +329,12 @@ namespace PuzzleApple.V5.Editor
                 var close=state.Groups.First(g=>g.RuleId=="world.off");var part=state.Detach(close.Id,close.Words.Last().Id);
                 float pose=e.room.Progress;yield return new WaitForSeconds(.25f);
                 Check(Mathf.Abs(e.room.Progress-pose)<.0001f&&!e.Busy&&e.board.Panel.IsOpen&&!e.board.Panel.InputBlocked,"split pauses closing and allows editing");
-                state.Join(part.Id,close.Id,false);yield return Until(()=>e.DialogReady);e.CancelExit();
+                state.JoinAndSpeak(part.Id,close.Id,false);yield return Until(()=>e.DialogReady);e.CancelExit();
                 state.ClearWorkspace();state.TryAcquireSentence("check.box.on","positive world");yield return Until(()=>e.room.Progress>.15f);
                 var open=state.Groups.First(g=>g.RuleId=="world.on");part=state.Detach(open.Id,open.Words.Last().Id);
                 pose=e.room.Progress;yield return new WaitForSeconds(.25f);
                 Check(Mathf.Abs(e.room.Progress-pose)<.0001f,"split pauses opening");
-                state.Join(part.Id,open.Id,false);yield return Until(()=>e.room.Opened&&!e.Busy);
+                state.JoinAndSpeak(part.Id,open.Id,false);yield return Until(()=>e.room.Opened&&!e.Busy);
                 Check(!e.player.MovementLocked&&!e.portableClosure.Isolated,"reopening releases player and restores room");
                 Result="PASS: actual wall hit/reflection, lit/dark walls, no decorative frame, no wide reveal planes, no floor overlap, box close/open split and resume, exit cancellation and portable restoration";
             }

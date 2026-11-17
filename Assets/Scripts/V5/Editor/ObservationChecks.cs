@@ -104,7 +104,7 @@ namespace PuzzleApple.V5.Editor
             var token=state.Detach(off.Id,off.Words.Last().Id);
             yield return new WaitForSeconds(.15f);
             Check(glow.intensity>0 && journey.WordAt(collider,1)=="light","half-lit sphere retains light identity");
-            state.Join(token.Id,off.Id,false);
+            state.JoinAndSpeak(token.Id,off.Id,false);
             yield return Until(()=>!journey.Tutorial.AnyLit);
             before=sphere.position;
             smallBefore=small.position;
@@ -244,7 +244,7 @@ namespace PuzzleApple.V5.Editor
                 var detached=s.Detach(group.Id,group.Words[1].Id);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
                 Check(!j.LampsMoving&&j.Lamps.All(l=>l.GetComponent<Rigidbody>().isKinematic),"split stops whole group");
                 before=body.position;yield return new WaitForSeconds(.15f);Check(Vector3.Distance(before,body.position)<.001f,"stopped positions stable");
-                s.Join(detached.Id,group.Id,false);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();Check(j.LampsMoving&&!body.isKinematic,"rejoin resumes");
+                s.JoinAndSpeak(detached.Id,group.Id,false);yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();Check(j.LampsMoving&&!body.isKinematic,"rejoin resumes");
                 e.board.Panel.SetOpen(false);yield return null;p.view.LookAt(body.position);p.AdoptCurrentView();
                 int groups=s.Groups.Count;pulsesBefore=e.feedback.StrongCount;o.Advance(false,0);o.Advance(true,2.1f);
                 Check(e.chamberLight.ShowingKnown,"known full bar immediately shows vocabulary feedback");

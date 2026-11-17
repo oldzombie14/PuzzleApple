@@ -26,7 +26,9 @@ namespace PuzzleApple.V5.Cognition
             public bool Independent => words.Count == 1;
             public bool Recognized { get; internal set; }
             public bool Conflicted { get; internal set; }
-            public bool Effective => Recognized && !Conflicted;
+            public bool Spoken { get; internal set; }
+            public bool Effective => Recognized && Spoken && !Conflicted;
+            public long PausedEstablishment { get; internal set; }
             public CognitionSignal Signal { get; internal set; }
             public IReadOnlyList<CognitionSignal> Signals { get; internal set; } = Array.Empty<CognitionSignal>();
             public string RuleId { get; internal set; }
@@ -59,9 +61,16 @@ namespace PuzzleApple.V5.Cognition
         public bool HasEffect(CognitionSignal signal) => groups.Any(g => g.Effective && g.Signals.Contains(signal));
         public bool Knows(string id) => learned.Contains(id);
 
-        public CognitionState(CognitionCatalog catalog)
+        public bool RequirePeriod {get;private set;}
+        public void SetPeriodMode(bool enabled){
+            if(RequirePeriod==enabled)return;
+            RequirePeriod=enabled;
+            Commit(CognitionChange.Join);
+        }
+        public CognitionState(CognitionCatalog catalog,bool requirePeriod=false)
         {
             if (!catalog) throw new ArgumentNullException(nameof(catalog));
+            RequirePeriod=requirePeriod;
             catalog.ValidateOrThrow();
             vocabulary = catalog.Words.ToDictionary(w => w.Id);
             channels = catalog.Rules.ToDictionary(r => r.Id, r => r.Channel);
@@ -101,7 +110,8 @@ namespace PuzzleApple.V5.Cognition
             acquisitionWords[sourceId] = definitions.Select(d => d.Id).ToArray();
             foreach (var d in definitions) learned.Add(d.Id);
             acquired=NewGroup(definitions.Select(d => new Word(++nextWord, d)));
-            Commit(CognitionChange.Add);
+            acquired.Spoken=true;
+            Commit(CognitionChange.Add,acquired);
             return true;
         }
         Group NewGroup(IEnumerable<Word> words)
@@ -117,6 +127,30 @@ namespace PuzzleApple.V5.Cognition
             var group = NewGroup(new[] { new Word(++nextWord, word) });
             Commit(CognitionChange.Add); return group;
         }
+        public bool Speak(int groupId)
+        {
+            var g=Find(groupId);
+            if(!RequirePeriod || g==null || g.Independent || g.Spoken)return false;
+            if(!g.Recognized){RecordAttempt(g);Changed?.Invoke(CognitionChange.Layout);return false;}
+            g.Spoken=true;
+            Commit(CognitionChange.Join,g);
+            return true;
+        }
+        public bool Unsay(int groupId)
+        {
+            var g=Find(groupId);
+            if(!RequirePeriod || g==null || !g.Spoken)return false;
+            g.PausedEstablishment=g.Established;
+            g.Spoken=false;
+            Commit(CognitionChange.Split);
+            return true;
+        }
+        void Edit(Group group)
+        {
+            if(!RequirePeriod)return;
+            group.Spoken=false;
+            group.PausedEstablishment=0;
+        }
         public void ReturnToLibrary(int groupId, int wordId, bool whole)
         {
             var group = Find(groupId); if (group == null) return;
@@ -124,6 +158,7 @@ namespace PuzzleApple.V5.Cognition
             else
             {
                 int index = group.words.FindIndex(w => w.Id == wordId); if (index < 0) return;
+                Edit(group);
                 var right = group.words.Skip(index + 1).ToArray();
                 group.words.RemoveRange(index, group.words.Count - index);
                 if (group.words.Count == 0) groups.Remove(group);
@@ -158,6 +193,7 @@ namespace PuzzleApple.V5.Cognition
             if (group == null) return null;
             int index = group.words.FindIndex(w => w.Id == wordId);
             if (index < 0 || group.Independent) return group;
+            Edit(group);
             var word = group.words[index];
             var right = group.words.Skip(index + 1).ToArray();
             group.words.RemoveRange(index, group.words.Count - index);
@@ -174,6 +210,7 @@ namespace PuzzleApple.V5.Cognition
             int a = group.words.FindIndex(w => w.Id == firstWordId);
             int b = group.words.FindIndex(w => w.Id == secondWordId);
             if (a < 0 || b < 0 || a == b) return;
+            Edit(group);
             var word = group.words[a]; group.words[a] = group.words[b]; group.words[b] = word;
             Commit(CognitionChange.Swap);
         }
@@ -182,11 +219,12 @@ namespace PuzzleApple.V5.Cognition
         {
             var source = Find(movingGroupId); var target = Find(targetGroupId);
             if (source == null || target == null || source == target) return;
+            Edit(target);
             target.words.InsertRange(prepend ? 0 : target.words.Count, source.words);
             groups.Remove(source);
             Commit(CognitionChange.Join);
         }
-        void Commit(CognitionChange kind)
+        void Commit(CognitionChange kind,Group attempt=null)
         {
             foreach (var group in groups)
             {
@@ -197,7 +235,9 @@ namespace PuzzleApple.V5.Cognition
                 group.Signals = group.Recognized ? rules[key].Effects.Distinct().ToArray() : Array.Empty<CognitionSignal>();
                 group.Rule = group.Recognized ? rules[key] : null;
                 group.RuleId = group.Recognized ? rules[key].Id : null;
-                if (group.RuleId != previousRule) group.Established = group.Recognized ? ++chronology : 0;
+                if(!RequirePeriod || !group.Recognized)group.Spoken=group.Recognized;
+                if(!group.Recognized || !group.Spoken)group.Established=0;
+                else if(group.RuleId!=previousRule || group.Established==0)group.Established=++chronology;
                 group.Conflicted = false;
             }
             // Resolve whole sentences in establishment order. Rejected sentences claim no channels.
@@ -205,15 +245,20 @@ namespace PuzzleApple.V5.Cognition
             var accepted = new List<Group>();
             foreach (var conflict in conflicts.Where(c => !c.Earliest))
             {
-                if (!groups.Any(g => g.Recognized && g.Signals.Contains(conflict.First)) ||
-                    !groups.Any(g => g.Recognized && g.Signals.Contains(conflict.Second))) continue;
-                foreach (var g in groups.Where(g => g.Recognized))
+                if (!groups.Any(g => g.Recognized && g.Spoken && g.Signals.Contains(conflict.First)) ||
+                    !groups.Any(g => g.Recognized && g.Spoken && g.Signals.Contains(conflict.Second))) continue;
+                foreach (var g in groups.Where(g => g.Recognized && g.Spoken))
                     if (g.Signals.Contains(conflict.First) || g.Signals.Contains(conflict.Second)) g.Conflicted = true;
             }
-            foreach (var group in groups.Where(g => g.Recognized && !g.Conflicted).OrderBy(g => g.Established))
+            foreach (var group in groups.Where(g => g.Recognized && g.Spoken && !g.Conflicted).OrderBy(g => g.Established))
             {
                 group.Conflicted = accepted.Any(other => ConflictsWith(group, other));
                 if (!group.Conflicted) accepted.Add(group);
+            }
+            if(RequirePeriod){
+                if(attempt!=null && !attempt.Independent)RecordAttempt(attempt);
+                Changed?.Invoke(kind);
+                return;
             }
             foreach (var id in lastEvaluations.Keys.Where(id => Find(id) == null).ToArray()) lastEvaluations.Remove(id);
             foreach (var group in groups)
@@ -223,11 +268,16 @@ namespace PuzzleApple.V5.Cognition
                 if (lastEvaluations.TryGetValue(group.Id, out var previous) && previous == evaluation) continue;
                 lastEvaluations[group.Id] = evaluation;
                 // Keep one entry per sentence/result, newest first; splitting never erases history.
-                history.RemoveAll(h => h.Effective == group.Effective && h.Words.SequenceEqual(group.words.Select(w => w.Definition)));
-                history.Insert(0, new HistoryEntry { Words = group.words.Select(w => w.Definition).ToArray(), Effective = group.Effective });
-                HistoryVersion++;
+                RecordAttempt(group);
             }
             Changed?.Invoke(kind);
+        }
+        void RecordAttempt(Group group)
+        {
+            var words=group.words.Select(w=>w.Definition).ToArray();
+            history.RemoveAll(h=>h.Effective==group.Effective && h.Words.SequenceEqual(words));
+            history.Insert(0,new HistoryEntry{Words=words,Effective=group.Effective});
+            HistoryVersion++;
         }
         bool ConflictsWith(Group a, Group b)
         {

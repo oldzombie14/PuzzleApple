@@ -40,7 +40,7 @@ namespace PuzzleApple.V5.Editor
                 var first = state.Groups.First(g => g.RuleId == "light.on");
                 state.ReturnToLibrary(first.Id, first.Words[0].Id, true);
                 Check(state.Groups.First(g => g.RuleId == "light.off").Effective, "conflict takeover");
-                Check(state.History.Any(h => h.Effective && h.Words[0].Id == "negative"), "takeover recorded");
+                Check(state.History.Any(h => h.Effective && h.Words[0].Id == "negative")!=state.RequirePeriod, "only automatic mode records an unspoken takeover");
                 int count = state.History.Count; state.ClearWorkspace();
                 Check(state.History.Count == count, "history survives removal");
                 var library = UnityEngine.Object.FindFirstObjectByType<WordLibrary>();

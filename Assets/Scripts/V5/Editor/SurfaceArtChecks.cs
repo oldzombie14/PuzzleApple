@@ -66,7 +66,7 @@ namespace PuzzleApple.V5.Editor
                 Check(!original.Moving&&Vector3.Distance(origin,original.transform.position)<.01f,"split stops original lamp");
                 e.board.State.TryAcquireSentence("check.original.off","negative light");
                 yield return Until(()=>original.Brightness==0);
-                e.board.State.Join(moveWord.Id,command.Id,false);
+                e.board.State.JoinAndSpeak(moveWord.Id,command.Id,false);
                 yield return new WaitForSeconds(.5f);
                 Check(!original.Moving&&Vector3.Distance(origin,original.transform.position)<.01f,"rejoining light move in a dark chamber leaves the cube still");
                 e.board.State.TryAcquireSentence("check.original.on","positive light");

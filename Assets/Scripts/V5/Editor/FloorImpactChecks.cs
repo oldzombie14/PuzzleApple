@@ -43,7 +43,7 @@ namespace PuzzleApple.V5.Editor
                 var group=state.Groups.First(g=>g.RuleId=="light.move");
                 var target=state.Spawn(e.board.Catalog.Word("floor"));
                 int weak=e.feedback.WeakCount,strong=e.feedback.StrongCount;
-                state.Join(target.Id,group.Id,false);
+                state.JoinAndSpeak(target.Id,group.Id,false);
                 yield return Until(()=>e.feedback.WeakCount>weak);
                 var before=body.position;
                 yield return new WaitForSeconds(.25f);
@@ -52,10 +52,11 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>j.floorMotion.Active);
                 yield return new WaitForFixedUpdate();
                 var detached=state.Detach(group.Id,group.Words.Last().Id);
+                if(state.RequirePeriod){Check(!group.Effective,"the edited prefix is silent");state.Speak(group.Id);}
                 yield return Until(()=>j.LampsMoving);
                 body.position=j.Root.TransformPoint(new Vector3(-4,4,j.RoomStart+8));
                 strong=e.feedback.StrongCount;
-                state.Join(detached.Id,group.Id,false);
+                state.JoinAndSpeak(detached.Id,group.Id,false);
                 yield return Until(()=>j.floorMotion.Active);
                 Check(e.feedback.StrongCount==strong+1&&e.feedback.GetComponentsInChildren<ParticleSystem>().Any(ps=>ps.isPlaying),"extending lit drift to floor plays a starred ripple");
                 before=body.position;yield return new WaitForSeconds(.2f);
@@ -74,8 +75,8 @@ namespace PuzzleApple.V5.Editor
                     before=body.position;
                     yield return new WaitForSeconds(.25f);
                     Check(!e.sentenceRuntime.HasEffect(CognitionSignal.LightMove)&&!body.isKinematic&&Vector3.Distance(body.position,before)>.02f,"fully dismantled sentence preserves dark drift");
-                    state.Join(moveWord.Id,group.Id,false);
-                    state.Join(floorWord.Id,group.Id,false);
+                    state.JoinAndSpeak(moveWord.Id,group.Id,false);
+                    state.JoinAndSpeak(floorWord.Id,group.Id,false);
                 }
                 e.board.Panel.SetOpen(false);
                 j.SetLights(true);yield return Until(()=>floor.HoleOpen);Physics.SyncTransforms();

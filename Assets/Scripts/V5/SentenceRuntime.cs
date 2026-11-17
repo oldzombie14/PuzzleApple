@@ -16,6 +16,8 @@ namespace PuzzleApple.V5
         readonly Dictionary<int,string> conflicts=new Dictionary<int,string>();
         readonly Dictionary<int,string> pendingTakeovers=new Dictionary<int,string>();
         readonly HashSet<CognitionSignal> applied=new HashSet<CognitionSignal>();
+        readonly HashSet<long> requested=new HashSet<long>();
+        readonly HashSet<long> rejected=new HashSet<long>();
         int revision;
         LightStateEffect lightState;
         DoorStateEffect doorState;
@@ -79,6 +81,13 @@ namespace PuzzleApple.V5
                     || (previous.TryGetValue(g.Id,out var activeRule) && activeRule==g.RuleId))
                 .OrderBy(g=>g.Established).ToArray();
             lightState.Rescope(groups);
+            if(state.RequirePeriod){
+                var acceptedIds=groups.Select(g=>g.Established);
+                var rejectedIds=state.Groups.Where(g=>g.Conflicted).Select(g=>g.Established);
+                if(requested.SetEquals(acceptedIds) && rejected.SetEquals(rejectedIds))return;
+                requested.Clear();requested.UnionWith(acceptedIds);
+                rejected.Clear();rejected.UnionWith(rejectedIds);
+            }
             var added=groups.Where(g=>!previous.TryGetValue(g.Id,out var rule)||rule!=g.RuleId).ToArray();
             var newConflicts=entry.board.State.Groups.Where(g=>g.Conflicted&&(!conflicts.TryGetValue(g.Id,out var rule)||rule!=g.RuleId)).Select(g=>g.Id).ToArray();
             foreach(var g in added)
@@ -102,6 +111,9 @@ namespace PuzzleApple.V5
                 var announce=groups.Where(g=>pendingTakeovers.ContainsKey(g.Id)||added.Contains(g)).ToArray();
                 StartCoroutine(Present(groups,announce,kind,version));
                 return;
+            }
+            if(state.RequirePeriod && added.Length==0 && previous.Keys.Any(id=>!groups.Any(g=>g.Id==id))){
+                Commit(groups,added,kind);return;
             }
             if(kind==CognitionChange.Split||granted){Commit(groups,added,kind);return;}
             if(entry.ConfirmingExit)return;

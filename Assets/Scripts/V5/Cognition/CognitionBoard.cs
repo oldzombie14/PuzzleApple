@@ -50,8 +50,8 @@ namespace PuzzleApple.V5.Cognition
             var bounds=new Rect(rect.xMin+view.InkStart,rect.yMin,view.InkEnd-view.InkStart,rect.height);
             if(State.RequirePeriod && view.Group.Spoken){
                 var point=view.Root.InverseTransformPoint(PeriodEnd(id));
-                float radius=punctuation.diameter*.5f*view.FontScale*punctuation.landingScale;
-                bounds.xMax=Mathf.Max(bounds.xMax,point.x+radius);
+                float radius=punctuation.diameter*.5f*view.FontScale;
+                bounds.xMax=point.x+radius;
                 bounds.yMin=Mathf.Min(bounds.yMin,point.y-radius);
                 bounds.yMax=Mathf.Max(bounds.yMax,point.y+radius);
             }

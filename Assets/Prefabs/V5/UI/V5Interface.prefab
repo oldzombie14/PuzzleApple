@@ -1480,7 +1480,7 @@ MonoBehaviour:
     restingOpacity: 0.86
     snapOpacity: 0.46
     guideOpacity: 0.35
-    returnSeconds: 0.22
+    returnSeconds: 0.38
     landSeconds: 0.15
     cornerScale: 1.3
     landingScale: 1.3

@@ -92,7 +92,7 @@ namespace PuzzleApple.V5.Editor
             Check(j.Lamps.Any(l=>Vector3.Distance(l.transform.position,Aim())<.05f),"lit room prioritizes its lamps even facing away from them");
             p.Teleport(mouth+j.Root.forward*1.5f-Vector3.up*1.4f,Quaternion.LookRotation(-j.Root.forward));
             yield return null;
-            Check(j.Root.InverseTransformPoint(Aim()).z<j.RoomStart,"facing the nearby doorway selects a return-path star");
+            Check(j.Lamps.Any(l=>Vector3.Distance(l.transform.position,Aim())<.05f),"a lit room keeps its lamp as the subject near the door");
             p.Teleport(mouth+j.Root.forward*8-Vector3.up*1.4f,j.Root.rotation);
             j.SetLights(false,PassageJourney.LightSpace.FarRoom);
             yield return Wait(()=>!j.LampsLit,"dark far room");

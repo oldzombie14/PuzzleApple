@@ -24,6 +24,7 @@ namespace PuzzleApple.V5
             output=owner.entry.chamberLight.GetComponent<ReticleBackground>();
             nearZ=start;
             travelLength=end-start;
+            phase=Mathf.Clamp(owner.Root.InverseTransformPoint(transform.position).z-start,0,travelLength);
             Deck=GetComponent<BoxCollider>();
             body=GetComponent<Rigidbody>();
             body.isKinematic=true;

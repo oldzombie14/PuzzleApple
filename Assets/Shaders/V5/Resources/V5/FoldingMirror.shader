@@ -6,6 +6,7 @@ Shader "PuzzleApple/V5/Folding Mirror"
         _ReflectionReady("Ready",Float)=0
         _Tint("Reflection tint",Color)=(1,1,1,1)
         _BaseColor("Frame",Color)=(.15,.16,.16,1)
+        _EmissionColor("Frame glow",Color)=(0,0,0,1)
         _MirrorGlass("Reflecting surface",Float)=0
     }
     SubShader
@@ -18,7 +19,7 @@ Shader "PuzzleApple/V5/Folding Mirror"
             #pragma vertex Vert
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            float4 _PanelSink, _Tint, _BaseColor;
+            float4 _PanelSink, _Tint, _BaseColor, _EmissionColor;
             float _PanelOpacity, _PanelGroundY, _PreserveMeshDepth, _MirrorGlass, _ReflectionReady;
             #include "../../PanelCut.hlsl"
             TEXTURE2D(_ReflectionTex); SAMPLER(sampler_ReflectionTex);
@@ -35,7 +36,7 @@ Shader "PuzzleApple/V5/Folding Mirror"
                 }
                 Light key=GetMainLight();
                 half3 normal=normalize(i.normal);
-                return half4(_BaseColor.rgb*(SampleSH(normal)+key.color*saturate(dot(normal,key.direction))),1);
+                return half4(_BaseColor.rgb*(SampleSH(normal)+key.color*saturate(dot(normal,key.direction)))+_EmissionColor.rgb,1);
             }
             ENDHLSL
         }

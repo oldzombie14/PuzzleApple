@@ -9,6 +9,7 @@ namespace PuzzleApple.V5
         public ObservableBehaviour[] targets=new ObservableBehaviour[0];
         public ObservationRing ring;
         [Min(.1f)] public float range=40;
+        [Range(0,6)] public float trackingSlackDegrees=2.5f;
         public ObservableBehaviour Target {get;private set;}
         public float Progress {get;private set;}
         bool WordOnly => Target.wordOnly || (Target == entry.journey.movementObservation && !entry.journey.LampsLit) ||
@@ -22,7 +23,7 @@ namespace PuzzleApple.V5
             entry.player.CanInteractWithWorld&&!entry.chamberLight.Collecting&&!entry.chamberLight.ShowingKnown;
         public ObservableBehaviour FindTarget()=>FindTarget(out _);
         Component trackedMember;
-        ObservableBehaviour FindTarget(out Component member)
+        ObservableBehaviour FindTarget(out Component member,bool tracking=false)
         {
             member=null;
             if(!CanObserve)return null;
@@ -31,6 +32,11 @@ namespace PuzzleApple.V5
             if (journey && journey.InCorridor && journey.ActiveStars && journey.ActiveStars.Moving)
             {
                 member = entry.chamberLight.PickStar(ray, range, out _);
+                if(!member && tracking && Target==journey.ActiveStars.Observation && trackedMember is Renderer star){
+                    var toward=star.bounds.center-ray.origin;
+                    var direction=Vector3.RotateTowards(ray.direction,toward.normalized,trackingSlackDegrees*Mathf.Deg2Rad,0);
+                    if(entry.chamberLight.PickStar(new Ray(ray.origin,direction),range,out _)==star)member=star;
+                }
                 if (member) return journey.ActiveStars.Observation;
             }
             var spheres = SphereObservation();
@@ -38,11 +44,11 @@ namespace PuzzleApple.V5
                 (!entry.portableClosure || !entry.portableClosure.Isolated))
             {
                 spheres.members = journey.Tutorial.MovingSpheres();
-                member = spheres.MemberAt(ray, range);
+                member = spheres.MemberAt(ray, range,tracking && Target==spheres?trackedMember as Collider:null,trackingSlackDegrees);
                 if (member) return spheres;
             }
             foreach(var target in targets)
-                if(target&&(member=target.MemberAt(ray,range)))return target;
+                if(target&&(member=target.MemberAt(ray,range,tracking && Target==target?trackedMember as Collider:null,trackingSlackDegrees)))return target;
             return null;
         }
         // The move tutorial's floating and blocking spheres teach the same lesson as the corridor stars.
@@ -69,7 +75,7 @@ namespace PuzzleApple.V5
         {
             if(!held){completedHold=false;Progress=0;Target=FindTarget(out trackedMember);return;}
             if(completedHold)return;
-            var next=FindTarget(out var member);
+            var next=FindTarget(out var member,Progress>0);
             if(next!=Target||member!=trackedMember){Progress=0;Target=next;trackedMember=member;}
             if(!Target){Progress=0;return;}
             Progress=Mathf.Clamp01(Progress+Mathf.Max(0,deltaTime)/Mathf.Max(.1f,Target.lesson.holdDuration));

@@ -17,7 +17,7 @@ namespace PuzzleApple.V5.Cognition
         [Min(0)] public float trailDelay=.027f;
         [Range(0,1)] public float restingOpacity=.86f,snapOpacity=.46f;
         [Range(0,1)] public float guideOpacity=.35f;
-        [Min(.01f)] public float returnSeconds=.22f,landSeconds=.15f;
+        [Min(.01f)] public float returnSeconds=.38f,landSeconds=.15f;
         [Min(1)] public float cornerScale=1.3f,landingScale=1.3f;
         [Min(0)] public float hintScale=.1f,guideScale=.25f,guideArc=18,rippleScale=2,rippleGrowth=1.5f;
         [Range(0,1)] public float rippleOpacity=.27f,dragSourceOpacity=.15f;
@@ -33,7 +33,9 @@ namespace PuzzleApple.V5.Cognition
         HashSet<int> drafts=new HashSet<int>();
         Color chalk;
         int source,hover;
-        float pulse,guide;
+        float pulse,guide,ringAge;
+        bool hinting;
+        Vector3? releasedAt;
         PeriodStyle Style=>board.punctuation;
         public bool Dragging=>ghost;
         public void Initialize(CognitionBoard owner,RectTransform overlay,Color ink)
@@ -71,7 +73,8 @@ namespace PuzzleApple.V5.Cognition
             }
             foreach(int id in attached.Keys.Where(id=>!active.Contains(id)).ToArray()){
                 if(attached[id]){
-                    if(board.Panel.IsOpen)StartCoroutine(FlyHome(attached[id].transform.position));
+                    var fade=attached[id].GetComponentInParent<CanvasGroup>(true);
+                    if(board.Panel.IsOpen && (!fade || fade.alpha>.001f))StartCoroutine(FlyHome(releasedAt??attached[id].transform.position));
                     Destroy(attached[id].gameObject);
                 }
                 attached.Remove(id);
@@ -83,8 +86,17 @@ namespace PuzzleApple.V5.Cognition
         System.Collections.IEnumerator FlyHome(Vector3 from)
         {
             var dot=Glyph("Returning period",layer,-1,false);dot.gameObject.SetActive(true);
-            for(float t=0;t<1 && board.Panel.IsOpen;t+=Time.unscaledDeltaTime/Style.returnSeconds)
-            {dot.transform.position=Vector3.Lerp(from,corner.transform.position,Mathf.SmoothStep(0,1,t));yield return null;}
+            float scale=board.Surface.lossyScale.x;
+            float distance=Vector3.Distance(from,corner.transform.position)/scale;
+            float duration=Style.returnSeconds*Mathf.Lerp(.6f,1.25f,Mathf.Clamp01(distance/420));
+            float lift=Mathf.Min(14,distance*.06f)*scale;
+            for(float t=0;t<1 && board.Panel.IsOpen;t+=Time.unscaledDeltaTime/duration){
+                float u=Mathf.SmoothStep(0,1,t);
+                dot.transform.position=Vector3.Lerp(from,corner.transform.position,u)+Vector3.up*(lift*4*u*(1-u));
+                dot.rectTransform.localScale=Vector3.one*Mathf.Lerp(1,Style.cornerScale,u);
+                dot.canvasRenderer.SetAlpha(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.76f,1,t)));
+                yield return null;
+            }
             Destroy(dot.gameObject);
         }
         public void Begin(int group,Vector2 screen)
@@ -116,8 +128,8 @@ namespace PuzzleApple.V5.Cognition
         {
             if(!ghost)return;
             Move(screen);int from=source,to=hover;Cancel();
-            if(from==to)return;
-            if(from>0){board.State.Unsay(from);return;}
+            if(from==to){if(from==0)StartCoroutine(FlyHome(screen));return;}
+            if(from>0){releasedAt=screen;board.State.Unsay(from);releasedAt=null;return;}
             if(to>0 && board.State.Speak(to)){board.LearnedPeriod=true;guide=0;}
         }
         public void Cancel()
@@ -151,8 +163,16 @@ namespace PuzzleApple.V5.Cognition
             float beat=Mathf.Max(ready?Mathf.Sin(Mathf.PI*Mathf.Clamp01(pulse/Style.hintSeconds)):0,show && guide<Style.guidePulseSeconds?Mathf.Sin(Mathf.PI*guide/Style.guidePulseSeconds):0);
             corner.canvasRenderer.SetAlpha(Mathf.Lerp(Style.restingOpacity,1,beat));
             corner.rectTransform.localScale=Vector3.one*Style.cornerScale*(1+beat*(show?Style.guideScale:Style.hintScale));
-            ring.gameObject.SetActive(beat>0);
-            if(beat>0){ring.transform.position=corner.transform.position;ring.rectTransform.localScale=Vector3.one*(Style.rippleScale+beat*Style.rippleGrowth);ring.canvasRenderer.SetAlpha(beat*Style.rippleOpacity);}
+            bool hintStart=beat>0 && !hinting;
+            hinting=beat>0;
+            ringAge=hintStart && (!ring.gameObject.activeSelf || ringAge>=Style.hintSeconds)?0:ringAge+dt;
+            float ripple=Mathf.Clamp01(ringAge/Style.hintSeconds);
+            ring.gameObject.SetActive(ready && ripple<1);
+            if(ring.gameObject.activeSelf){
+                ring.transform.position=corner.transform.position;
+                ring.rectTransform.localScale=Vector3.one*(Style.rippleScale+ripple*Style.rippleGrowth);
+                ring.canvasRenderer.SetAlpha((1-ripple)*Style.rippleOpacity);
+            }
             foreach(var token in attached.Values)if(token){
                 float u=Mathf.Clamp01((Time.unscaledTime-token.born)/Style.landSeconds);
                 token.rectTransform.localScale=Vector3.one*board.PeriodScale(token.group)*Mathf.Lerp(Style.landingScale,1,u);
@@ -192,6 +212,18 @@ namespace PuzzleApple.V5.Cognition
             mesh.Clear();
             const int segments=48;
             float radius=diameter*.5f;
+            if(ring){
+                for(int i=0;i<=segments;i++){
+                    float angle=i*2*Mathf.PI/segments;
+                    var dir=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));
+                    mesh.AddVert(dir*radius,color,Vector2.zero);
+                    mesh.AddVert(dir*(radius-.8f),color,Vector2.zero);
+                    if(i==0)continue;
+                    int n=i*2;
+                    mesh.AddTriangle(n-2,n-1,n);mesh.AddTriangle(n,n-1,n+1);
+                }
+                return;
+            }
             Color clear=color;
             clear.a=0;
             for(int i=0;i<=segments;i++){
@@ -199,7 +231,7 @@ namespace PuzzleApple.V5.Cognition
                 var direction=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));
                 mesh.AddVert(direction*(radius+.5f),clear,Vector2.zero);
                 mesh.AddVert(direction*(radius-.5f),color,Vector2.zero);
-                mesh.AddVert(direction*(ring?radius*.82f:0),ring?clear:color,Vector2.zero);
+                mesh.AddVert(Vector2.zero,color,Vector2.zero);
                 if(i==0)continue;
                 int n=i*3;
                 mesh.AddTriangle(n-3,n-2,n);mesh.AddTriangle(n,n-2,n+1);

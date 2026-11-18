@@ -35,7 +35,7 @@ namespace PuzzleApple.V5
         public FloorImpactSurface floorSurface;
         public FloorDirectedMotion floorMotion;
         public bool LampsMoving=>entry && entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(LightSpace.FarRoom)
-            ? entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,LightSpace.FarRoom)
+            ? Brightness>0 && entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,LightSpace.FarRoom)
             : DemonstrationLampMoving(Brightness>0);
         // A brightness command preserves an autonomous drift until the player changes the motion sentence.
         public int RelitDriftRevision(LightSpace space)=>entry.sentenceRuntime.HasLampMotion(space)?-1:entry.sentenceRuntime.LightMotionRevision(space);
@@ -50,7 +50,9 @@ namespace PuzzleApple.V5
         }
         public bool DemonstrationLampMoving(bool isOn,int relitRevision=-1,LightSpace space=LightSpace.FarRoom)
         {
-            if((roomsWithMoveKnown & space)!=0)
+            bool approachingWithMove=space==LightSpace.FarRoom && (roomsIntroduced&space)==0 &&
+                entry && entry.board && entry.board.State!=null && entry.board.State.Knows("move");
+            if(approachingWithMove || (roomsWithMoveKnown & space)!=0)
                 return isOn && entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,space);
             return entry&&entry.board&&entry.board.State!=null&&movementObservation&&
             (entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(space)
@@ -234,7 +236,8 @@ namespace PuzzleApple.V5
             if(movingFloor)
             {
                 Platform=path.gameObject.AddComponent<PassagePlatform>();
-                Platform.Bind(this,pathStart+inset,roomStart-inset);
+                float stopInset=Mathf.Min(length*.5f,pathWidth*.5f+.02f);
+                Platform.Bind(this,pathStart+stopInset,roomStart-stopInset);
             }
             var pathSurface=new MaterialPropertyBlock();pathSurface.SetFloat("_FrontWhite",0);
             pathSurface.SetColor("_ShadeColor",new Color(.42f,.42f,.42f,1));
@@ -346,6 +349,10 @@ namespace PuzzleApple.V5
 
         [Min(1)] public float maxScopeDistance=30;
         [Range(5,90)] public float scopeHalfAngle=60;
+        [Tooltip("Distance from an open passage mouth at which a sustained sentence begins affecting the adjacent space.")]
+        [Min(0)] public float approachDistance=30;
+        [Tooltip("Let an existing sentence enter the tutorial from the first path as soon as the door opens. Off preserves the first-opening demonstration until the player enters.")]
+        public bool reachTutorialBeforeEntry;
         public LightSpace PlayerSpace {
             get {
                 var outdoor=entry.outdoor;
@@ -406,6 +413,27 @@ namespace PuzzleApple.V5
             if (Tutorial.ExitBlocked)
                 scope &= InReturnPath || InSecondRoom ? ~beforeSphere : beforeSphere;
             return scope;
+        }
+
+        public LightSpace SustainedReach()
+        {
+            if(entry.portableClosure && entry.portableClosure.Isolated)return 0;
+            var here=PlayerSpace;
+            if((here&LightSpace.All)==0 || !Root || !Tutorial || !entry.room.Opened)return here;
+            var connected=ConnectedLights();
+            var p=Root.InverseTransformPoint(entry.player.view.position);
+            var reached=here;
+            void Across(LightSpace a,LightSpace b,float z,bool allowForward=true){
+                var pair=a|b;
+                if((connected&pair)!=pair || (here&pair)==0 || (here==a && !allowForward))return;
+                float x=Mathf.Max(0,Mathf.Abs(p.x)-PathWidth*.5f);
+                if(x*x+(p.z-z)*(p.z-z)<=approachDistance*approachDistance)reached|=pair;
+            }
+            Across(LightSpace.Chamber,LightSpace.FirstPath,0);
+            Across(LightSpace.FirstPath,LightSpace.SphereRoom,pathLength,reachTutorialBeforeEntry);
+            Across(LightSpace.SphereRoom,LightSpace.ReturnPath,Tutorial.ExitZ);
+            Across(LightSpace.ReturnPath,LightSpace.FarRoom,RoomStart);
+            return reached;
         }
 
         // Switchable light sources by space, in a fixed order. A new light source joins here.

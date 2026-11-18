@@ -249,9 +249,10 @@ namespace PuzzleApple.V5
             curtain.gameObject.SetActive(true);
             try
             {
-                yield return FadeThreshold(0,1,.20f);
+                yield return FadeThreshold(0,1,toChapter?.75f:.20f);
                 if(toChapter)
                 {
+                    yield return null; // Present a fully covered frame before loading the galleries.
                     yield return EnterChapter();
                     if(!InChapter){World.Audio.Play(World.music);yield break;}
                     player.view.rotation=Chapter.arrival.rotation*incoming;
@@ -264,7 +265,7 @@ namespace PuzzleApple.V5
                 }
                 var start=player.view.rotation;
                 var finish=toChapter?start:player.transform.rotation;
-                yield return FadeThreshold(1,0,toChapter?.32f:.62f,start,finish);
+                yield return FadeThreshold(1,0,toChapter?.9f:.62f,start,finish);
                 player.AdoptCurrentView();
             }
             finally

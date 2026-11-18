@@ -43,7 +43,8 @@ namespace PuzzleApple.V5
                 var button=tile.gameObject.AddComponent<Button>();button.targetGraphic=border;
                 var colors=button.colors;colors.normalColor=new Color(.68f,.68f,.68f);colors.highlightedColor=Color.white;button.colors=colors;
                 var fill=Rect("Inset",tile);fill.sizeDelta=Vector2.one*(cell-3);fill.gameObject.AddComponent<Image>().color=Color.black;
-                var icon=Rect("Outline",fill);Stretch(icon);var graphic=icon.gameObject.AddComponent<ShapeOutline>();graphic.shape=shape;graphic.raycastTarget=false;
+                var icon=Rect("Outline",fill);Stretch(icon);var graphic=icon.gameObject.AddComponent<ShapeOutline>();
+                graphic.shape=shape;graphic.selectionIcon=true;graphic.color=Color.white;graphic.raycastTarget=false;
                 button.onClick.AddListener(()=>Select(shape));
             }
             elapsed=0;fade.alpha=0;box.localScale=Vector3.one*fit*.92f;

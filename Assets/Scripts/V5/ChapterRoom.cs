@@ -42,6 +42,13 @@ namespace PuzzleApple.V5
         WorldEntry entry=>Entry;
         float brightness=1, target=1, paintingSpotInitial=1;
         public float Brightness=>brightness;
+        public bool FitsArrivalBox(CharacterController motor)
+        {
+            if(!boxFill)return false;
+            var bounds=motor.bounds;
+            bounds.Expand(new Vector3(2*motor.skinWidth,-.2f,2*motor.skinWidth));
+            return boxFill.Contains(bounds.min) && boxFill.Contains(bounds.max);
+        }
         Vector3 direction=new Vector3(-.6f,-.65f,.45f).normalized;
         MaterialPropertyBlock properties;
         Color emission;

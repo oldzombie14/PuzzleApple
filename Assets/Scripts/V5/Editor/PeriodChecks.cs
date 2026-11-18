@@ -44,7 +44,9 @@ namespace PuzzleApple.V5.Editor
         }
         static IEnumerator Exercise(WorldEntry e){
             var board=e.board;var state=board.State;Check(state.RequirePeriod,"enable Require Period before Play");
-            board.Panel.SetOpen(true);yield return new WaitForSecondsRealtime(.4f);
+            board.Panel.SetOpen(true);
+            yield return ChargeDoorChecks.Wait(()=>board.Panel.FullyOpen && !board.Panel.InputBlocked,"board accepts the first drag");
+            yield return new WaitForEndOfFrame();
             Check(!e.blackBackground.raycastTarget,"opening fade passes pointer input to the board");
             Drag(board,0,board.Surface.TransformPoint(board.Surface.rect.center),true);
             Check(!board.IsDragging && state.Groups.Count==0 && state.History.Count==0,"empty-board drop returns to the supply");
@@ -67,7 +69,9 @@ namespace PuzzleApple.V5.Editor
             Drag(board,0,(Vector2)board.PeriodEnd(g.Id)+Vector2.up*48*board.Surface.lossyScale.x,true);yield return new WaitForSecondsRealtime(.5f);
             Check(g.Spoken && g.Effective && state.History.Count==1,"native period drag speaks world flow");
             var period=board.GroupRect(g.Id).InverseTransformPoint(board.PeriodEnd(g.Id));
-            Check(board.GroupContentBounds(g.Id).Contains(period+Vector3.right*board.punctuation.diameter*.5f),"feedback bounds include the attached period");
+            var row=board.GroupRect(g.Id);
+            float inkScale=row.GetComponentInChildren<CenteredSymbolImage>().rectTransform.lossyScale.x/row.lossyScale.x;
+            Check(Mathf.Abs(board.GroupContentBounds(g.Id).xMax-period.x-board.punctuation.diameter*.5f*inkScale)<.01f,"ripple starts its usual padding at the circular ink edge");
             while(board.Panel.InputBlocked)yield return null;
             board.Panel.SetOpen(true);
             while(!board.Panel.FullyOpen)yield return null;

@@ -93,6 +93,10 @@ namespace PuzzleApple.V5
             SetCollision(collideWhileOpening);
         }
         public void HoldCurrentPose(){target=Progress;SetCollision(Progress<=0||collideWhileOpening&&!Opened);}
+        public void CloseInPlace(Vector3 feet)
+        {
+            SinkFocus=null;SinkCentre=feet;target=0;SetCollision(false);Apply();
+        }
         public void CloseAt(Vector3 feet)
         {
             if (Opened) { SinkFocus=null; SinkCentre=feet; }

@@ -18,7 +18,7 @@ namespace PuzzleApple.V5
         readonly HashSet<CognitionSignal> applied=new HashSet<CognitionSignal>();
         sealed class MotionScope
         {
-            public int owner;
+            public int[] words;
             public string rule;
             public PassageJourney.LightSpace rooms;
         }
@@ -96,8 +96,7 @@ namespace PuzzleApple.V5
         }
         PassageJourney.LightSpace ResumeScope(CognitionState.Group group,PassageJourney.LightSpace here)
         {
-            int index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && p.owner==group.Id);
-            if(index<0)index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && (p.rooms&here)!=0);
+            int index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && p.words.SequenceEqual(group.Words.Select(w=>w.Id)));
             if(index<0)return 0;
             var saved=pausedScopes[index];pausedScopes.RemoveAt(index);
             return (saved.rooms&here)!=0?saved.rooms:0;
@@ -106,11 +105,11 @@ namespace PuzzleApple.V5
         {
             foreach(var key in scopes.Keys.Where(key=>!state.Groups.Any(g=>g.Recognized && (g.Established==key || g.PausedEstablishment==key))).ToArray()){
                 if(motionScopes.TryGetValue(key,out var saved)){
-                    pausedScopes.RemoveAll(p=>p.rule==saved.rule && p.rooms==saved.rooms);
                     pausedScopes.Add(saved);motionScopes.Remove(key);
                 }
                 scopes.Remove(key);
             }
+            pausedScopes.RemoveAll(p=>p.words.Any(id=>state.Owning(id)==null));
             foreach(var group in state.Groups.Where(g=>g.Recognized && g.Established>0)){
                 if(scopes.ContainsKey(group.Established))continue;
                 PassageJourney.LightSpace rooms;
@@ -124,7 +123,7 @@ namespace PuzzleApple.V5
                     if(rooms==0)rooms=entry.journey?entry.journey.SentenceScope():here;
                 }
                 scopes[group.Established]=rooms;
-                if(Motion(group))motionScopes[group.Established]=new MotionScope{owner=group.Id,rule=group.RuleId,rooms=rooms};
+                if(Motion(group))motionScopes[group.Established]=new MotionScope{words=group.Words.Select(w=>w.Id).ToArray(),rule=group.RuleId,rooms=rooms};
             }
         }
         public void Refresh(CognitionChange kind)
@@ -259,7 +258,7 @@ namespace PuzzleApple.V5
                 bool inProgress=!finished && (lightState.TrySettling(group,out bool settling)?settling:EffectInProgress(group));
                 if(Motion(group) && (MotionFrozen || motion.WaitingForLight(group,Scope(group))))inProgress=true;
                 if(inProgress){elapsed=0;board.SetSentenceOpacity(group.Id,1);yield return null;continue;}
-                if(LightStateEffect.Commands(group,false) && !board.Panel.IsOpen) elapsed=duration;
+                if(!board.Panel.IsOpen) elapsed=duration;
                 else elapsed+=Time.unscaledDeltaTime;
                 float opacity=1-Mathf.SmoothStep(0,1,elapsed/duration);
                 board.SetSentenceOpacity(group.Id,opacity);
@@ -275,9 +274,29 @@ namespace PuzzleApple.V5
             }
         }
         int committedRevision;
+        CognitionState.Group[] committedGroups=System.Array.Empty<CognitionState.Group>();
+        void LateUpdate()
+        {
+            if(committedGroups.Length==0 || !entry.journey)return;
+            var reach=entry.journey.SustainedReach();
+            bool changed=false;
+            foreach(var group in committedGroups){
+                if(!group.Effective || Kind(group)!=SentenceKind.Sustained || !previous.TryGetValue(group.Id,out var rule) || rule!=group.RuleId ||
+                    !scopes.TryGetValue(group.Established,out var before) || (reach&~before)==0)continue;
+                var expanded=before|reach;
+                scopes[group.Established]=expanded;
+                if(motionScopes.TryGetValue(group.Established,out var saved))saved.rooms=expanded;
+                foreach(var signal in group.Signals)appliedScopes[signal]|=expanded;
+                if(group.Signal==CognitionSignal.DoorMove && ((expanded&~before)&PassageJourney.LightSpace.FarRoom)!=0 && entry.journey.EndingDoor && entry.journey.EndingDoor.CanCycle)
+                    entry.journey.EndingDoor.StartCycle(group.Established);
+                changed=true;
+            }
+            if(changed)motion.Commit(entry.board.State,committedGroups);
+        }
         void Commit(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind)
         {
             committedRevision=revision;
+            committedGroups=groups;
             previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
             foreach(var g in groups)pendingTakeovers.Remove(g.Id);
             applied.Clear();appliedScopes.Clear();

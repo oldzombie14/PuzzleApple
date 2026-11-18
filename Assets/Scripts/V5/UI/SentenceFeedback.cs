@@ -71,7 +71,6 @@ namespace PuzzleApple.V5
                 if (!group.Effective) continue;
                 effective.Add(group.Established);
                 if (!runtime.SustainsFeedback(group)) continue;
-                SoundOnce(group);
                 if(output.enabled && !pulsing.Contains(group.Id))
                     StartCoroutine(Pulse(group.Id,true,true));
             }

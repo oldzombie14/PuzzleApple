@@ -140,11 +140,8 @@ namespace PuzzleApple.V5
             }
             if((shot.rule=="light.move" || shot.focus==Focus.Light) && j && j.PlayerSpace==PassageJourney.LightSpace.FarRoom){
                 var eye=Entry.player.view;
-                var mouth=j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart));
-                var toMouth=mouth-eye.position;
-                bool facingStars=toMouth.magnitude<=4 && Vector3.Dot(eye.forward,toMouth.normalized)>.65f;
-                if(j.ReturnStars && j.ReturnStars.Brightness>0 && (facingStars || !j.LampsLit && shot.rule=="light.move"))
-                    return j.ReturnStars.FocusNear(mouth-j.Root.forward*4);
+                if(shot.rule=="light.move" && !j.LampsLit && j.ReturnStars && j.ReturnStars.Brightness>0)
+                    return j.ReturnStars.FocusNear(j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart-4)));
                 if(j.Lamps.Count>0){
                     var lamp=j.Lamps.Where(l=>l).OrderByDescending(l=>Vector3.Dot(eye.forward,(l.transform.position-eye.position).normalized)).FirstOrDefault();
                     if(lamp)return lamp.transform.position+shot.offset;

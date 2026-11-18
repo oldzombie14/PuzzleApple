@@ -40,7 +40,8 @@ namespace PuzzleApple.V5
             if(Includes(PassageJourney.LightSpace.Garden)&&((ISentenceMovable)outside.Garden).CanMove(signal))return true;
             var j=entry.journey;
             if(signal==CognitionSignal.WorldMove)return j.Platform&&Includes(PassageJourney.LightSpace.ReturnPath);
-            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.FarRoom))return j.EndingDoor && j.EndingDoor.CanCycle && (!entry.sentenceRuntime.Owns(signal,PassageJourney.LightSpace.FarRoom,g.Established) || j.EndingDoor.AcceptedCycle(g.Established));
+            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.FarRoom) && j.EndingDoor && j.EndingDoor.CanCycle &&
+                (!entry.sentenceRuntime.Owns(signal,PassageJourney.LightSpace.FarRoom,g.Established) || j.EndingDoor.AcceptedCycle(g.Established)))return true;
             if(signal==CognitionSignal.LightDoorMove && Includes(PassageJourney.LightSpace.FirstPath) && j.Stars && j.Stars.NeedsGather)return true;
             if(signal==CognitionSignal.DoorMove)return (scope&(PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom))!=0 && j.CanCycleDoor && !applied(CognitionSignal.DoorOn)&&!applied(CognitionSignal.DoorOff);
             if(Includes(PassageJourney.LightSpace.SphereRoom)&&j.Tutorial&&j.Tutorial.CanMove(signal))return true;

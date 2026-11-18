@@ -6,6 +6,7 @@ Shader "PuzzleApple/V5/Corridor Star"
         [HDR] _EmissionColor("Emission", Color)=(1,1,1,1)
         _FogInfluence("Fog influence",Range(0,1))=1
         _FacetStrength("Facet shading", Range(0,1))=1
+        [HideInInspector] _TailOpacity("End of line opacity", Range(0,1))=1
         [HideInInspector] _CorridorAxis("Corridor depth plane", Vector)=(0,0,0,0)
         [HideInInspector] _CorridorLength("Visible corridor length", Float)=1
     }
@@ -23,16 +24,17 @@ Shader "PuzzleApple/V5/Corridor Star"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor, _EmissionColor, _CorridorAxis;
-                float _CorridorLength, _FacetStrength, _FogInfluence;
+                float _CorridorLength, _FacetStrength, _FogInfluence, _TailOpacity;
             CBUFFER_END
-            struct Varyings { float4 positionCS:SV_POSITION; float depth:TEXCOORD0; half fog:TEXCOORD1; half tone:TEXCOORD2; };
-            Varyings vert(float4 positionOS:POSITION, float3 normalOS:NORMAL)
+            struct Varyings { float4 positionCS:SV_POSITION; float depth:TEXCOORD0; half fog:TEXCOORD1; half tone:TEXCOORD2; half opacity:TEXCOORD3; };
+            Varyings vert(float4 positionOS:POSITION, float3 normalOS:NORMAL, float2 uv:TEXCOORD0)
             {
                 Varyings o;
                 float3 world=TransformObjectToWorld(positionOS.xyz);
                 o.positionCS=TransformWorldToHClip(world);
                 o.depth=dot(world,_CorridorAxis.xyz)+_CorridorAxis.w;
                 o.fog=ComputeFogFactor(o.positionCS.z);
+                o.opacity=lerp(1,_TailOpacity,smoothstep(0,1,uv.x));
                 float3 normal = TransformObjectToWorldNormal(normalOS);
                 float light = 1.55*normal.y + dot(normal.xz,float2(-.42,-.25));
                 float glow = dot(_EmissionColor.rgb,float3(.2126,.7152,.0722)) * _BaseColor.a;
@@ -44,7 +46,7 @@ Shader "PuzzleApple/V5/Corridor Star"
             {
                 clip(min(i.depth,_CorridorLength-i.depth));
                 half3 color=_BaseColor.rgb+_EmissionColor.rgb*i.tone;
-                return half4(lerp(color,MixFog(color,i.fog),_FogInfluence),_BaseColor.a);
+                return half4(lerp(color,MixFog(color,i.fog),_FogInfluence),_BaseColor.a*i.opacity);
             }
             ENDHLSL
         }

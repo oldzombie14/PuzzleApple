@@ -122,12 +122,12 @@ namespace PuzzleApple.V5
         }
 
         // Fill seen from a viewpoint: the containing room's fill, blended across doorways.
-        public static bool FillAt(Vector3 view,out float result,out float weight)
+        public static bool FillAt(Vector3 view,out float result,out float weight,RoomLightBalance exclude=null)
         {
             float sum=0;result=0;weight=0;
             foreach(var room in rooms)
             {
-                if(!room||!room.style)continue;
+                if(!room||!room.style||room==exclude)continue;
                 float w=room.Weight(view);
                 if(w<=0)continue;
                 sum+=w;result+=w*room.fill;weight=Mathf.Max(weight,w);

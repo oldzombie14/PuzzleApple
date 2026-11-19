@@ -8,12 +8,17 @@ namespace PuzzleApple.V5
     {
         readonly WorldEntry entry;
         readonly Dictionary<ISwitchableLight,CognitionState.Group> commanded=new Dictionary<ISwitchableLight,CognitionState.Group>();
+        readonly Dictionary<int,PassageJourney.LightSpace> commandProgress=new Dictionary<int,PassageJourney.LightSpace>();
         public LightStateEffect(WorldEntry owner){entry=owner;}
         public static bool Commands(CognitionState.Group g,bool on)=>g!=null && g.Signals.Contains(on?CognitionSignal.LightOn:CognitionSignal.LightOff);
         public static bool Handles(CognitionState.Group g)=>Commands(g,true)||Commands(g,false);
+        public PassageJourney.LightSpace TargetScope(CognitionState.Group group){
+            var current=entry.sentenceRuntime.Scope(group);
+            return commandProgress.TryGetValue(group.Id,out var progress)?current&progress:current;
+        }
         IEnumerable<ISwitchableLight> Targets(CognitionState.Group g)
         {
-            var scope=entry.sentenceRuntime.Scope(g);
+            var scope=TargetScope(g);
             var passage=entry.outdoor;
             if((scope&PassageJourney.LightSpace.Outdoor)!=0)yield return passage.World;
             if((scope&PassageJourney.LightSpace.Gallery)!=0)yield return passage.Chapter;
@@ -29,6 +34,15 @@ namespace PuzzleApple.V5
         }
         public void Release(int id){
             foreach(var target in commanded.Where(p=>p.Value.Id==id).Select(p=>p.Key).ToArray())commanded.Remove(target);
+            commandProgress.Remove(id);
+        }
+        public void Prepare(CognitionState.Group[] groups,CognitionState.Group[] added){
+            var lights=groups.Where(Handles).ToArray();
+            foreach(var id in commandProgress.Keys.Where(id=>!lights.Any(g=>g.Id==id)).ToArray())commandProgress.Remove(id);
+            foreach(var group in lights)
+                if(!commandProgress.ContainsKey(group.Id)||added.Contains(group))
+                    // Unlocking expands sustained effects, not a light command already in flight.
+                    commandProgress[group.Id]=ProgressLock.Accessible(entry.journey.ChapterSpaces);
         }
         public void Commit(CognitionState.Group[] groups,CognitionState.Group[] added){
             var next=new Dictionary<ISwitchableLight,CognitionState.Group>();

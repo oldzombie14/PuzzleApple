@@ -10,6 +10,7 @@ namespace PuzzleApple.V5
         public PassageJourney journey;
         public FoldingRoom closedRoom;
         public float moveSpeed=3.5f, mouseSensitivity=.09f;
+        public float WalkMultiplier {get;private set;}=1;
         [Min(0)] public float jumpHeight=1.2f;
         public bool MovementLocked {get;set;}
         public bool CinematicLocked {get;set;}
@@ -99,6 +100,11 @@ namespace PuzzleApple.V5
         }
         internal void AdvanceMovement(Vector2 input,bool controls,float deltaTime,bool jumpPressed=false)
         {
+            var pass=journey?journey.entry.outdoor:null;
+            var chapter=pass && pass.InChapter?pass.CurrentRoom:null;
+            float targetSpeed=chapter?chapter.WalkingMultiplier(transform.position):1;
+            float transition=chapter && chapter.layout?chapter.layout.speedTransition:.4f;
+            WalkMultiplier=Mathf.MoveTowards(WalkMultiplier,targetSpeed,deltaTime/Mathf.Max(.01f,transition));
             // Lock includes gravity; orientation remains independent.
             if(deltaTime>0 && MovementLocked){vertical=0;launchVelocity=Vector3.zero;
                 if(carrierTravel.sqrMagnitude>0)motor.Move(carrierTravel-Vector3.up*motor.skinWidth);
@@ -123,7 +129,7 @@ namespace PuzzleApple.V5
                     if(feet.y<.2f&&journey.floorSurface.FitsOpening(feet,motor.radius))
                         vertical=Mathf.Max(vertical,-2f);
                 }
-                var motion=((transform.right*input.x+transform.forward*input.y)*moveSpeed+launchVelocity+Vector3.up*vertical)*deltaTime;
+                var motion=((transform.right*input.x+transform.forward*input.y)*moveSpeed*WalkMultiplier+launchVelocity+Vector3.up*vertical)*deltaTime;
                 launchVelocity=Vector3.MoveTowards(launchVelocity,Vector3.zero,8*deltaTime);
                 if(journey&&journey.enabled)motion=journey.ConstrainMovement(transform.position,motion);
                 if(closedRoom)motion=closedRoom.ConstrainClosedMovement(motor,motion);

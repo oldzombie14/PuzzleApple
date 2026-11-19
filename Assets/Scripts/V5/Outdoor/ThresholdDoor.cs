@@ -27,7 +27,6 @@ namespace PuzzleApple.V5.Outdoor
         BoxCollider[] frameColliders;
         Collider ground;
         float speed;
-        Transform facingPlayer;
         void Awake()
         {
             body = GetComponent<Rigidbody>();
@@ -43,13 +42,12 @@ namespace PuzzleApple.V5.Outdoor
         public void InitializeAtExit(Transform view)
         {
             body.position=transform.position;body.rotation=transform.rotation;
-            facingPlayer=view;Revealed=true;LandingCompleted=true;
+            Revealed=true;LandingCompleted=true;
         }
         public void Reveal(Transform view)
         {
             if (Revealed) return;
             gameObject.SetActive(true);
-            facingPlayer=view;
             var forward = Vector3.ProjectOnPlane(view.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < .01f) forward = Vector3.ProjectOnPlane(view.up, Vector3.up).normalized;
             var position = view.position + forward * spawnDistance;
@@ -82,11 +80,6 @@ namespace PuzzleApple.V5.Outdoor
         }
         void FixedUpdate()
         {
-            if(Revealed&&facingPlayer)
-            {
-                var bearing=Vector3.ProjectOnPlane(body.position-facingPlayer.position,Vector3.up);
-                if(bearing.sqrMagnitude>9f)body.MoveRotation(Quaternion.LookRotation(bearing,Vector3.up));
-            }
             if (ground) groundHeight = ground.bounds.max.y + .02f;
             if (Revealed && Landed && !freeMotion.Moving) CompleteLanding();
             if (!Descending) return;

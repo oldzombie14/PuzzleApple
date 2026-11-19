@@ -34,7 +34,7 @@ namespace PuzzleApple.V5.Editor
             Check(guide.GetColor("_BaseColor").a>.65f,"recognized preview brightens the symmetry line");
             Check(!mirrors.CopiesActive && mirrors.Copy(0).parent.Find("Chalk silhouette").gameObject.activeInHierarchy &&
                 mirrors.Copy(0).parent.Find("Chalk silhouette").GetComponent<Renderer>().enabled,"draft or imminent snap previews actual reflection");
-            if(state.RequirePeriod)PeriodChecks.Drag(board,0,board.PeriodEnd(target.Id));else board.EndDrag(at);
+            if(state.RequirePeriod)PeriodChecks.Click(board,target.Id);else board.EndDrag(at);
             yield return Wait(()=>mirrors.CopiesActive,"mirror appears");
             board.Panel.SetOpen(false);
             var twin=mirrors.Copy(0);var mirror=twin.Find(room.mirror.name).GetComponent<Collider>();

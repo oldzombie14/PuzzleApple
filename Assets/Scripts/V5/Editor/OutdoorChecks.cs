@@ -91,6 +91,8 @@ namespace PuzzleApple.V5.Editor
                 player.view.LookAt(e.chamberLight.surface.bounds.center);player.AdoptCurrentView();
                 Check(e.chamberLight.TryCollect(),"lit ceiling collection");yield return Until(()=>!e.chamberLight.Collecting,"collection completion");
                 Check(!e.outdoor.TryWorldDrop(e.board,"light",new Vector2(Screen.width*.8f,Screen.height*.5f)),"world drop prohibited indoors");
+                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1,"unlock room two before the room-three fixture");
+                yield return ChargeDoorChecks.UnlockEntrance(e);
                 player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);yield return null;
                 var lamp=j.Lamps[0];lamp.GetComponent<Rigidbody>().position=j.Root.TransformPoint(new Vector3(0,2,j.RoomStart+6));
                 lamp.direction=Vector3.zero;Physics.SyncTransforms();player.view.LookAt(lamp.transform.position);player.AdoptCurrentView();yield return null;

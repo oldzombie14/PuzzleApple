@@ -15,6 +15,8 @@ namespace PuzzleApple.V5
         public bool showHorizon=true;
         [Range(.5f,4)] public float outlinePixels=1.8f;
         [Range(0,120)] public int starCount=64;
+        [Min(1)] public float safetyWallHeight=3;
+        [Min(1)] public float fallRecoveryDepth=8;
         public AudioClip igniteClip,swellClip,flashClip;
         public bool Completed {get;private set;}
         public bool Playing {get;private set;}
@@ -63,6 +65,14 @@ namespace PuzzleApple.V5
             ramp.GetComponent<BoxCollider>().size=new Vector3(stairWidth,.2f,along.magnitude);
             Landing=door.Block("Upper landing",new Vector3(0,baseY-.3f,TopZ+1.8f),new Vector3(stairWidth,.6f,3.65f),steps,true);
             Landing.SetParent(transform,true);
+            for(int side=-1;side<=1;side+=2){
+                var wall=new GameObject("Stair safety wall",typeof(BoxCollider)).transform;
+                wall.SetParent(transform,false);wall.localRotation=ramp.localRotation;
+                wall.localPosition=ramp.localPosition+Vector3.right*side*(stairWidth*.5f+.1f)+Vector3.up*(safetyWallHeight*.5f);
+                wall.GetComponent<BoxCollider>().size=new Vector3(.2f,safetyWallHeight,along.magnitude+2);
+                SafetyWall(new Vector3(side*(stairWidth*.5f+.1f),baseY+safetyWallHeight*.5f,TopZ+1.8f),new Vector3(.2f,safetyWallHeight,4));
+            }
+            SafetyWall(new Vector3(0,baseY+safetyWallHeight*.5f,TopZ+3.7f),new Vector3(stairWidth+.4f,safetyWallHeight,.2f));
             plinth=door.Block("Symbol plinth",new Vector3(0,baseY+.24f,TopZ+2.1f),new Vector3(.55f,.48f,.55f),steps,true);
             plinth.SetParent(transform,true);
             mark=new Material(Resources.Load<Shader>("V5/AscentInk"));
@@ -98,7 +108,7 @@ namespace PuzzleApple.V5
             var starMesh=j.Stars.GetComponentInChildren<MeshFilter>(true);
             Stars=new GameObject("Ascent stars").AddComponent<AscentStars>();
             Stars.transform.SetParent(transform,false);
-            Stars.Build(starMesh,starCount,stairWidth,StairStart,TopZ,baseY);
+            Stars.Build(starMesh,starCount,stairWidth,StairStart,TopZ,baseY,journey);
             rippleInk=new Material(starMesh.GetComponent<Renderer>().sharedMaterial);
             rippleInk.SetVector("_CorridorAxis",Vector4.zero);
             rippleInk.SetFloat("_FogInfluence",0);
@@ -133,6 +143,10 @@ namespace PuzzleApple.V5
             if(!LookingAtSymbol())return false;
             StartCoroutine(Depart(true));return true;
         }
+        void SafetyWall(Vector3 position,Vector3 size){
+            var wall=new GameObject("Landing safety wall",typeof(BoxCollider)).transform;
+            wall.SetParent(transform,false);wall.localPosition=position;wall.GetComponent<BoxCollider>().size=size;
+        }
         void LateUpdate(){
             if(!door || !journey.enabled){if(daylight)daylight.weight=0;return;}
             time+=Time.deltaTime;
@@ -143,6 +157,8 @@ namespace PuzzleApple.V5
             if(door.Paused){daylight.weight=0;return;}
             var eye=journey.entry.player.view;
             var local=transform.InverseTransformPoint(eye.position);
+            var feet=transform.InverseTransformPoint(journey.entry.player.transform.position);
+            if(!Playing && !door.Stunned && feet.z>door.LeafZ && feet.y < -fallRecoveryDepth)door.RecoverFromFall();
             bool upstairs=local.z>door.LeafZ && Mathf.Abs(local.x)<door.width;
             float heightAlongFlight=baseY*Mathf.InverseLerp(StairStart,TopZ,local.z);
             var threshold=whiteStartHeight>0?whiteStartHeight:(baseY-whiteBlendHeight)*.5f;
@@ -205,9 +221,8 @@ namespace PuzzleApple.V5
                             ripple.transform.localScale=Vector3.one*Mathf.Lerp(.06f,1.35f,u);
                             ripple.widthMultiplier=.028f*(1-Mathf.Clamp01(u));
                         }
-                        volume.weight=Mathf.SmoothStep(0,1,t/.55f);
-                        daylight.weight=1-volume.weight;
-                        flash.color=new Color(0,0,0,.13f*Mathf.Sin(Mathf.PI*Mathf.Clamp01(t/.55f)));
+                        // Retain the stair gain through ignition; only the white flash adds exposure.
+                        volume.weight=0;daylight.weight=1;flash.color=Color.clear;
                         mark.SetColor("_Face",Color.white*(1+5*k));mark.SetColor("_Edge",Color.Lerp(Color.black,Color.white,k));
                         Symbol.rotation=Quaternion.Slerp(Symbol.rotation,facing,Time.unscaledDeltaTime*3);
                         yield return null;
@@ -218,6 +233,7 @@ namespace PuzzleApple.V5
                 if(first)yield return new WaitForSecondsRealtime(.6f);
                 while(!entry.outdoor.Prepared)yield return null;
                 entry.outdoor.ArriveFromAscent();
+                entry.outdoor.World.IntroWord.SetCompleted();
                 Completed=true;WhiteAmount=0;veil.enabled=false;plinth.gameObject.SetActive(false);Symbol.gameObject.SetActive(false);horizon.gameObject.SetActive(false);
                 yield return Fade(1,0,first?3:.2f,first);
             }finally{

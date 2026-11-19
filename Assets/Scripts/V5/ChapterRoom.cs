@@ -8,6 +8,8 @@ namespace PuzzleApple.V5
     public sealed class ChapterRoom : MonoBehaviour, ISwitchableLight, ISentenceMovable, IBrightenableLight
     {
         public Transform arrival, gardenThreshold;
+        public ChapterLayoutSettings layout;
+        public float WalkingMultiplier(Vector3 feet)=>box && boxFill && boxFill.Contains(feet+Vector3.up)?1:layout?layout.walkingMultiplier:1.3f;
         public Transform paintingFixture;
         public Renderer paintingLens;
         public Light paintingSpot;

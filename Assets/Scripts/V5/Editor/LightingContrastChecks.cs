@@ -58,6 +58,7 @@ namespace PuzzleApple.V5.Editor
                 Image known=null;foreach(var im in l.hud.GetComponentsInChildren<Image>(true))if(im.name=="Known word feedback")known=im;
                 Check(known&&known.gameObject.activeSelf&&known.material==contrast,"known feedback keeps same contrast");Contrast(known.material);
                 var j=e.journey;e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+2)),j.Root.rotation);yield return new WaitForEndOfFrame();yield return new WaitForEndOfFrame();
+                yield return new WaitForSecondsRealtime(1.2f);
                 Check(j.InSecondRoom&&rig.chamberBloom.weight==0&&BloomAt(e.player.view)>1f,"second-room soft Bloom restored");
                 Result="PASS: neutral closed fill, HDR world image, independent soft chamber/second-room Bloom, balanced outer ambient, first/known live materials and GPU contrast on light/dark backgrounds";
             }

@@ -4,7 +4,6 @@ namespace PuzzleApple.V5
 {
     // Native broad spotlights: dim slit light when closed, white diffuse fill when open.
     // Ambient fill comes from each room's RoomLightBalance, so every room follows one RoomLightStyle.
-    // Ambient fill comes from each room's RoomLightBalance, so every room follows one RoomLightStyle.
     public sealed class RoomLighting : MonoBehaviour
     {
         public FoldingRoom room;
@@ -24,6 +23,10 @@ namespace PuzzleApple.V5
         public RoomLightBalance chamberFill;
         [Tooltip("Share of the sphere room's fill that reaches the corridor through the fully open door.")]
         [Range(0,1)] public float openDoorFill=1;
+        [Min(.05f)] public float transitionSeconds=.8f;
+        Color currentAmbient;
+        float currentFog;
+        bool initialized;
         public static float AdvanceLevel(float current, float target, float step)
         {
             float dark = 1 - Mathf.Clamp01(current);
@@ -56,24 +59,30 @@ namespace PuzzleApple.V5
             Color dim=Color.white*(style?style.darkFill:.055f);
             Color outside=dim;
             var view=journey?journey.entry.player.view:Camera.main?Camera.main.transform:null;
-            if(view&&RoomLightBalance.FillAt(view.position,out float fill,out float weight))
+            var hiddenRoom=journey&&journey.InReturnPath?journey.FarRoomFill:null;
+            if(view&&RoomLightBalance.FillAt(view.position,out float fill,out float weight,hiddenRoom))
                 outside=Color.Lerp(dim,Color.white*fill,weight);
             // In a corridor, take the fill of the room it opens into: the sphere room through the
-            // white door, the far room through its always-open doorway.
+            // white door, and the far room through its right-hinged entrance.
             if(journey&&journey.InCorridor)
             {
                 var ahead=journey.InReturnPath?journey.FarRoomFill:journey.Tutorial?journey.Tutorial.Fill:null;
-                float open=journey.InReturnPath?1:journey.DoorProgress;
+                float open=journey.InReturnPath?(journey.EntranceDoor?journey.EntranceDoor.Progress:0):journey.DoorProgress;
                 float far=ahead?Mathf.Lerp(dim.r,ahead.Fill,openDoorFill*open):dim.r;
                 if(far>outside.r)outside=Color.white*far;
             }
-            RenderSettings.ambientLight=FoldingAmbient(outside,blend);
+            var targetAmbient=FoldingAmbient(outside,blend);
+            float smoothing=1-Mathf.Exp(-Time.unscaledDeltaTime*4/transitionSeconds);
+            currentAmbient=initialized?Color.Lerp(currentAmbient,targetAmbient,smoothing):targetAmbient;
+            RenderSettings.ambientLight=currentAmbient;
             // Room surfaces (World Surface) take their own room's fill; the chamber fades in as it unfolds.
             if(chamberFill){chamberFill.closedFill=closedAmbient;chamberFill.openness=blend;}
             // Keep the fog shader variant ready from the initial menu frame.
             RenderSettings.fog=true;RenderSettings.fogColor=Color.black;RenderSettings.fogMode=FogMode.ExponentialSquared;
-            RenderSettings.fogDensity=journey&&journey.ViewBeyondChamber&&room.Opened?
+            float targetFog=journey&&journey.ViewBeyondChamber&&room.Opened?
                 corridor*Mathf.Lerp(journey.corridorFogDensity,journey.fogDensity*journey.Brightness,journey.DoorwayLighting):0;
+            currentFog=initialized?Mathf.Lerp(currentFog,targetFog,smoothing):targetFog;
+            RenderSettings.fogDensity=currentFog;initialized=true;
         }
     }
 }

@@ -26,7 +26,7 @@ namespace PuzzleApple.V5
         public float WorldExposure=>exposure.postExposure.value;
         public float FloorIllumination=>Mathf.SmoothStep(0,1,levels.z);
         public float LampMultiplier => 1 + Mathf.SmoothStep(0,1,levels.w);
-        readonly Vector4[] localLevels=new Vector4[9];
+        readonly Vector4[] localLevels=new Vector4[10];
         static int Index(PassageJourney.LightSpace space){
             int index=0;
             for(int mask=(int)space;mask>1;mask>>=1)index++;
@@ -86,6 +86,7 @@ namespace PuzzleApple.V5
                 if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.CurrentRoom;
                 if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World;
                 var j=entry.journey;
+                if(j && j.PlayerSpace==PassageJourney.LightSpace.Ascent)return j.Ascent.Stars;
                 if(j&&j.InTutorial)return j.Tutorial;
                 if(j&&j.InCorridor)return j.CorridorGlow;
                 if(j&&j.InSecondRoom)return j.FarRoomGlow;
@@ -110,13 +111,14 @@ namespace PuzzleApple.V5
             if(j && j.Root && j.Tutorial){
                 Shader.SetGlobalMatrix("_P5JourneyInverse",j.Root.worldToLocalMatrix);
                 Shader.SetGlobalVector("_P5SpaceEnds",new Vector4(0,j.pathLength,j.Tutorial.ExitZ,j.RoomStart));
+                Shader.SetGlobalFloat("_P5AscentStart",j.RoomStart+j.roomSize.z);
             }
             var passage=source.entry.outdoor;
             Shader.SetGlobalFloat("_P5ChapterMode",passage && passage.InChapter?2:passage && passage.IsOutside?1:0);
             if(passage && passage.InChapter){
                 var room=passage.Vitruvian.roomFill;
                 Shader.SetGlobalVector("_P5VitruvianCentre",room.transform.TransformPoint(room.interior.center));
-                Shader.SetGlobalVector("_P5VitruvianExtents",room.interior.extents+Vector3.one*.2f);
+                Shader.SetGlobalVector("_P5VitruvianExtents",Vector3.Scale(room.interior.extents,room.transform.lossyScale));
                 var gate=passage.Chapter.gardenThreshold;
                 Shader.SetGlobalVector("_P5GardenPlane",new Vector4(gate.forward.x,gate.forward.y,gate.forward.z,-Vector3.Dot(gate.forward,gate.position)));
             }
@@ -129,7 +131,7 @@ namespace PuzzleApple.V5
                 v.w=Mathf.MoveTowards(v.w,source.HasEffect(CognitionSignal.IlluminateLight,space)?1:0,stepSize);
                 localLevels[i]=v;
             }
-            Shader.SetGlobalVectorArray("_P5RoomSentenceGlow",localLevels);
+            Shader.SetGlobalVectorArray("_P5SpaceSentenceGlow",localLevels);
             if(levels.Equals(targets))return;
             float step=Time.unscaledDeltaTime/FadeSeconds;
             levels.x=Mathf.MoveTowards(levels.x,targets.x,step);
@@ -162,7 +164,7 @@ namespace PuzzleApple.V5
         void OnDestroy()
         {
             System.Array.Clear(localLevels,0,localLevels.Length);
-            Shader.SetGlobalVectorArray("_P5RoomSentenceGlow",localLevels);
+            Shader.SetGlobalVectorArray("_P5SpaceSentenceGlow",localLevels);
             Shader.SetGlobalFloat("_P5DoorGlow",0);
             Shader.SetGlobalFloat("_P5FloorGlow",0);
             if(bloomProfile){foreach(var component in bloomProfile.components)Destroy(component);Destroy(bloomProfile);}

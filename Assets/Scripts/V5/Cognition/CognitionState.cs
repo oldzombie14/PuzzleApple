@@ -29,7 +29,6 @@ namespace PuzzleApple.V5.Cognition
             public int RejectedAttempts {get; internal set;}
             public bool Spoken { get; internal set; }
             public bool Effective => Recognized && Spoken && !Conflicted;
-            public long PausedEstablishment { get; internal set; }
             public CognitionSignal Signal { get; internal set; }
             public IReadOnlyList<CognitionSignal> Signals { get; internal set; } = Array.Empty<CognitionSignal>();
             public string RuleId { get; internal set; }
@@ -143,7 +142,6 @@ namespace PuzzleApple.V5.Cognition
         {
             var g=Find(groupId);
             if(!RequirePeriod || g==null || !g.Spoken)return false;
-            g.PausedEstablishment=g.Established;
             g.Spoken=false;
             g.RejectedAttempts=0;
             Commit(CognitionChange.Split);
@@ -154,7 +152,6 @@ namespace PuzzleApple.V5.Cognition
             if(!RequirePeriod)return;
             group.Spoken=false;
             group.RejectedAttempts=0;
-            group.PausedEstablishment=0;
         }
         public void ReturnToLibrary(int groupId, int wordId, bool whole)
         {

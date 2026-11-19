@@ -3,21 +3,39 @@ using UnityEngine.Rendering;
 
 namespace PuzzleApple.V5
 {
-    public sealed class AscentStars : MonoBehaviour
+    public sealed class AscentStars : MonoBehaviour,ISwitchableLight,IBrightenableLight
     {
         struct Star
         {
             public MeshRenderer renderer;
+            public Renderer halo;
             public Vector3 anchor;
             public float height,phase,frequency;
         }
         Star[] stars;
         Material ink;
+        Material haloInk;
+        MaterialPropertyBlock glow;
+        public StarGlowStyle glowStyle;
         bool visible,collectible;
+        PassageJourney journey;
+        float brightness=1,target=1,motionTime;
+        public float Brightness=>brightness;
+        public bool Lit=>brightness>0 && journey && journey.Ascent && journey.Ascent.WhiteAmount<.5f;
+        public bool WouldChange(bool on)=>on?brightness<1:brightness>0;
+        public bool Settling(bool on)=>target==(on?1:0)&&brightness!=target;
+        public void SetOn(bool on){target=on?1:0;}
+        public void Hold(){target=brightness;}
+        public bool CanMove(Cognition.CognitionSignal signal)=>signal==Cognition.CognitionSignal.LightMove && brightness>0;
+        void Update(){if(journey)brightness=Mathf.MoveTowards(brightness,target,Time.unscaledDeltaTime/Mathf.Max(.01f,journey.lightFadeDuration));}
 
-        public void Build(MeshFilter diamond,int count,float stairWidth,float start,float top,float rise)
+        public void Build(MeshFilter diamond,int count,float stairWidth,float start,float top,float rise,PassageJourney owner)
         {
+            journey=owner;
             ink=new Material(diamond.GetComponent<Renderer>().sharedMaterial);
+            if(!glowStyle)glowStyle=StarGlowStyle.Load();
+            haloInk=new Material(Resources.Load<Shader>("V5/StarHalo"));
+            haloInk.renderQueue=(int)RenderQueue.Transparent+54;glow=new MaterialPropertyBlock();
             ink.SetVector("_CorridorAxis",Vector4.zero);
             ink.SetFloat("_FacetStrength",0);
             ink.SetFloat("_FogInfluence",0);
@@ -38,20 +56,27 @@ namespace PuzzleApple.V5
                 var renderer=go.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial=ink;renderer.shadowCastingMode=ShadowCastingMode.Off;
                 renderer.receiveShadows=false;renderer.enabled=false;
-                stars[i]=new Star{renderer=renderer,anchor=anchor,height=Range(.19f,.66f),phase=Range(0,2*Mathf.PI),frequency=Range(.65f,1.4f)};
+                stars[i]=new Star{renderer=renderer,halo=StarGlowStyle.CreateHalo(go.transform,haloInk),anchor=anchor,height=Range(.19f,.66f),phase=Range(0,2*Mathf.PI),frequency=Range(.65f,1.4f)};
             }
         }
 
         public void Draw(Transform eye,float white,float time,bool show)
         {
+            var runtime=journey.entry.sentenceRuntime;
+            const PassageJourney.LightSpace space=PassageJourney.LightSpace.Ascent;
+            if(brightness>0 && (!runtime.ControlsLamps(space)||runtime.HasEffect(Cognition.CognitionSignal.LightMove,space)))motionTime+=Time.deltaTime;
+            if(white<.5f)time=motionTime;
             if(!show && !visible)return;
             visible=show;
             float contrast=Mathf.Abs(1-2*white);
-            collectible=show && white<.5f && contrast>.15f;
-            ink.SetColor("_EmissionColor",white<.5f?Color.white*1.6f:Color.black);
+            collectible=show && brightness>.99f && white<.5f && contrast>.15f;
+            var emission=white<.5f?Color.white*(glowStyle?glowStyle.emission:1f)*brightness*runtime.LampBoost(space):Color.black;
+            ink.SetColor("_EmissionColor",emission);
             ink.SetColor("_BaseColor",new Color(0,0,0,Mathf.SmoothStep(0,1,contrast)));
+            glow.SetColor("_EmissionColor",emission);glow.SetColor("_BaseColor",ink.GetColor("_BaseColor"));
             foreach(var star in stars){
-                star.renderer.enabled=show;
+                star.renderer.enabled=show && (white>=.5f || brightness>0);
+                if(glowStyle)glowStyle.DrawHalo(star.halo,show && white<.5f && brightness>0,glow);
                 if(!show)continue;
                 var t=star.renderer.transform;
                 float beat=time*star.frequency+star.phase;
@@ -78,6 +103,6 @@ namespace PuzzleApple.V5
             }
             return nearest;
         }
-        void OnDestroy(){if(ink)Destroy(ink);}
+        void OnDestroy(){if(ink)Destroy(ink);if(haloInk)Destroy(haloInk);}
     }
 }

@@ -20,7 +20,13 @@ namespace PuzzleApple.V5
         Scene chapterScene, gardenScene, vitruvianScene;
         public ChapterRoom Vitruvian {get;private set;}
         public ChapterRoom Garden {get;private set;}
-        public ChapterRoom CurrentRoom=>InChapter && Vitruvian && Vitruvian.roomFill.Contains(entry.player.view.position)?Vitruvian:InChapter&&Garden&&Vector3.Dot(entry.player.transform.position-Chapter.gardenThreshold.position,Chapter.gardenThreshold.forward)<0?Garden:Chapter;
+        public ChapterRoom CurrentRoom {
+            get {
+                if(!InChapter)return Chapter;
+                var gate=MembraneDoor.At(entry.player.transform.position,PassageJourney.LightSpace.Gallery|PassageJourney.LightSpace.Garden|PassageJourney.LightSpace.Vitruvian);
+                return gate && gate.room?gate.room:Chapter;
+            }
+        }
         Transform chapterFrame;
         Vector3 previousFeet;
         bool tracking;
@@ -417,7 +423,7 @@ namespace PuzzleApple.V5
             var exit=World.exit;
             var point=exit.position+exit.forward*3;
             point.y=World.ground.bounds.max.y+.12f;
-            entry.player.Teleport(point,Quaternion.LookRotation(exit.forward));
+            entry.player.Teleport(point,Quaternion.LookRotation(exit.forward)*Quaternion.Euler(0,40,0));
             entry.player.AdoptCurrentView();entry.player.Launch(Vector3.zero);tracking=false;
         }
         void ActivateOutdoor()

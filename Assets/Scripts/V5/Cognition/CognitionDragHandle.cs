@@ -20,7 +20,9 @@ namespace PuzzleApple.V5.Cognition
             if(board.Panel.InputBlocked)return;
             if(e.button==PointerEventData.InputButton.Right)
             {
-                pressed=began=false;board.RemoveToken(groupId,WordId,wholeSentence);e.Use();return;
+                pressed=began=false;
+                board.RemoveToken(groupId,WordId,wholeSentence);
+                e.Use();return;
             }
             if (e.button != PointerEventData.InputButton.Left) return;
             pressed = true; began = false; pointer = e.position;

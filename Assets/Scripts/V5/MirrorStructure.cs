@@ -59,10 +59,13 @@ namespace PuzzleApple.V5
             if(foldingWall){closedWall=foldingWall.worldToLocalMatrix;interior=room.box.GetComponent<FoldingInterior>();}
             ink=new MaterialPropertyBlock();
             foreach(var source in originals){
+                var owner=source.GetComponent<SentenceOwnership>();
+                if(!owner)owner=source.gameObject.AddComponent<SentenceOwnership>();owner.room=room;
                 var t=new Twin{source=source};
                 t.root=new GameObject(source.name+" reflection").transform;t.root.SetParent(transform,false);
                 t.solid=Instantiate(source,t.root);t.solid.localPosition=Vector3.zero;t.solid.localRotation=Quaternion.identity;
-                t.solid.localScale=source.lossyScale;t.colliders=t.solid.GetComponentsInChildren<Collider>();
+                t.solid.GetComponent<SentenceOwnership>().source=owner;
+                t.solid.localScale=RelativeScale(source,t.root);t.colliders=t.solid.GetComponentsInChildren<Collider>();
                 if(interior)foreach(var surface in t.solid.GetComponentsInChildren<MeshRenderer>()){
                     var finish=surface.sharedMaterial;
                     mirrorFinishes[surface]=finish;
@@ -127,14 +130,19 @@ namespace PuzzleApple.V5
             float angle=(Mathf.PerlinNoise((float)wanderTime*.35f,initial.y)-.5f)*140*dt;
             wanderTime+=dt;velocity=Quaternion.Euler(0,0,angle)*velocity;
             var source=originals[0];var p=source.localPosition;
-            float z=(folded?3:10.5f)-Mathf.Max(mirrorSize.x*.5f,folded?.1f:sideMargin);
-            float minY=(folded?.1f:0)+mirrorSize.y*.5f,maxY=(folded?6:22)-mirrorSize.y*.5f;
-            p.z+=velocity.x*wanderSpeed*dt;p.y+=velocity.y*wanderSpeed*dt;
+            float scale=Mathf.Abs(transform.lossyScale.x);
+            float z=(folded?3/scale:10.5f)-Mathf.Max(mirrorSize.x*.5f,folded?.1f/scale:sideMargin);
+            float minY=(folded?.1f/scale:0)+mirrorSize.y*.5f,maxY=(folded?6/scale:22)-mirrorSize.y*.5f;
+            p.z+=velocity.x*wanderSpeed*dt/scale;p.y+=velocity.y*wanderSpeed*dt/scale;
             if(p.z<=-z || p.z>=z)velocity.x=p.z<0?Mathf.Abs(velocity.x):-Mathf.Abs(velocity.x);
             if(p.y<=minY || p.y>=maxY)velocity.y=p.y<minY?Mathf.Abs(velocity.y):-Mathf.Abs(velocity.y);
             p.z=Mathf.Clamp(p.z,-z,z);p.y=Mathf.Clamp(p.y,minY,maxY);source.localPosition=p;
         }
         float wanderTime,rippleAge=10;
+        static Vector3 RelativeScale(Transform source,Transform parent){
+            var a=source.lossyScale;var b=parent.lossyScale;
+            return new Vector3(a.x/b.x,a.y/b.y,a.z/b.z);
+        }
         void Tint(Renderer r,Color color){
             ink.Clear();ink.SetColor("_BaseColor",color);ink.SetColor("_EmissionColor",Color.black);
             ink.SetVector("_CorridorAxis",Vector4.zero);ink.SetFloat("_FogInfluence",0);r.SetPropertyBlock(ink);
@@ -200,7 +208,7 @@ namespace PuzzleApple.V5
                 }
                 t.root.SetPositionAndRotation(p,q);
                 if(appearing){
-                    int count=Physics.OverlapBoxNonAlloc(p,new Vector3(mirrorSize.x*.5f,mirrorSize.y*.5f,.025f),overlaps,q,
+                    int count=Physics.OverlapBoxNonAlloc(p,Vector3.Scale(new Vector3(mirrorSize.x*.5f,mirrorSize.y*.5f,.025f),transform.lossyScale),overlaps,q,
                         Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore);
                     for(int i=0;i<count;i++)if(!overlaps[i].transform.IsChildOf(t.root)){
                         Debug.LogWarning("Mirror reflection overlaps "+overlaps[i].name+" at "+t.source.name,this);break;
@@ -215,7 +223,7 @@ namespace PuzzleApple.V5
                     }
                 }
                 t.solid.gameObject.SetActive(copy || reveal>.5f);
-                t.solid.localScale=Vector3.Scale(t.source.lossyScale,new Vector3(1,Mathf.Max(.001f,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.32f,1,reveal))),1));
+                t.solid.localScale=Vector3.Scale(RelativeScale(t.source,t.root),new Vector3(1,Mathf.Max(.001f,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.32f,1,reveal))),1));
                 foreach(var c in t.colliders)c.enabled=copy;
                 t.outline.enabled=t.fill.enabled=!cutting && w>.001f;
                 t.outline.loop=preview>.97f || reveal>=.5f;

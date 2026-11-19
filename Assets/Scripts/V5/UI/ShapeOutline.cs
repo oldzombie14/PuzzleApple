@@ -15,12 +15,13 @@ namespace PuzzleApple.V5
         }
         protected override void OnPopulateMesh(VertexHelper mesh){
             mesh.Clear();
-            float r=Mathf.Min(rectTransform.rect.width,rectTransform.rect.height)*.3f;
+            float r=Mathf.Min(rectTransform.rect.width,rectTransform.rect.height)*.275f;
             int sides=returnArrow?32:shape==InstanceShape.Sphere?40:4;
             float offset=shape==InstanceShape.Cube?Mathf.PI*.25f:0;
+            if(shape==InstanceShape.Cube && !returnArrow)r*=Mathf.Sqrt(2);
             float sweep=returnArrow?Mathf.PI*1.6f:Mathf.PI*2;
             Vector2 Point(int i){float a=i*sweep/sides+offset;return new Vector2(Mathf.Sin(a),Mathf.Cos(a))*r;}
-            for(int i=0;i<sides;i++)Line(mesh,Point(i),Point(i+1),1.8f);
+            for(int i=0;i<sides;i++)Line(mesh,Point(i),Point(i+1),1.5f);
             if(returnArrow){var p=Point(0);Line(mesh,p,p+new Vector2(4,3),1.8f);Line(mesh,p,p+new Vector2(4,-3),1.8f);}
         }
     }

@@ -28,6 +28,8 @@ namespace PuzzleApple.V5.Editor
         static IEnumerator CheckFeedback(WorldEntry e){
             e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
             var j=e.journey;var state=e.board.State;
+            j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);
+            j.SetLights(false,PassageJourney.LightSpace.All);yield return Until(()=>!j.Lights(PassageJourney.LightSpace.All).Any(l=>l.WouldChange(false)));
             e.sentenceRuntime.presentation.enabledShots=false;
             e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.12f,j.RoomStart+5)),j.Root.rotation);
             yield return Until(()=>j.InSecondRoom);
@@ -36,7 +38,7 @@ namespace PuzzleApple.V5.Editor
             e.board.Panel.SetOpen(true);yield return new WaitForSecondsRealtime(.4f);
             bool Rippling()=>GameObject.Find("Sentence effect ripple") || GameObject.Find("Sentence grammar ripple");
             float fade=e.feedback.duration*1.2f+.3f;
-            foreach(var words in new[]{"light move","light move door","light move light","light move floor","door move","door move light"}){
+            foreach(var words in new[]{"light move","light move door","light move light","light move floor","door move light"}){
                 state.ClearWorkspace();yield return new WaitForSecondsRealtime(fade);
                 int weak=e.feedback.WeakCount;
                 state.TryAcquireSentence("feedback."+words,words,out var group);
@@ -59,10 +61,9 @@ namespace PuzzleApple.V5.Editor
             yield return new WaitForSecondsRealtime(fade);
             Check(!e.sentenceRuntime.SustainsFeedback(command) && !Rippling(),"executing command has only its initial pulse");
             state.ClearWorkspace();
+            j.SetLights(true,PassageJourney.LightSpace.ReturnPath);
+            yield return Until(()=>j.ReturnStars.Brightness==1);
             state.TryAcquireSentence("feedback.multi","light move",out var multi);
-            var scopes=(System.Collections.Generic.Dictionary<long,PassageJourney.LightSpace>)typeof(SentenceRuntime)
-                .GetField("scopes",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(e.sentenceRuntime);
-            scopes[multi.Established]=PassageJourney.LightSpace.FarRoom|PassageJourney.LightSpace.ReturnPath;
             j.SetLights(false,PassageJourney.LightSpace.FarRoom);yield return Until(()=>j.Brightness==0);
             yield return new WaitForSecondsRealtime(fade);
             Check(j.ReturnStars.Brightness>0 && !e.sentenceRuntime.SustainsFeedback(multi) && !Rippling(),"lit distant stars do not sustain a dark room's feedback");
@@ -133,7 +134,7 @@ namespace PuzzleApple.V5.Editor
                 var state=e.board.State;var j=e.journey;
                 e.board.Panel.SetOpen(true);
                 int strongBefore=e.feedback.StrongCount,weakBefore=e.feedback.WeakCount;
-                Check(e.chamberLight.Brightness==1&&j.Brightness==0,"bright chamber and dark far room");
+                Check(e.chamberLight.Brightness==1&&j.Brightness==0,"chamber lit and locked far room dark");
                 state.TryAcquireSentence("check.already.on","positive light");
                 yield return Until(()=>e.feedback.WeakCount>weakBefore);
                 var redundant=state.Groups.First(g=>g.RuleId=="light.on");
@@ -160,7 +161,7 @@ namespace PuzzleApple.V5.Editor
                 Check(e.feedback.StrongCount==pulses+1&&presentation.LastRule=="light.on","newly effective ON receives strong ripple and its own shot");
                 Check(e.chamberLight.Brightness==held&&!presentation.CanInterrupt,"old fade stops immediately before takeover shot");
                 yield return Until(()=>!presentation.Playing);
-                Check(presentation.PlayCount==shotsBefore+1&&e.chamberLight.Brightness==1&&j.Brightness==0,"takeover brightens chamber but stops at closed door");
+                Check(presentation.PlayCount==shotsBefore+1&&e.chamberLight.Brightness==1&&j.Brightness==0,"takeover brightens chamber and leaves locked room unchanged");
                 presentation.enabledShots=false;
                 yield return Until(()=>state.Find(on.Id)==null);
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength-4)),j.Root.rotation);
@@ -189,7 +190,7 @@ namespace PuzzleApple.V5.Editor
                 Check(j.Door.GetComponent<Renderer>().enabled&&j.Door.GetComponent<Collider>().enabled&&j.Door.position==doorPosition,"off restores stationary white leaf and collision");
                 Check(!j.Root.GetComponentsInChildren<Renderer>().Any(r=>r.name.Contains("door")&&r.name.Contains("filaments")&&r.transform.localPosition.z>j.pathLength&&r.enabled),"closed door conceals the room-side outline");
                 Check(j.WordAt(j.Door.GetComponent<Collider>(),1)==null,"closed rear door does not reveal itself through collection hint");
-                state.ClearWorkspace();j.SetLights(true);yield return Until(()=>j.Brightness>=1);
+                yield return ChargeDoorChecks.UnlockEntrance(e);state.ClearWorkspace();j.SetLights(true);yield return Until(()=>j.Brightness>=1);
                 yield return null;j.Door.GetComponent<Renderer>().GetPropertyBlock(surface);
                 Check(surface.GetFloat("_DoorBackBrightness")==1,"closed door back follows lit room wall");
                 presentation.enabledShots=true;
@@ -245,7 +246,7 @@ namespace PuzzleApple.V5.Editor
                 for(int pass=0;pass<3;pass++)
                 {
                     bool on=pass>0;
-                    if(on){j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);}
+                    if(on){j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);}
                     if(pass==2)
                     {
                         j.SetLights(false,PassageJourney.LightSpace.All);
@@ -271,7 +272,7 @@ namespace PuzzleApple.V5.Editor
                     Check((p.view.localPosition-local).sqrMagnitude<.0001f&&j.InCorridor,"camera returned to corridor");
                     e.board.State.ClearWorkspace();
                 }
-                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);
+                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);
                 yield return new WaitForEndOfFrame();
                 j.SetLights(true,PassageJourney.LightSpace.FarRoom);yield return Until(()=>j.Brightness==1);
                 float outside=RenderSettings.ambientLight.r;
@@ -310,6 +311,7 @@ namespace PuzzleApple.V5.Editor
                 if(!e.Entered){e.EnterWorld();yield return Until(()=>e.Entered);}
                 if(!e.room.Opened){e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);}
                 e.board.Panel.SetOpen(false);
+                e.journey.SetDoor(true);yield return Until(()=>e.journey.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);
                 for(int pass=0;pass<4;pass++)
                 {
                     var j=e.journey;
@@ -344,7 +346,7 @@ namespace PuzzleApple.V5.Editor
                             else
                             {
                                 var heading=Vector3.ProjectOnPlane(centre-p.view.position,Vector3.up);
-                                Check(Mathf.Abs(p.view.forward.y)<.001f && Vector3.Angle(heading,p.view.forward)<.1f,"level shot towards room centre");
+                                Check(Mathf.Abs(p.view.forward.y)<.001f && Vector3.Angle(heading,p.view.forward)<.1f,"level shot towards room centre, pass "+pass+", space "+j.PlayerSpace+", forward "+p.view.forward+", expected "+heading.normalized);
                             }
                         }
                         frames++;yield return null;
@@ -375,6 +377,7 @@ namespace PuzzleApple.V5.Editor
                 if(!e.Entered){e.EnterWorld();yield return Until(()=>e.Entered);}
                 if(!e.room.Opened){e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);}
                 var j=e.journey;var f=j.floorSurface;var state=e.board.State;
+                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+4)),j.Root.rotation);
                 yield return Until(()=>j.InSecondRoom);j.SetLights(true);yield return Until(()=>j.Brightness>=1);yield return null;
                 var wall=j.Root.Find("Room side wall").GetComponent<Renderer>();

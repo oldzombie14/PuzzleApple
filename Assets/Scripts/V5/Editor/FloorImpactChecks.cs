@@ -30,6 +30,8 @@ namespace PuzzleApple.V5.Editor
             var root=j.Root;
             var state=e.board.State;
             e.board.Panel.SetOpen(false);
+            j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);
+            j.EntranceDoor.SetOpen(true);yield return Until(()=>j.EntranceDoor.Progress==1);
             // Leave the tutorial exit clear while exercising the rail puzzle in isolation.
             j.Tutorial.Sphere.localPosition+=Vector3.back*6;
             Physics.SyncTransforms();
@@ -115,6 +117,7 @@ namespace PuzzleApple.V5.Editor
             {
                 e.EnterWorld();yield return Until(()=>e.Entered);e.OpenWorld(-1);yield return Until(()=>e.room.Opened&&!e.Busy);
                 var j=e.journey;var floor=j.floorSurface;
+                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);
                 e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+3)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
                 j.SetLights(true);yield return Until(()=>j.Brightness==1);yield return new WaitForEndOfFrame();
                 Check(floor.Surface.sharedMaterial.shader==j.whitePath.shader&&floor.Surface.sharedMaterial.GetFloat("_SurfaceMode")==2&&floor.Surface.sharedMaterial.GetFloat("_Brightness")==1,"shared surface shader preserves white lit floor effects");

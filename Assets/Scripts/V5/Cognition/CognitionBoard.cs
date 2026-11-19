@@ -37,6 +37,8 @@ namespace PuzzleApple.V5.Cognition
         public RectTransform Surface => surface;
         public bool IsDragging => drag != null || periods && periods.Dragging;
         public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
+        internal float PeriodVisibility(int id)=>views.TryGetValue(id,out var v)?Mathf.Clamp01(v.Fade.alpha/(v.Conflicted?ConflictAlpha:1)):0;
+        public void PauseSentence(int id){CancelDrag();State.Unsay(id);}
         public void SetSentenceOpacity(int id,float opacity)
         {
             if (!views.TryGetValue(id,out var view)) return;
@@ -48,9 +50,9 @@ namespace PuzzleApple.V5.Cognition
             if (!views.TryGetValue(id, out var view)) return default;
             var rect = view.Root.rect;
             var bounds=new Rect(rect.xMin+view.InkStart,rect.yMin,view.InkEnd-view.InkStart,rect.height);
-            if(State.RequirePeriod && view.Group.Spoken){
+            if(State.RequirePeriod && !view.Group.Independent){
                 var point=view.Root.InverseTransformPoint(PeriodEnd(id));
-                float radius=punctuation.diameter*.5f*view.FontScale*punctuation.landingScale;
+                float radius=punctuation.diameter*.5f*view.FontScale;
                 bounds.xMax=Mathf.Max(bounds.xMax,point.x+radius);
                 bounds.yMin=Mathf.Min(bounds.yMin,point.y-radius);
                 bounds.yMax=Mathf.Max(bounds.yMax,point.y+radius);
@@ -68,22 +70,32 @@ namespace PuzzleApple.V5.Cognition
         }
         sealed class RemovedWord
         {
-            public Image Image;
+            public MaskableGraphic Image;
             public Material Material;
             public Vector3 Position;
             public float Started;
         }
         readonly List<RemovedWord> removedWords = new List<RemovedWord>();
         Shader removalShader;
-        const float RemovalDuration = .6f;
+        internal const float RemovalDuration = .6f;
         static readonly int DissolveProgress = Shader.PropertyToID("_Progress");
-        void BeginRemovalEffect(Image source, float opacity)
+        internal void BeginRemovalEffect(MaskableGraphic source, float opacity)
         {
             if (!removalShader) removalShader = Resources.Load<Shader>("V5SymbolDissolve");
             if (!removalShader) return;
             // Erode one intact glyph using broad, soft regions rather than moving cutouts.
-            var image = new GameObject("Dissolving word", typeof(RectTransform), typeof(CenteredSymbolImage))
-                .GetComponent<CenteredSymbolImage>();
+            MaskableGraphic image;
+            Vector2 inkSize;
+            if(source is PeriodGlyph period){
+                var dot=new GameObject("Dissolving period",typeof(RectTransform),typeof(PeriodGlyph)).GetComponent<PeriodGlyph>();
+                dot.diameter=period.diameter;dot.ring=period.ring;
+                image=dot;inkSize=Vector2.one*period.diameter;
+            }else{
+                var symbol=(Image)source;
+                var copy=new GameObject("Dissolving word",typeof(RectTransform),typeof(CenteredSymbolImage)).GetComponent<CenteredSymbolImage>();
+                copy.sprite=symbol.sprite;copy.preserveAspect=symbol.preserveAspect;
+                image=copy;inkSize=SymbolUI.InkRect(symbol).size;
+            }
             var rect = image.rectTransform;
             var original = source.rectTransform;
             rect.SetParent(original, false);
@@ -91,15 +103,12 @@ namespace PuzzleApple.V5.Cognition
             rect.sizeDelta = original.rect.size;
             rect.anchoredPosition = Vector2.zero;
             rect.SetParent(Surface, true);
-            image.sprite = source.sprite;
-            image.preserveAspect = source.preserveAspect;
             image.raycastTarget = false;
             var color = source.color;
             color.a *= opacity;
             image.color = color;
             var material = new Material(removalShader);
-            var ink = SymbolUI.InkRect(source);
-            material.SetVector("_InkSize", new Vector4(Mathf.Max(1, ink.width), Mathf.Max(1, ink.height), 0, 0));
+            material.SetVector("_InkSize", new Vector4(Mathf.Max(1, inkSize.x), Mathf.Max(1, inkSize.y), 0, 0));
             material.SetFloat("_Seed", Mathf.Repeat(source.GetInstanceID() * .618034f, 97));
             image.material = material;
             removedWords.Add(new RemovedWord { Image = image, Material = material,
@@ -195,7 +204,7 @@ namespace PuzzleApple.V5.Cognition
         float SentenceIndent => sentenceHandlePrefab.rectTransform.rect.width;
         float wordSize => wordPrefab.rectTransform.rect.width;
         float WordHeight => wordPrefab.rectTransform.rect.height;
-        const float ConflictAlpha = .16f;
+        internal const float ConflictAlpha = .16f;
         public void ClearWorkspace(){CancelDrag();State.ClearWorkspace();}
         Color ChalkColor => wordPrefab.color;
         Vector2 lastSurfaceSize;

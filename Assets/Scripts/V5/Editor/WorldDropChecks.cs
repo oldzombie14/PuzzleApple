@@ -19,6 +19,8 @@ namespace PuzzleApple.V5.Editor
             Result="Running";e.StartCoroutine(Exercise(e));
         }
         static IEnumerator Exercise(WorldEntry e){
+            var keyboard=InputSystem.AddDevice<Keyboard>();var mouse=InputSystem.AddDevice<Mouse>();
+            try{
             e.OpenWorld(-1);yield return ChargeDoorChecks.Wait(()=>e.room.Opened&&!e.Busy,"unfold");
             var s=e.board.State;s.TryAcquireWord("drop.check.light",e.board.Catalog.Word("light"));
             var pass=e.outdoor;var board=e.board;
@@ -39,7 +41,12 @@ namespace PuzzleApple.V5.Editor
                 int count=field.PlayerCount;
                 var choice=board.Panel.ContentRoot.GetComponentInParent<Canvas>().rootCanvas.transform.Find("Shape selection/Shape choices");
                 Check(choice && choice.Cast<Transform>().Count(t=>t.GetComponent<Button>())==3 && field.PlayerCount==count,"choice before spawning");
-                choice.Find(shape.ToString()).GetComponent<Button>().onClick.Invoke();
+                if(shape==InstanceShape.Sphere)choice.Find(shape.ToString()).GetComponent<Button>().onClick.Invoke();
+                else{
+                    keyboard.MakeCurrent();InputSystem.QueueStateEvent(keyboard,new KeyboardState(shape==InstanceShape.Cube?Key.Digit2:Key.Digit3));
+                    yield return null;yield return null;
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;
+                }
                 Check(!picker.Open && field.PlayerCount==count+1,"choice spawns exactly once");
                 var instance=field.ActiveLamps.Select(l=>l.GetComponent<PlayerInstance>()).First(l=>l && l.Shape==shape);
                 var col=instance.GetComponent<Collider>();
@@ -48,6 +55,10 @@ namespace PuzzleApple.V5.Editor
                 point.x-=Screen.width*.09f;
             }
             var nativeCount=field.ActiveCount;
+            bool choseSphere=false;pass.Picker.Show(board.Panel,point,region.shapes,shape=>choseSphere=shape==InstanceShape.Sphere);
+            keyboard.MakeCurrent();InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.Digit1));yield return null;yield return null;
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;
+            Check(choseSphere,"key 1 selects the circle");
             var pickerUI=pass.Picker;
             foreach(var corner in new[]{new Vector2(0,0),new Vector2(Screen.width,0),new Vector2(0,Screen.height),new Vector2(Screen.width,Screen.height)}){
                 pickerUI.Show(board.Panel,corner,region.shapes,_=>{});
@@ -65,14 +76,14 @@ namespace PuzzleApple.V5.Editor
             ExecuteEvents.Execute(cell.gameObject,pointer,ExecuteEvents.pointerEnterHandler);
             yield return new WaitForSecondsRealtime(.18f);
             Check(cell.targetGraphic.canvasRenderer.GetColor().r>normal.r+.1f,"hover brightens cell");
-            InputSystem.QueueStateEvent(Keyboard.current,new KeyboardState(Key.Escape));
+            keyboard.MakeCurrent();InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.Escape));
             yield return null;yield return null;
-            InputSystem.QueueStateEvent(Keyboard.current,new KeyboardState());yield return null;
-            Check(!pickerUI.Open && board.Panel.IsOpen,"Escape cancels only picker");
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;
+            Check(!pickerUI.Open && board.Panel.IsOpen,"Escape cancels only picker (picker="+pickerUI.Open+", panel="+board.Panel.IsOpen+", keyboard="+keyboard.enabled+")");
             pass.TryWorldDrop(board,"light",point);
-            InputSystem.QueueStateEvent(Mouse.current,new MouseState{position=point}.WithButton(MouseButton.Right));
+            mouse.MakeCurrent();InputSystem.QueueStateEvent(mouse,new MouseState{position=point}.WithButton(MouseButton.Right));
             yield return null;yield return null;
-            InputSystem.QueueStateEvent(Mouse.current,new MouseState{position=point});yield return null;
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=point});yield return null;
             Check(!pickerUI.Open && field.PlayerCount==3,"right click cancels without recovery");
             Check(field.ActiveCount==nativeCount && board.Panel.IsOpen,"cancel preserves panel and lamps");
             int limit=region.maxInstances;region.maxInstances=field.PlayerCount;
@@ -119,6 +130,7 @@ namespace PuzzleApple.V5.Editor
             Check(field.PlayerCount==0 && field.ActiveCount==1 && source && !target,"staggered recovery retains original");
             recovery.Advance(null,true,true,false,.4f);Check(recovery.Progress==0,"no empty progress");
             Result="PASS: scoped drops, three native selections, meshes, cap, cancel, motion and freeze, individual and group recovery, retention and command completion";
+            }finally{InputSystem.RemoveDevice(keyboard);InputSystem.RemoveDevice(mouse);}
         }
     }
 }

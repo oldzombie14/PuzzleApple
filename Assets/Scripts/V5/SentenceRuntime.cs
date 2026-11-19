@@ -16,17 +16,39 @@ namespace PuzzleApple.V5
         readonly Dictionary<int,string> conflicts=new Dictionary<int,string>();
         readonly Dictionary<int,string> pendingTakeovers=new Dictionary<int,string>();
         readonly HashSet<CognitionSignal> applied=new HashSet<CognitionSignal>();
-        sealed class MotionScope
-        {
-            public int owner;
-            public string rule;
-            public PassageJourney.LightSpace rooms;
-        }
-        readonly List<MotionScope> pausedScopes=new List<MotionScope>();
-        readonly Dictionary<long,MotionScope> motionScopes=new Dictionary<long,MotionScope>();
-        readonly Dictionary<long,PassageJourney.LightSpace> scopes=new Dictionary<long,PassageJourney.LightSpace>();
         readonly Dictionary<CognitionSignal,PassageJourney.LightSpace> appliedScopes=new Dictionary<CognitionSignal,PassageJourney.LightSpace>();
-        public PassageJourney.LightSpace Scope(CognitionState.Group group)=>scopes.TryGetValue(group.Established,out var space)?space:0;
+        readonly Dictionary<int,PassageJourney.LightSpace> commandOrigins=new Dictionary<int,PassageJourney.LightSpace>();
+        PassageJourney.LightSpace currentScope;
+        public PassageJourney.LightSpace Scope(CognitionState.Group group)=>entry.journey.SentenceScope();
+        public PassageJourney.LightSpace DoorPresentationScope(CognitionState.Group group)=>doorState.ChangingSpaces(group);
+        public PassageJourney.LightSpace EffectScope(CognitionState.Group group){
+            if(LightStateEffect.Handles(group))return lightState.TargetScope(group);
+            if(DoorStateEffect.Handles(group))return doorState.TargetScope(group);
+            // Presentation may choose one focus; effects visit every eligible object in scope.
+            return Scope(group);
+        }
+        public PassageJourney.LightSpace PreferredSpace(CognitionState.Group group,PassageJourney.LightSpace candidates){
+            candidates&=Scope(group);if(candidates==0)return 0;
+            var origin=entry.journey.PlayerSpace;
+            if(group!=null && !commandOrigins.TryGetValue(group.Id,out origin))commandOrigins[group.Id]=origin=entry.journey.PlayerSpace;
+            if((candidates&origin)!=0)return origin;
+            var order=new[]{PassageJourney.LightSpace.Chamber,PassageJourney.LightSpace.FirstPath,PassageJourney.LightSpace.SphereRoom,
+                PassageJourney.LightSpace.ReturnPath,PassageJourney.LightSpace.FarRoom,PassageJourney.LightSpace.Ascent,
+                PassageJourney.LightSpace.Outdoor,PassageJourney.LightSpace.Gallery,PassageJourney.LightSpace.Garden,PassageJourney.LightSpace.Vitruvian};
+            int index=System.Array.IndexOf(order,origin),distance=int.MaxValue;PassageJourney.LightSpace nearest=0;
+            for(int i=0;i<order.Length;i++)if((candidates&order[i])!=0 && System.Math.Abs(i-index)<=distance){distance=System.Math.Abs(i-index);nearest=order[i];}
+            return nearest;
+        }
+        void Update(){ReevaluateScope();motion?.TrackLampControl();}
+        public void ReevaluateScope(){
+            if(!entry || !entry.Entered || entry.board.State==null)return;
+            var next=entry.journey.SentenceScope();if(next==currentScope)return;
+            if((currentScope&next)!=currentScope)commandOrigins.Clear();
+            currentScope=next;
+            // Only retarget effects already committed; pending presentation still owns its start.
+            var groups=entry.board.State.Groups.Where(g=>g.Effective && previous.TryGetValue(g.Id,out var rule) && rule==g.RuleId).OrderBy(g=>g.Established).ToArray();
+            Commit(groups,System.Array.Empty<CognitionState.Group>(),CognitionChange.Layout);
+        }
         public bool HasEffect(CognitionSignal signal,PassageJourney.LightSpace space)=>appliedScopes.TryGetValue(signal,out var scope)&&(scope&space)!=0;
         readonly HashSet<long> requested=new HashSet<long>();
         readonly HashSet<long> rejected=new HashSet<long>();
@@ -60,18 +82,19 @@ namespace PuzzleApple.V5
 
         public void ChangeSpace()
         {
-            pausedScopes.Clear();
+            commandOrigins.Clear();
+            currentScope=entry.journey.SentenceScope();
             doorState.ChangeSpace();
             illumination.Apply(this);
         }
-        bool observationTransferred;
+        bool observationTransferred,doorLessonTransferred;
         public float LampMultiplier => illumination ? illumination.LampMultiplier : 1;
         public float LampBoost(PassageJourney.LightSpace space)=>illumination?illumination.LampBoost(space):1;
         public bool HasEffect(CognitionSignal effect)=>applied.Contains(effect);
         public bool Owns(CognitionSignal signal,PassageJourney.LightSpace space,long established)
         {
             foreach(var g in entry.board.State.Groups)
-                if(g.Established==established && g.Effective && previous.TryGetValue(g.Id,out var rule) && rule==g.RuleId && g.Signal==signal && (Scope(g)&space)!=0)return true;
+                if(g.Established==established && g.Effective && previous.TryGetValue(g.Id,out var rule) && rule==g.RuleId && g.Signal==signal && (EffectScope(g)&space)!=0)return true;
             return false;
         }
         public int LightMotionRevision(PassageJourney.LightSpace space)=>motion.Revision(space);
@@ -94,39 +117,6 @@ namespace PuzzleApple.V5
             var lesson=entry.journey&&entry.journey.movementObservation?entry.journey.movementObservation.lesson:null;
             observationTransferred=lesson&&entry.board.State!=null&&entry.board.State.HasAcquired(lesson.acquisitionId);
         }
-        PassageJourney.LightSpace ResumeScope(CognitionState.Group group,PassageJourney.LightSpace here)
-        {
-            int index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && p.owner==group.Id);
-            if(index<0)index=pausedScopes.FindLastIndex(p=>p.rule==group.RuleId && (p.rooms&here)!=0);
-            if(index<0)return 0;
-            var saved=pausedScopes[index];pausedScopes.RemoveAt(index);
-            return (saved.rooms&here)!=0?saved.rooms:0;
-        }
-        void LockScopes(CognitionState state)
-        {
-            foreach(var key in scopes.Keys.Where(key=>!state.Groups.Any(g=>g.Recognized && (g.Established==key || g.PausedEstablishment==key))).ToArray()){
-                if(motionScopes.TryGetValue(key,out var saved)){
-                    pausedScopes.RemoveAll(p=>p.rule==saved.rule && p.rooms==saved.rooms);
-                    pausedScopes.Add(saved);motionScopes.Remove(key);
-                }
-                scopes.Remove(key);
-            }
-            foreach(var group in state.Groups.Where(g=>g.Recognized && g.Established>0)){
-                if(scopes.ContainsKey(group.Established))continue;
-                PassageJourney.LightSpace rooms;
-                if(group.PausedEstablishment>0 && scopes.TryGetValue(group.PausedEstablishment,out rooms)){
-                    scopes.Remove(group.PausedEstablishment);
-                    motionScopes.Remove(group.PausedEstablishment);
-                    group.PausedEstablishment=0;
-                }else{
-                    var here=entry.journey?entry.journey.PlayerSpace:PassageJourney.LightSpace.Chamber;
-                    rooms=Motion(group)?ResumeScope(group,here):0;
-                    if(rooms==0)rooms=entry.journey?entry.journey.SentenceScope():here;
-                }
-                scopes[group.Established]=rooms;
-                if(Motion(group))motionScopes[group.Established]=new MotionScope{owner=group.Id,rule=group.RuleId,rooms=rooms};
-            }
-        }
         public void Refresh(CognitionChange kind)
         {
             if(!entry||!entry.board||entry.board.State==null||kind==CognitionChange.Layout)return;
@@ -137,7 +127,8 @@ namespace PuzzleApple.V5
                 .Where(g=>!MotionFrozen || !WorldFlow(g)
                     || (previous.TryGetValue(g.Id,out var activeRule) && activeRule==g.RuleId))
                 .OrderBy(g=>g.Established).ToArray();
-            LockScopes(state);
+            foreach(var id in commandOrigins.Keys.Where(id=>!groups.Any(g=>g.Id==id)).ToArray())commandOrigins.Remove(id);
+            foreach(var g in groups)if(!commandOrigins.ContainsKey(g.Id))commandOrigins[g.Id]=entry.journey.PlayerSpace;
             if(state.RequirePeriod){
                 var acceptedIds=groups.Select(g=>g.Established);
                 var rejectedIds=state.Groups.Where(g=>g.Conflicted).Select(g=>g.Established);
@@ -146,6 +137,7 @@ namespace PuzzleApple.V5
                 rejected.Clear();rejected.UnionWith(rejectedIds);
             }
             var added=groups.Where(g=>!previous.TryGetValue(g.Id,out var rule)||rule!=g.RuleId).ToArray();
+            doorState.Prepare(groups,added);
             var newConflicts=entry.board.State.Groups.Where(g=>g.Conflicted&&(!conflicts.TryGetValue(g.Id,out var rule)||rule!=g.RuleId)).Select(g=>g.Id).ToArray();
             foreach(var g in added)
                 if(conflicts.TryGetValue(g.Id,out var oldRule)&&oldRule==g.RuleId)pendingTakeovers[g.Id]=g.RuleId;
@@ -158,6 +150,8 @@ namespace PuzzleApple.V5
             var lesson=entry.journey&&entry.journey.movementObservation?entry.journey.movementObservation.lesson:null;
             bool granted=lesson&&!observationTransferred&&entry.board.State.HasAcquired(lesson.acquisitionId);
             if(granted)observationTransferred=true;
+            bool doorGranted=!doorLessonTransferred && entry.journey && entry.journey.EndingDoor && entry.journey.EndingDoor.LessonAcquired;
+            if(doorGranted)doorLessonTransferred=true;
             foreach(var id in newConflicts)StartCoroutine(ConflictPulse(id,version));
             // A world-close sequence owns the exit UI; it monitors its own sentence.
             if(pendingTakeovers.Count>0&&!entry.ConfirmingExit)
@@ -172,7 +166,7 @@ namespace PuzzleApple.V5
             if(state.RequirePeriod && added.Length==0 && previous.Keys.Any(id=>!groups.Any(g=>g.Id==id))){
                 Commit(groups,added,kind);return;
             }
-            if(kind==CognitionChange.Split||granted){Commit(groups,added,kind);return;}
+            if(kind==CognitionChange.Split||granted||doorGranted){Commit(groups,added,kind);return;}
             if(entry.ConfirmingExit)return;
             StartCoroutine(Present(groups,added,kind,version));
         }
@@ -197,7 +191,7 @@ namespace PuzzleApple.V5
                     &&lightState.ShotAllowed(g))shot=g;
             }
             if(shot!=null&&!entry.Busy)
-                yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind);},Kind(shot)==SentenceKind.Command?shot:null);
+                yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind);},Kind(shot)==SentenceKind.Command?shot:null,shot);
             else Commit(groups,added,kind);
         }
         bool VisibleChange(CognitionState.Group g)
@@ -210,7 +204,7 @@ namespace PuzzleApple.V5
         public bool SustainsFeedback(CognitionState.Group g)
         {
             if(Kind(g)!=SentenceKind.Sustained || (g.Signal!=CognitionSignal.FreezeMotion && g.Signal!=CognitionSignal.IlluminateWorld && (Scope(g)&entry.journey.PlayerSpace)==0))return false;
-            if(Motion(g) && !motion.CanMove(g,HasEffect,Scope(g)&entry.journey.PlayerSpace))return false;
+            if(Motion(g) && !motion.CanMove(g,HasEffect,EffectScope(g)&entry.journey.PlayerSpace))return false;
             return EffectInProgress(g);
         }
 
@@ -257,7 +251,7 @@ namespace PuzzleApple.V5
             while(board.State.Find(group.Id)==group && group.Established==established && group.Effective)
             {
                 bool inProgress=!finished && (lightState.TrySettling(group,out bool settling)?settling:EffectInProgress(group));
-                if(Motion(group) && (MotionFrozen || motion.WaitingForLight(group,Scope(group))))inProgress=true;
+                if(Motion(group) && (MotionFrozen || motion.WaitingForLight(group,EffectScope(group))))inProgress=true;
                 if(inProgress){elapsed=0;board.SetSentenceOpacity(group.Id,1);yield return null;continue;}
                 if(LightStateEffect.Commands(group,false) && !board.Panel.IsOpen) elapsed=duration;
                 else elapsed+=Time.unscaledDeltaTime;
@@ -280,20 +274,22 @@ namespace PuzzleApple.V5
             committedRevision=revision;
             previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
             foreach(var g in groups)pendingTakeovers.Remove(g.Id);
+            lightState.Prepare(groups,added);
             applied.Clear();appliedScopes.Clear();
             foreach(var g in groups)foreach(var signal in g.Signals) {
                 applied.Add(signal);
                 appliedScopes.TryGetValue(signal,out var mask);
-                appliedScopes[signal]=mask|Scope(g);
+                appliedScopes[signal]=mask|EffectScope(g);
             }
             motion.Commit(entry.board.State,groups);
             illumination.Apply(this);
             lightState.Commit(groups,added);
             if(entry.outdoor&&entry.outdoor.IsOutside)entry.outdoor.World.ApplyMotion(HasEffect,kind==CognitionChange.Split);
             doorState.Commit(groups,added);
+            foreach(var g in groups)
+                if(g.Signal==CognitionSignal.DoorMove && (EffectScope(g)&PassageJourney.LightSpace.FarRoom)!=0 && entry.journey.EndingDoor && !entry.journey.EndingDoor.AcceptedCycle(g.Established))entry.journey.EndingDoor.StartCycle(g.Established);
             foreach(var g in added)
             {
-                if(g.Signal==CognitionSignal.DoorMove && (Scope(g)&PassageJourney.LightSpace.FarRoom)!=0)entry.journey.EndingDoor?.StartCycle(g.Established);
                 if(Kind(g)==SentenceKind.Command)FinishCommand(g.Id);
                 else if(WorldFlow(g)&&g.Signals.Contains(CognitionSignal.WorldOn))entry.OpenWorld(g.Id);
                 else if(WorldFlow(g)&&g.Signals.Contains(CognitionSignal.WorldOff))entry.CloseWorldFromSentence(g.Id);

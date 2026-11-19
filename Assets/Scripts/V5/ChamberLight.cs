@@ -228,6 +228,10 @@ namespace PuzzleApple.V5
         {
             string word=LookedAtWord(out var emitter);if(word==null)return false;
             if(knownFeedback!=null){StopCoroutine(knownFeedback);knownFeedback=null;knownSymbol.gameObject.SetActive(false);}
+            if(word=="door" && entry.journey && entry.journey.EndingDoor){
+                var view=entry.player.view;PickStar(new Ray(view.position,view.forward),collectionDistance,out var hit);
+                if(entry.journey.EndingDoor.Owns(hit.collider) && entry.journey.EndingDoor.TryCollectLesson())return true;
+            }
             if(entry.board.State.Knows(word)){ShowKnownVocabulary(word);return true;}
             if(word=="light")
             {
@@ -290,15 +294,15 @@ namespace PuzzleApple.V5
             }
             knownSymbol.gameObject.SetActive(false);knownFeedback=null;KnownFeedbackWord=null;
         }
-        public void CollectObservation(Cognition.ObservationLesson lesson,bool wordOnly=false)
-        {if(!Collecting&&lesson)StartCoroutine(Collect(lesson.verb.Id,lesson,wordOnly));}
-        IEnumerator Collect(string id,Cognition.ObservationLesson lesson=null,bool wordOnly=false)
+        public void CollectObservation(Cognition.ObservationLesson lesson,bool wordOnly=false,bool showWord=true)
+        {if(!Collecting&&lesson)StartCoroutine(Collect(lesson.verb.Id,lesson,wordOnly,showWord));}
+        IEnumerator Collect(string id,Cognition.ObservationLesson lesson=null,bool wordOnly=false,bool showWord=true)
         {
             Collecting=true;hoverEye.gameObject.SetActive(false);if(reticle)reticle.SetActive(false);
             entry.board.Panel.InputBlocked=true;
             var word=entry.board.Catalog.Word(id);
-            var rect=collectionSymbol.rectTransform;collectionSymbol.sprite=word.Symbol;collectionSymbol.gameObject.SetActive(true);
-            float duration=wordDisplayDuration;
+            var rect=collectionSymbol.rectTransform;collectionSymbol.sprite=word.Symbol;collectionSymbol.gameObject.SetActive(showWord);
+            float duration=showWord?wordDisplayDuration:0;
             for(float t=0;t<duration;t+=Time.unscaledDeltaTime)
             {
                 float fly=Mathf.SmoothStep(0,1,Mathf.InverseLerp(duration-wordFlyDuration,duration,t));

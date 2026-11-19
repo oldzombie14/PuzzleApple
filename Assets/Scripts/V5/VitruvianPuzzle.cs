@@ -46,6 +46,7 @@ namespace PuzzleApple.V5
         readonly RaycastHit[] hits=new RaycastHit[32];
         Vector3 Foot=>transform.position;
         float Radius=>height*navelRatio;
+        float WorldScale=>Mathf.Abs(transform.lossyScale.x);
         public bool DropOnBall(Ray ray)
         {
             if(!Physics.Raycast(ray,out var hit,100,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore) ||
@@ -67,7 +68,7 @@ namespace PuzzleApple.V5
         {
             var line=new GameObject(name,typeof(LineRenderer)).GetComponent<LineRenderer>();
             line.transform.SetParent(transform,false);line.sharedMaterial=lineMaterial;line.useWorldSpace=true;
-            line.loop=loop;line.widthMultiplier=width;line.numCapVertices=2;
+            line.loop=loop;line.widthMultiplier=width*WorldScale;line.numCapVertices=2;
             line.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;line.receiveShadows=false;
             return line;
         }
@@ -86,7 +87,7 @@ namespace PuzzleApple.V5
         void Ring(LineRenderer line,Vector3 centre,float radius){
             for(int i=0;i<line.positionCount;i++){
                 float a=2*Mathf.PI*i/line.positionCount;
-                line.SetPosition(i,centre+radius*(transform.right*Mathf.Cos(a)+transform.up*Mathf.Sin(a)));
+                line.SetPosition(i,centre+radius*WorldScale*(transform.right*Mathf.Cos(a)+transform.up*Mathf.Sin(a)));
             }
         }
         void Start(){
@@ -137,7 +138,7 @@ namespace PuzzleApple.V5
         }
         Vector3 OrbitPoint(float degrees){
             float a=degrees*Mathf.Deg2Rad;
-            return pivot.position+Radius*(transform.right*Mathf.Cos(a)+transform.up*Mathf.Sin(a));
+            return pivot.position+transform.TransformVector(new Vector3(Mathf.Cos(a),Mathf.Sin(a),0)*Radius);
         }
         void PoseOrbit(){
             var end=OrbitPoint(OrbitAngle);ball.transform.position=end;
@@ -194,7 +195,7 @@ namespace PuzzleApple.V5
             var line=branches[side];line.positionCount=maxReflections+2;line.SetPosition(0,World(p));int count=1;
             bool met=false;
             for(int bounce=0;bounce<=maxReflections;bounce++){
-                float distance=DistanceToObstacle(World(p),transform.TransformDirection(d),height*4);
+                float distance=DistanceToObstacle(World(p),transform.TransformDirection(d),height*4*WorldScale)/WorldScale;
                 Vector2 normal=Vector2.zero;
                 for(int i=0;i<(room.mirrors.CopiesActive?4:2);i++){
                     var mirror=i<2?room.mirrors.originals[i]:room.mirrors.Copy(i-2);

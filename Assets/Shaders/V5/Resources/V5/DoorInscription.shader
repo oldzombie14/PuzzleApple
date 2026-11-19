@@ -22,7 +22,7 @@ Shader "PuzzleApple/V5/Carved Door Inscription"
             half4 Frag(Output i):SV_Target
             {
                 half mask=SAMPLE_TEXTURE2D(_MainTex,sampler_MainTex,i.uv).a;
-                return half4(_GlyphEmission.rgb*mask,lerp(1,.34h*_ExposureGain,mask));
+                return half4(_GlyphEmission.rgb*mask,lerp(1,.18h*_ExposureGain,mask));
             }
             ENDHLSL
         }

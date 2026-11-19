@@ -17,93 +17,133 @@ namespace PuzzleApple.V5.Editor
         internal static CognitionState.Group Draft(CognitionBoard board,params string[] words){
             var state=board.State;
             foreach(var word in words)if(!state.Knows(word))state.TryAcquireWord("period.check."+word,board.Catalog.Word(word));
-            var g=state.Spawn(board.Catalog.Word(words[0]));
-            for(int i=1;i<words.Length;i++)state.Join(state.Spawn(board.Catalog.Word(words[i])).Id,g.Id,false);
-            return g;
+            var group=state.Spawn(board.Catalog.Word(words[0]));
+            for(int i=1;i<words.Length;i++)state.Join(state.Spawn(board.Catalog.Word(words[i])).Id,group.Id,false);
+            return group;
+        }
+        static PeriodGlyph Glyph(CognitionBoard board,int group)=>board.Surface.GetComponentsInChildren<PeriodGlyph>(true).First(p=>p.group==group && p.name=="Sentence period");
+        static PointerEventData Pointer(PeriodGlyph handle,bool right=false)=>new PointerEventData(EventSystem.current){button=right?PointerEventData.InputButton.Right:PointerEventData.InputButton.Left,position=handle.transform.position};
+        internal static void Click(CognitionBoard board,int group,bool right=false,bool checkHit=false){
+            var handle=Glyph(board,group);var data=Pointer(handle,right);
+            if(checkHit){
+                data.position+=Vector2.right*25*board.Surface.lossyScale.x;
+                var hits=new System.Collections.Generic.List<RaycastResult>();EventSystem.current.RaycastAll(data,hits);
+                Check(hits.Count>0 && hits[0].gameObject==handle.gameObject,"period hit area reaches near the dot");
+            }
+            ExecuteEvents.Execute(handle.gameObject,data,ExecuteEvents.pointerDownHandler);
+            ExecuteEvents.Execute(handle.gameObject,data,ExecuteEvents.pointerUpHandler);
         }
         internal static void Drag(CognitionBoard board,int source,Vector2 destination,bool checkHitArea=false){
-            var handle=board.Surface.GetComponentsInChildren<PeriodGlyph>().First(p=>p.raycastTarget && p.group==source);
-            var offset=(source==0?Vector2.left:Vector2.right)*25*board.Surface.lossyScale.x;
-            var data=new PointerEventData(EventSystem.current){button=PointerEventData.InputButton.Left,position=(Vector2)handle.transform.position+offset};
-            var target=handle.gameObject;
-            if(checkHitArea){
-                var hits=new System.Collections.Generic.List<RaycastResult>();
-                EventSystem.current.RaycastAll(data,hits);
-                Check(hits.Count>0 && hits[0].gameObject==target,"pointer near "+handle.name+" hit "+(hits.Count>0?hits[0].gameObject.name:"nothing"));
-            }
+            var handle=Glyph(board,source);var data=Pointer(handle);var target=handle.gameObject;
+            ExecuteEvents.Execute(target,data,ExecuteEvents.pointerDownHandler);
             ExecuteEvents.Execute(target,data,ExecuteEvents.initializePotentialDrag);
-            Check(!data.useDragThreshold,"period follows the first pointer movement");
-            ExecuteEvents.Execute(target,data,ExecuteEvents.beginDragHandler);
+            Check(data.useDragThreshold,"period uses the normal drag threshold");
+            data.position+=Vector2.right*20;ExecuteEvents.Execute(target,data,ExecuteEvents.beginDragHandler);
             data.position=destination;ExecuteEvents.Execute(target,data,ExecuteEvents.dragHandler);
-            Check(board.IsDragging && GameObject.Find("Dragging period ripple"),"dragging a period shows a ripple at the pointer");
+            Check(!GameObject.Find("Dragging period ripple"),"drag has no pointer ripple");
+            ExecuteEvents.Execute(target,data,ExecuteEvents.pointerUpHandler);
             ExecuteEvents.Execute(target,data,ExecuteEvents.endDragHandler);
         }
         static void Check(bool pass,string message){if(!pass){Result="FAIL: "+message;throw new Exception(Result);}}
-        public static void Run(){
-            var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();Result="Running";e.StartCoroutine(Exercise(e));
+        static void RemoveByRightClick(CognitionBoard board,CognitionState.Group group,bool whole=false,int index=0){
+            var ids=group.Words.Select(w=>w.Id).ToArray();
+            var handle=board.GroupRect(group.Id).GetComponentsInChildren<CognitionDragHandle>().First(h=>whole?h.WordId<0:h.WordId==ids[index]);
+            int before=board.Surface.GetComponentsInChildren<UnityEngine.UI.Image>().Count(i=>i.name=="Dissolving word");
+            var data=new PointerEventData(EventSystem.current){button=PointerEventData.InputButton.Right,position=handle.transform.position};
+            ExecuteEvents.Execute(handle.gameObject,data,ExecuteEvents.pointerDownHandler);
+            var removed=whole?ids:new[]{ids[index]};
+            Check(removed.All(id=>board.State.Owning(id)==null),"right-click removes the selected word or whole sentence immediately");
+            Check(ids.Except(removed).All(id=>board.State.Owning(id)!=null),"right-click keeps unselected words");
+            var ghosts=board.Surface.GetComponentsInChildren<UnityEngine.UI.Image>().Where(i=>i.name=="Dissolving word").ToArray();
+            Check(ghosts.Length==before+removed.Length && ghosts.All(i=>!i.raycastTarget),"removed words dissolve without intercepting input");
         }
+        public static void Run(){var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();Result="Running";e.StartCoroutine(Exercise(e));}
         static IEnumerator Exercise(WorldEntry e){
             var board=e.board;var state=board.State;Check(state.RequirePeriod,"enable Require Period before Play");
             board.Panel.SetOpen(true);yield return new WaitForSecondsRealtime(.4f);
-            Check(!e.blackBackground.raycastTarget,"opening fade passes pointer input to the board");
-            Drag(board,0,board.Surface.TransformPoint(board.Surface.rect.center),true);
-            Check(!board.IsDragging && state.Groups.Count==0 && state.History.Count==0,"empty-board drop returns to the supply");
+            Check(!GameObject.Find("Period supply"),"no corner supply");
+            var one=Draft(board,"light");yield return null;
+            Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>(true).Any(p=>p.group==one.Id),"single word has no period");
+            RemoveByRightClick(board,one);
+            state.ClearWorkspace();
             var g=Draft(board,"positive","world");yield return null;
-            Check(g.Recognized && !g.Effective && state.History.Count==0 && !e.room.Animating,"draft has no history, effect or shot");
-            Check(board.GroupRect(g.Id).GetComponent<CanvasGroup>().alpha<.2f,"draft uses conflict opacity");
-            yield return new WaitForSecondsRealtime(board.punctuation.guidePulseSeconds+board.punctuation.guideFlightSeconds*.45f);
-            Check(board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(p=>p.name=="Period guide"),"first draft shows a moving guide");
-            yield return new WaitForEndOfFrame();
-            var folder=UnityEditor.SessionState.GetString("C2C.captureFolder","");
-            if(!string.IsNullOrEmpty(folder)){
-                var frame=ScreenCapture.CaptureScreenshotAsTexture();
-                try{System.IO.Directory.CreateDirectory(folder);System.IO.File.WriteAllBytes(System.IO.Path.Combine(folder,"period.png"),frame.EncodeToPNG());}
-                finally{UnityEngine.Object.Destroy(frame);}
+            var token=Glyph(board,g.Id);var pointer=Pointer(token);
+            Check(!g.Effective && state.History.Count==0 && !e.room.Animating,"draft has no effect or history");
+            Check(board.GroupRect(g.Id).GetComponent<CanvasGroup>().alpha<.2f,"draft words remain dim");
+            Check(GameObject.Find("Period first-click ripple"),"first recognized draft shows ripple");
+            float low=1,high=0;
+            for(float t=0;t<board.punctuation.breathSeconds;t+=Time.unscaledDeltaTime){
+                low=Mathf.Min(low,token.canvasRenderer.GetAlpha());high=Mathf.Max(high,token.canvasRenderer.GetAlpha());yield return null;
             }
-            var lastWord=board.GroupRect(g.Id).GetComponentsInChildren<CenteredSymbolImage>().Last();
-            Rect ink=SymbolUI.InkRect(lastWord);
-            var end=lastWord.rectTransform.InverseTransformPoint(board.PeriodEnd(g.Id));
-            Check(end.x>ink.xMax+10 && end.y<lastWord.rectTransform.rect.center.y,"period has a separate column at the row bottom");
-            Drag(board,0,(Vector2)board.PeriodEnd(g.Id)+Vector2.up*48*board.Surface.lossyScale.x,true);yield return new WaitForSecondsRealtime(.5f);
-            Check(g.Spoken && g.Effective && state.History.Count==1,"native period drag speaks world flow");
-            var period=board.GroupRect(g.Id).InverseTransformPoint(board.PeriodEnd(g.Id));
-            Check(board.GroupContentBounds(g.Id).Contains(period+Vector3.right*board.punctuation.diameter*.5f),"feedback bounds include the attached period");
+            Check(low<.25f && high>.9f && token.rectTransform.localScale==Vector3.one,"period breathes without scaling");
+            ExecuteEvents.Execute(token.gameObject,pointer,ExecuteEvents.pointerEnterHandler);
+            yield return new WaitForSecondsRealtime(.18f);Check(token.canvasRenderer.GetAlpha()>.99f,"hover restores opacity");
+            ExecuteEvents.Execute(token.gameObject,pointer,ExecuteEvents.pointerExitHandler);
+            ExecuteEvents.Execute(token.gameObject,pointer,ExecuteEvents.pointerDownHandler);pointer.position=Vector2.zero;
+            ExecuteEvents.Execute(token.gameObject,pointer,ExecuteEvents.pointerUpHandler);Check(!g.Spoken,"release outside is not a click");
+            Drag(board,g.Id,Vector2.zero);Check(!board.IsDragging && !g.Spoken,"draft cannot drag or speak by dragging");
+            Click(board,g.Id,false,true);yield return null;
+            Check(g.Spoken && g.Effective && state.History.Count==1 && !GameObject.Find("Period first-click ripple"),"click speaks and permanently dismisses guide");
             while(board.Panel.InputBlocked)yield return null;
-            board.Panel.SetOpen(true);
-            while(!board.Panel.FullyOpen)yield return null;
-            yield return new WaitForEndOfFrame();
-            Drag(board,g.Id,Vector2.zero,true);yield return null;
-            Check(!g.Effective && g.Words.Count==2 && !e.room.Animating,"unsay pauses fold and retains both words");
-            state.ClearWorkspace();var prefix=Draft(board,"light","move");
-            Check(!prefix.Effective && !e.sentenceRuntime.presentation.Playing,"prefix stays silent");
-            var floor=Draft(board,"floor");state.Join(floor.Id,prefix.Id,false);
-            Check(prefix.RuleId=="light.move.floor" && !prefix.Effective,"three-word draft");
-            var a=Draft(board,"positive","light");var b=Draft(board,"negative","light");
-            state.Speak(b.Id);state.Speak(a.Id);
-            Check(b.Effective && a.Conflicted,"first spoken wins irrespective of drafting order");
-            state.Unsay(b.Id);Check(a.Effective && !b.Conflicted,"draft releases conflict");
-            var part=state.Detach(a.Id,a.Words[1].Id);Check(!a.Spoken,"editing ejects punctuation");
-            state.Join(part.Id,a.Id,false);Check(!a.Spoken && a.Recognized,"rejoined sentence remains draft");
-            var invalid=Draft(board,"world","world");int count=state.HistoryVersion;
-            Check(!board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"world world stays unmarked before punctuation");
-            Drag(board,0,board.PeriodEnd(invalid.Id),true);
-            Check(invalid.Spoken && !invalid.Effective && state.HistoryVersion>count && !state.History[0].Effective,"rejected sentence keeps its period and enters history");
-            Check(board.GroupRect(invalid.Id).GetComponentsInChildren<PeriodGlyph>().Any(p=>p.group==invalid.Id),"rejected sentence displays its period");
-            state.Spawn(board.Catalog.Word("light"));
-            Check(invalid.Spoken,"unrelated edits preserve rejected punctuation");
-            Check(board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"punctuation marks the rejected draft");
-            state.Swap(invalid.Id,invalid.Words[0].Id,invalid.Words[1].Id);
-            Check(!board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"edited rejected draft clears the old verdict");
-            state.TryAcquireSentence("observed","light move",out var granted);
-            Check(granted.Spoken && granted.Effective,"granted example arrives spoken");
-            state.ClearWorkspace();Check(board.Surface.GetComponentsInChildren<PeriodGlyph>(true).Any(p=>p.group==0 && p.raycastTarget),"corner supply survives clear");
-            board.SetPeriodMode(false);yield return null;
-            Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(),"legacy mode has no punctuation UI");
-            board.SetPeriodMode(true);Draft(board,"mirror","move");yield return new WaitForSecondsRealtime(.95f);
-            Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(p=>p.name=="Period guide"),"learned guide stays dismissed across trial toggles");
-            yield return new WaitForSecondsRealtime(e.feedback.duration*1.2f+.15f);
-            Check(!GameObject.Find("Sentence grammar ripple") && !GameObject.Find("Sentence effect ripple"),"draft leaves sentence feedback silent");
-            Result="PASS: actual period drags, world interruption, silent prefix, history, conflicts, edits and granted example";
+            board.Panel.SetOpen(true);while(!board.Panel.FullyOpen)yield return null;
+            Drag(board,g.Id,board.GroupRect(g.Id).TransformPoint(board.GroupRect(g.Id).rect.center));
+            Check(g.Spoken,"releasing inside the sentence does not pause");
+            Drag(board,g.Id,Vector2.zero,true);float progress=e.room.Progress;
+            Check(!g.Spoken && !g.Effective && g.Words.Count==2,"drag outside pauses immediately");
+            Check(!Glyph(board,g.Id).gameObject.activeSelf,"draft period waits for dragged dot to fade");
+            yield return new WaitForSecondsRealtime(.3f);
+            Check(Glyph(board,g.Id).gameObject.activeSelf && Mathf.Abs(e.room.Progress-progress)<.001f,"draft returns with world progress preserved");
+            Click(board,g.Id);yield return null;
+            while(board.Panel.InputBlocked)yield return null;board.Panel.SetOpen(true);while(!board.Panel.FullyOpen)yield return null;
+            RemoveByRightClick(board,g,false,1);
+            Check(!g.Spoken && g.Words.Count==1,"right-click spoken word dissolves it and stops the sentence");
+            var draft=Draft(board,"light","move","floor");RemoveByRightClick(board,draft,false,1);
+            Check(draft.Words.Count==1 && state.Groups.Any(x=>x.Independent&&x.Words[0].Meaning=="floor"),"removing draft middle word preserves separate left and right runs");
+            RemoveByRightClick(board,Draft(board,"mirror","move"),true);
+            yield return new WaitForSecondsRealtime(.7f);
+            Check(!board.Surface.GetComponentsInChildren<UnityEngine.UI.Image>().Any(i=>i.name=="Dissolving word"),"dissolve remnants are cleaned up");
+            state.ClearWorkspace();e.sentenceRuntime.presentation.enabledShots=false;
+            var wholeSpoken=Draft(board,"mirror","move");Click(board,wholeSpoken.Id);
+            RemoveByRightClick(board,wholeSpoken,true);
+            var periodDraft=Draft(board,"light","move");Click(board,periodDraft.Id,true);
+            Check(!periodDraft.Spoken && periodDraft.Words.Count==2 && !Glyph(board,periodDraft.Id).gameObject.activeSelf,"right-click draft period dissolves only punctuation");
+            yield return new WaitForSecondsRealtime(.7f);
+            Check(Glyph(board,periodDraft.Id).gameObject.activeSelf,"draft period returns after dissolving");
+            state.ClearWorkspace();
+            var prefix=Draft(board,"light","move");Check(!prefix.Effective,"two-word prefix stays silent");
+            state.Join(Draft(board,"floor").Id,prefix.Id,false);Check(prefix.RuleId=="light.move.floor"&&!prefix.Spoken,"three-word draft stays silent");
+            var a=Draft(board,"positive","light");var b=Draft(board,"negative","light");Click(board,b.Id);Click(board,a.Id);
+            Check(b.Effective && a.Conflicted,"first spoken wins");Click(board,b.Id,true);Check(a.Effective && !b.Spoken && b.Words.Count==2,"right-click period releases conflict and preserves words");
+            var dissolvingDot=board.Surface.GetComponentsInChildren<PeriodGlyph>().Single(p=>p.name=="Dissolving period");
+            Check(!dissolvingDot.raycastTarget && dissolvingDot.material.shader.name=="PuzzleApple/V5/SymbolDissolve","period uses non-interactive dissolve material");
+            Check(!Glyph(board,b.Id).gameObject.activeSelf,"period stays hidden during dissolve");
+            yield return new WaitForSecondsRealtime(.3f);
+            Check(dissolvingDot && dissolvingDot.material.GetFloat("_Progress")>0 && dissolvingDot.material.GetFloat("_Progress")<1,"period dissolution progresses over time");
+            yield return new WaitForSecondsRealtime(.4f);
+            Check(!dissolvingDot && Glyph(board,b.Id).gameObject.activeSelf,"dissolved period cleans up and returns as draft");
+            var part=state.Detach(a.Id,a.Words.Last().Id);Check(!a.Spoken,"split pauses");
+            Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(p=>p.group==a.Id),"split to one word removes period");
+            state.Join(part.Id,a.Id,false);Check(!a.Spoken,"rejoin stays draft");
+            var invalid=Draft(board,"world","world");yield return null;int count=state.HistoryVersion;
+            Check(Glyph(board,invalid.Id) && !board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"invalid draft has a period but no scratch");
+            Click(board,invalid.Id,false,true);
+            Check(invalid.Spoken&&!invalid.Effective&&state.HistoryVersion>count&&board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"invalid click marks and records failure");
+            Click(board,invalid.Id,true);Check(!board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"pause clears rejection");
+            yield return new WaitForSecondsRealtime(.7f);
+            Click(board,invalid.Id);state.Swap(invalid.Id,invalid.Words[0].Id,invalid.Words[1].Id);
+            Check(!board.GroupRect(invalid.Id).Find("Chalk reveal/Scratch 0"),"editing clears rejection");
+            state.TryAcquireSentence("observed","light move",out var granted);Check(granted.Spoken&&granted.Effective,"observation example arrives spoken");
+            state.ClearWorkspace();board.SetPeriodMode(false);yield return null;
+            Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(),"legacy mode removes punctuation UI");
+            var legacy=Draft(board,"mirror","move");Check(legacy.Effective,"legacy mode activates on assembly");
+            RemoveByRightClick(board,legacy);Check(state.Groups.All(x=>!x.Effective),"legacy right-click retains removal behavior");
+            RemoveByRightClick(board,Draft(board,"light"));
+            RemoveByRightClick(board,Draft(board,"mirror","move"),true);
+            state.ClearWorkspace();board.SetPeriodMode(true);Draft(board,"mirror","move");yield return new WaitForSecondsRealtime(1);
+            Check(!GameObject.Find("Period first-click ripple")&&!GameObject.Find("Period guide")&&!GameObject.Find("Period supply"),"guide stays dismissed after toggle");
+            var folder=UnityEditor.SessionState.GetString("C2C.captureFolder","");
+            if(!string.IsNullOrEmpty(folder)){yield return new WaitForEndOfFrame();var frame=ScreenCapture.CaptureScreenshotAsTexture();System.IO.File.WriteAllBytes(System.IO.Path.Combine(folder,"period-click.png"),frame.EncodeToPNG());UnityEngine.Object.Destroy(frame);}
+            Result="PASS: automatic periods, breathing, hover, click/drag, right-click word/sentence dissolution in both modes, period-only dissolution and return, progress, history, conflicts and cleanup";
         }
     }
 }

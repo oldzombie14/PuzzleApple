@@ -38,6 +38,7 @@ namespace PuzzleApple.V5
         bool previousBlocked,previousLock;
         RectTransform top,bottom;
         Shot current;
+        Cognition.CognitionState.Group focusGroup;
         CanvasGroup caption;
         float shotRoll;
         WorldEntry Entry=>runtime.entry;
@@ -70,9 +71,9 @@ namespace PuzzleApple.V5
             Entry.player.RestoreGameplayCursor();
             Entry.player.SuppressInteractionThisFrame();
         }
-        public IEnumerator Play(string rule,Action apply,Cognition.CognitionState.Group sentence=null)
+        public IEnumerator Play(string rule,Action apply,Cognition.CognitionState.Group sentence=null,Cognition.CognitionState.Group affected=null)
         {
-            current=Profile(rule);
+            current=Profile(rule);focusGroup=affected??sentence;
             if(current==null){apply();yield break;}
             int token=++revision;
             Playing=true;CanInterrupt=false;PlayCount++;LastRule=rule;
@@ -131,41 +132,35 @@ namespace PuzzleApple.V5
         Vector3 Target(Shot shot,bool roomMotion)
         {
             if(Entry.outdoor&&Entry.outdoor.IsOutside)return Entry.outdoor.World.Focus(shot.focus)+shot.offset;
-            var j=Entry.journey;Vector3 target=Entry.player.view.position+Entry.player.view.forward*5;
-            if(shot.rule=="floor.move"&&j&&j.Platform)
-                return Entry.player.StandingOn(j.Platform.Deck)?Entry.player.view.position+j.Platform.TravelDirection:j.Platform.Deck.bounds.center;
-            if(shot.focus==Focus.Door && j && j.EndingDoor){
-                var group=Entry.board.State.Groups.FirstOrDefault(g=>g.Effective && g.RuleId==shot.rule);
-                if(group!=null && (runtime.Scope(group)&PassageJourney.LightSpace.FarRoom)!=0)return j.EndingDoor.Leaf.position;
+            var j=Entry.journey;
+            var group=focusGroup!=null&&focusGroup.RuleId==shot.rule?focusGroup:Entry.board.State.Groups.FirstOrDefault(g=>g.Effective&&g.RuleId==shot.rule);
+            if(Entry.outdoor&&Entry.outdoor.InChapter){
+                var room=Entry.outdoor.CurrentRoom;
+                var point=shot.focus==Focus.Floor?room.floor.bounds.center:room.puzzle?room.puzzle.ball.transform.position:room.lamp?room.lamp.position:room.paintingLens?room.paintingLens.bounds.center:room.floor.bounds.center;
+                return point+shot.offset;
             }
-            if((shot.rule=="light.move" || shot.focus==Focus.Light) && j && j.PlayerSpace==PassageJourney.LightSpace.FarRoom){
-                var eye=Entry.player.view;
-                var mouth=j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart));
-                var toMouth=mouth-eye.position;
-                bool facingStars=toMouth.magnitude<=4 && Vector3.Dot(eye.forward,toMouth.normalized)>.65f;
-                if(j.ReturnStars && j.ReturnStars.Brightness>0 && (facingStars || !j.LampsLit && shot.rule=="light.move"))
-                    return j.ReturnStars.FocusNear(mouth-j.Root.forward*4);
-                if(j.Lamps.Count>0){
-                    var lamp=j.Lamps.Where(l=>l).OrderByDescending(l=>Vector3.Dot(eye.forward,(l.transform.position-eye.position).normalized)).FirstOrDefault();
-                    if(lamp)return lamp.transform.position+shot.offset;
-                }
+            var candidates=shot.focus==Focus.Door?PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom|PassageJourney.LightSpace.ReturnPath|PassageJourney.LightSpace.FarRoom:PassageJourney.LightSpace.All;
+            if(shot.focus==Focus.Door && DoorStateEffect.Handles(group)){
+                var changing=runtime.DoorPresentationScope(group);
+                if(changing!=0)candidates&=changing;
             }
-            if(roomMotion)
-            {
-                Vector3 centre=j.InTutorial?j.Tutorial.Fill.transform.position:
-                    j.InSecondRoom?j.FarRoomFill.transform.position:Entry.chamberLight.RoomCentre;
-                var eye=Entry.player.view;
-                var heading=Vector3.ProjectOnPlane(centre-eye.position,Vector3.up);
+            var space=runtime.PreferredSpace(group,group!=null?candidates&runtime.EffectScope(group):candidates);
+            if(roomMotion && shot.focus!=Focus.Door && (space==PassageJourney.LightSpace.Chamber || space==PassageJourney.LightSpace.SphereRoom || space==PassageJourney.LightSpace.FarRoom)){
+                var centre=space==PassageJourney.LightSpace.SphereRoom?j.Tutorial.Fill.transform.position:space==PassageJourney.LightSpace.FarRoom?j.FarRoomFill.transform.position:Entry.chamberLight.RoomCentre;
+                var eye=Entry.player.view;var heading=Vector3.ProjectOnPlane(centre-eye.position,Vector3.up);
                 if(heading.sqrMagnitude<.01f)heading=Quaternion.Euler(0,eye.eulerAngles.y,0)*Vector3.forward;
                 return eye.position+heading;
             }
-            if(j&&j.InTutorial&&shot.focus!=Focus.Door)return j.Tutorial.Sphere.position+shot.offset;
-            if(j&&j.InCorridor&&LastRule=="light.move")return Entry.player.view.position+Entry.player.view.forward*5;
-            if(shot.focus==Focus.Door&&j&&j.Door)target=j.Door.position;
-            else if(shot.focus==Focus.Floor&&j&&j.floorSurface&&j.floorSurface.Surface)target=j.floorSurface.Surface.bounds.center;
-            else if(j&&j.InSecondRoom&&j.Lamps.Count>0)
-                target=LampCentre(j);
-            else if(Entry.chamberLight&&Entry.chamberLight.surface)target=Entry.chamberLight.surface.bounds.center;
+            if(shot.rule=="floor.move" && (runtime.Scope(group)&PassageJourney.LightSpace.ReturnPath)!=0 && j.Platform)
+                return Entry.player.StandingOn(j.Platform.Deck)?Entry.player.view.position+j.Platform.TravelDirection:j.Platform.Deck.bounds.center;
+            Vector3 target=Entry.player.view.position+Entry.player.view.forward*5;
+            if(shot.focus==Focus.Door)target=space==PassageJourney.LightSpace.FarRoom?j.EndingDoor.Leaf.position:space==PassageJourney.LightSpace.ReturnPath?j.EntranceDoor.Leaf.position:j.Door.position;
+            else if(space==PassageJourney.LightSpace.FarRoom)target=shot.focus==Focus.Floor?j.floorSurface.Surface.bounds.center:LampCentre(j);
+            else if(space==PassageJourney.LightSpace.SphereRoom)target=j.Tutorial.Sphere.position;
+            else if(space==PassageJourney.LightSpace.FirstPath)target=j.Stars.FocusNear(Entry.player.view.position);
+            else if(space==PassageJourney.LightSpace.ReturnPath)target=j.ReturnStars.FocusNear(Entry.player.view.position);
+            else if(space==PassageJourney.LightSpace.Ascent)target=j.Ascent.transform.TransformPoint(new Vector3(0,2,5));
+            else if(space==PassageJourney.LightSpace.Chamber)target=Entry.chamberLight.surface.bounds.center;
             return target+shot.offset;
         }
         static Vector3 LampCentre(PassageJourney journey)

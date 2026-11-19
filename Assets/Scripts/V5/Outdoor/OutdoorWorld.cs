@@ -19,6 +19,8 @@ namespace PuzzleApple.V5.Outdoor
         public WorldSentenceEffects world;
         public MusicTrack music;
         public Transform exit, chapterFrame;
+        public ChapterWordMarker IntroWord {get;private set;}
+        public ChapterWordMarker ChapterWord {get;private set;}
         [Min(1)] public float airSpawnDistance=8;
         [Min(0)] public float spawnSearchRadius=2,minimumLampSpacing=1.2f;
         [Range(1,64)] public int spawnAttempts=32;
@@ -82,6 +84,17 @@ namespace PuzzleApple.V5.Outdoor
             field.observer=entry.player.transform;clouds.player=entry.player.transform;
             lights.observer=entry.player.transform;world.player=entry.player;
             door.InitializeAtExit(entry.player.view);
+            var frame=door.transform;
+            var left=FrameBounds(frame,frame.Find("Left pier").GetComponent<MeshFilter>());
+            var right=FrameBounds(frame,frame.Find("Right pier").GetComponent<MeshFilter>());
+            var sill=FrameBounds(frame,frame.Find("Sill").GetComponent<MeshFilter>());
+            var lintel=FrameBounds(frame,frame.Find("Lintel").GetComponent<MeshFilter>());
+            var openingCenter=new Vector3((left.max.x+right.min.x)*.5f,(sill.max.y+lintel.min.y)*.5f,(sill.center.z+lintel.center.z)*.5f);
+            var pictureCenter=FrameBounds(chapterFrame,chapterFrame.GetComponentInChildren<MeshFilter>()).center;
+            IntroWord=new GameObject("Intro core word").AddComponent<ChapterWordMarker>();
+            IntroWord.transform.SetParent(frame,false);IntroWord.Build("light",1.03f,openingCenter);
+            ChapterWord=new GameObject("Chapter I core word").AddComponent<ChapterWordMarker>();
+            ChapterWord.transform.SetParent(chapterFrame,false);ChapterWord.Build("mirror",.64f,pictureCenter);
             // The V5 copies are assets. Runtime cloud projection must never dirty them.
             PrepareResources();
             RenderSettings.sun=sun;RenderSettings.skybox=environment.daySky;
@@ -90,6 +103,16 @@ namespace PuzzleApple.V5.Outdoor
             Audio=entry.gameObject.AddComponent<SessionAudio>();Audio.Play(music);
             // Keep one board, its acquisition IDs, notes and sentences across the passage.
             ApplyMotion(entry.board.State.HasEffect,false);
+        }
+        static Bounds FrameBounds(Transform frame,MeshFilter surface)
+        {
+            // Measure in the frame's own axes so rotated and scaled parents keep the same anchor.
+            var mesh=surface.sharedMesh.bounds;
+            var matrix=frame.worldToLocalMatrix*surface.transform.localToWorldMatrix;
+            var bounds=new Bounds(matrix.MultiplyPoint3x4(mesh.center),Vector3.zero);
+            for(int x=-1;x<=1;x+=2)for(int y=-1;y<=1;y+=2)for(int z=-1;z<=1;z+=2)
+                bounds.Encapsulate(matrix.MultiplyPoint3x4(mesh.center+Vector3.Scale(mesh.extents,new Vector3(x,y,z))));
+            return bounds;
         }
         public void ApplyMotion(System.Func<CognitionSignal,bool> hasEffect,bool split)
         {

@@ -45,22 +45,22 @@ namespace PuzzleApple.V5.Editor
                 var off=System.Linq.Enumerable.First(e.board.State.Groups,g=>g.RuleId=="light.off");
                 e.board.State.ReturnToLibrary(off.Id,0,true);
                 yield return Until(()=>light.Brightness==1);
-                Check(hole.walls[chosen].GetComponent<Renderer>().enabled,"lit wall visually whole");
+                Check(hole.Revealed && hole.Reveal==1 && !hole.walls[chosen].GetComponent<Renderer>().enabled,"relighting preserves the revealed passage");
                 e.board.State.ClearWorkspace();yield return null;Check(light.TargetOn,"splitting preserves lamp state");
-                // Native CharacterController trajectory through the concealed opening.
+                // Native CharacterController trajectory through the retained opening.
                 p.enabled=false;var origin=hole.Entrance.TransformPoint(new Vector3(0,-hole.sillHeight+.02f,-1.3f));
                 p.Teleport(origin,hole.Entrance.rotation);
                 var step=p.GetType().GetMethod("AdvanceMovement",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);
                 for(int i=0;i<20;i++)step.Invoke(p,new object[]{Vector2.zero,true,1f/120,false});
                 for(int i=0;i<110;i++)step.Invoke(p,new object[]{new Vector2(0,1),true,1f/120,i==0});
                 yield return null;
-                Check(hole.ReachedEntrance,"jump crosses concealed aperture and reaches landing");
+                Check(hole.ReachedEntrance,"jump crosses retained aperture and reaches landing");
                 Check(hole.SelectedWall==chosen,"random wall stable during play");
                 p.Teleport(new Vector3(0,.02f,0),Quaternion.identity);p.enabled=true;
                 e.RequestExit();yield return Until(()=>e.DialogReady);e.CancelExit();
                 Check(!p.MovementLocked&&!e.ConfirmingExit,"world close/cancel with light available");
                 Check(hole.SelectedWall==chosen,"random wall stable after world close");
-                Result="PASS: acquisition, light fade and re-enable, blocked dark collection, coexistence and split, concealed-opening jump, world close/cancel";
+                Result="PASS: acquisition, light fade and re-enable, retained passage, blocked dark collection, coexistence and split, entrance jump, world close/cancel";
             }
             finally{Application.runInBackground=background;}
         }

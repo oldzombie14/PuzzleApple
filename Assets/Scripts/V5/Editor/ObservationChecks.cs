@@ -76,10 +76,10 @@ namespace PuzzleApple.V5.Editor
             yield return new WaitForSeconds(.25f);
             Check(sphere.position==start && journey.Tutorial.ExitBlocked && !journey.Tutorial.IsLit(collider),
                 "opening with light move leaves the dark sphere blocking the exit");
-            Check(small.position==before && journey.Tutorial.IsLit(small.GetComponent<Collider>()),
-                "learning move before opening suppresses the small sphere demonstration");
+            Check(Vector3.Distance(small.position,before)>.01f && journey.Tutorial.IsLit(small.GetComponent<Collider>()),
+                "opening the progress lock immediately controls the lit small sphere");
             var learned=state.Groups.Single(g=>g.RuleId=="light.move");
-            Check((entry.sentenceRuntime.Scope(learned)&PassageJourney.LightSpace.SphereRoom)==0,"opening a door does not expand the old sentence");
+            Check((entry.sentenceRuntime.Scope(learned)&PassageJourney.LightSpace.SphereRoom)!=0,"opening a progress lock expands the existing sentence");
             player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.pathLength+3)),journey.Root.rotation);
             yield return Until(()=>journey.InTutorial);
             var verb=state.Detach(learned.Id,learned.Words.Last().Id);state.JoinAndSpeak(verb.Id,learned.Id,false);
@@ -202,6 +202,11 @@ namespace PuzzleApple.V5.Editor
                 e.EnterWorld();yield return Until(()=>e.Entered);
                 e.board.State.TryAcquireSentence("observe.check.world","positive world");yield return Until(()=>e.room.Opened&&!e.Busy);
                 var j=e.journey;var p=e.player;
+                // This observation fixture starts in room 3, after normal progress unlocks room 2.
+                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);
+                yield return ChargeDoorChecks.UnlockEntrance(e);
+                Check(!j.LightsOn && j.Brightness==0,"drifting room initially dark");
+                j.SetLights(false,PassageJourney.LightSpace.FarRoom);yield return Until(()=>j.Brightness==0);
                 p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+2)),j.Root.rotation);e.board.Panel.SetOpen(false);yield return null;
                 var body=j.Lamps[0].GetComponent<Rigidbody>();var before=body.position;yield return new WaitForSeconds(.2f);
                 Check(!j.LightsOn&&Vector3.Distance(before,body.position)>.02f,"unlearned dark lamps keep moving");

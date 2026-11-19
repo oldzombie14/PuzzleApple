@@ -33,6 +33,7 @@ namespace PuzzleApple.V5.Editor
                 before=j.Root.InverseTransformPoint(p.transform.position).z;
                 for(int i=0;i<20;i++){advance.Invoke(p,new object[]{Vector2.up,true,.026f,false});yield return null;}
                 Check(j.Root.InverseTransformPoint(p.transform.position).z<before-.8f,"turned W return retained");
+                j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);yield return ChargeDoorChecks.UnlockEntrance(e);
                 p.Teleport(j.Root.TransformPoint(new Vector3(0,.05f,j.RoomStart+4)),j.Root.rotation);yield return Until(()=>j.InSecondRoom);j.SetLights(true);
                 yield return Until(()=>j.Brightness>=1);yield return null;
                 var f=j.floorSurface;var ceiling=j.Root.Find("Room ceiling").GetComponent<Renderer>();
@@ -56,6 +57,8 @@ namespace PuzzleApple.V5.Editor
                 p.Teleport(Vector3.up*.05f,Quaternion.identity);yield return null;yield return null;
                 Check(!j.BeyondChamber,"returned to original room");
                 var original=e.chamberLight;var origin=original.transform.position;
+                Check(original.Brightness==0,"chapter-wide off also darkens the unlocked original chamber");
+                original.SetOn(true);yield return Until(()=>original.Brightness==1);
                 e.board.State.TryAcquireSentence("check.original.move","light move");
                 yield return new WaitForSeconds(.5f);
                 Check(original.Moving&&Vector3.Distance(origin,original.transform.position)>.2f,"original lamp moves after using light move on return");

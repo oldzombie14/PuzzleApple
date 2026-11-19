@@ -26,7 +26,10 @@ namespace PuzzleApple.V5
         GameObject stairs;
         Material stairInk;
         Light stairLight;
-        public float Reveal=>journey&&journey.ViewBeyondChamber?1:1-Mathf.SmoothStep(0,1,lamp.Brightness);
+        ProgressLock revealLock;
+        public bool Revealed=>revealLock && revealLock.Unlocked;
+        public float LightReveal=>1-Mathf.SmoothStep(0,1,lamp.Brightness);
+        public float Reveal=>Revealed || journey&&journey.ViewBeyondChamber?1:LightReveal;
         Material returnGlow;
         void Start()
         {
@@ -37,6 +40,8 @@ namespace PuzzleApple.V5
             float tall=wall.lossyScale.y,thick=x?wall.lossyScale.x:wall.lossyScale.z;
             var outward=new Vector3(wall.position.x,0,wall.position.z).normalized;
             var root=new GameObject("Random passage - runtime").transform;root.SetParent(transform,false);
+            var lockTemplate=Resources.Load<ProgressLock>("V5/PassageRevealProgressLock");
+            if(journey && lockTemplate){revealLock=Instantiate(lockTemplate,root,false);revealLock.passageReveal=this;}
             root.SetPositionAndRotation(new Vector3(wall.position.x,wall.position.y-tall*.5f,wall.position.z),Quaternion.LookRotation(outward));
             float centre=0;
             float left=centre-width*.5f,right=centre+width*.5f;
@@ -129,8 +134,8 @@ namespace PuzzleApple.V5
 
         void UpdateStairs()
         {
-            // The aperture stays open when viewed from the corridor. The stairs follow the chamber lamp on both sides.
-            float dissolve = Mathf.SmoothStep(0, 1, lamp.Brightness);
+            // Once revealed, the entrance and its walking access remain available after relighting.
+            float dissolve = Revealed?0:1-LightReveal;
             stairInk.SetFloat("_Dissolve", dissolve);
             float corridorLight = journey && journey.Stars ? journey.Stars.Brightness : 1;
             stairLight.intensity = 2.2f * (1 - dissolve) * corridorLight;

@@ -9,7 +9,7 @@ namespace PuzzleApple.V5
         {
             public Transform shape;
             public Vector3 home;
-            public Renderer renderer;
+            public Renderer renderer,halo;
             public Plane[] faces;
             Vector3 direction;
             float travel, roadContact, speed, flightOpacity = 1;
@@ -117,6 +117,8 @@ namespace PuzzleApple.V5
             }
         }
         MaterialPropertyBlock glow;
+        public StarGlowStyle glowStyle;
+        Material haloInk;
         PassageJourney journey;
         Vector4 depthPlane;
         float visibleLength;
@@ -161,6 +163,8 @@ namespace PuzzleApple.V5
             glow.SetVector("_CorridorAxis",depthPlane);
             glow.SetFloat("_CorridorLength",visibleLength);
             var renderers = GetComponentsInChildren<MeshRenderer>(true);
+            if(!glowStyle)glowStyle=StarGlowStyle.Load();
+            haloInk=new Material(Resources.Load<Shader>("V5/StarHalo"));
             stars = new Star[renderers.Length];
             var hulls = new Dictionary<Mesh,Plane[]>();
             for (int i = 0; i < renderers.Length; i++)
@@ -194,6 +198,7 @@ namespace PuzzleApple.V5
                     star.shape.localRotation = Quaternion.Euler(0,(i*137.5f)%360,0);
                 }
                 star.age = Random.Range(0f, star.period);
+                star.halo=StarGlowStyle.CreateHalo(star.shape,haloInk);
                 star.size = star.TwinkleSize();
                 star.SetFlightBounds(owner.pathLength,owner.PathWidth,doorHeight);
                 stars[i] = star;
@@ -212,7 +217,7 @@ namespace PuzzleApple.V5
             if(!journey || stars==null)return;
             bool visible=journey.isActiveAndEnabled&&
                 (!journey.entry.portableClosure||!journey.entry.portableClosure.Isolated);
-            Color emission=Color.white*(1.6f*journey.entry.sentenceRuntime.LampBoost(this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath));
+            Color emission=Color.white*((glowStyle?glowStyle.emission:1f)*journey.entry.sentenceRuntime.LampBoost(this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath));
             var view=journey.entry.player.view;
             if (TransitionEnabled)
             {
@@ -234,7 +239,7 @@ namespace PuzzleApple.V5
                 var star=stars[i];
                 star.Advance(Time.unscaledDeltaTime,On,TransitionEnabled,journey.lightFadeDuration,view.position);
                 if(gather && On && !journey.EndingDoor.Paused)star.shape.localPosition=Vector3.MoveTowards(star.shape.localPosition,GatherPoint(i),4*Time.deltaTime);
-                if(!visible){star.renderer.enabled=false;continue;}
+                if(!visible){star.renderer.enabled=star.halo.enabled=false;continue;}
                 float flight=parked?1:star.AdvanceFlight(moving,Time.deltaTime,Time.unscaledDeltaTime);
                 float reveal=star.Opacity*flight;
                 star.shape.localScale=Vector3.one*(star.height*star.size*Mathf.Lerp(.4f,1,flight));
@@ -246,6 +251,8 @@ namespace PuzzleApple.V5
                 glow.SetColor("_BaseColor",new Color(0,0,0,reveal));
                 star.renderer.SetPropertyBlock(glow);
                 star.renderer.enabled=reveal>.005f;
+                if(glowStyle)glowStyle.DrawHalo(star.halo,star.renderer.enabled,glow);
+                star.halo.transform.rotation=Quaternion.LookRotation(fromView,Vector3.up);
             }
         }
 
@@ -276,6 +283,7 @@ namespace PuzzleApple.V5
             }
             return best;
         }
+        void OnDestroy(){if(haloInk)Destroy(haloInk);}
 
         static bool HitSolid(Star star,Ray ray,float reach,out float enter)
         {

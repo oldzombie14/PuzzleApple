@@ -6,9 +6,7 @@ using PuzzleApple.V5.Cognition;
 namespace PuzzleApple.V5
 {
     // Motion sentences (rules whose channel ends with .motion): light, door and floor movement.
-    // Resolves the ISentenceMovable in the player's space (Chapter I room, outdoor world, tutorial
-    // spheres, corridor stars, far-room lamps, chamber lamp) and asks whether the sentence would
-    // move something there. Motion itself is applied by the objects from the applied effects.
+    // Checks every eligible space for motion; objects apply the scoped effects themselves.
     public sealed class MotionEffect
     {
         readonly WorldEntry entry;
@@ -28,10 +26,21 @@ namespace PuzzleApple.V5
         public bool HasLampMotion(PassageJourney.LightSpace space)=>activeMotions.TryGetValue(space,out var signal) && signal!=CognitionSignal.Empty;
         public CognitionSignal LightMotion {get;private set;}
 
+        public void TrackLampControl()
+        {
+            if(entry.board.State==null || !entry.board.State.Knows("move"))return;
+            foreach(var pair in activeMotions){
+                if(pair.Value==CognitionSignal.Empty)continue;
+                // Room 3's dark cubes drift independently; only emitting cubes are light targets.
+                if(pair.Key==PassageJourney.LightSpace.FarRoom && !entry.journey.LampsLit)continue;
+                controlledSpaces|=pair.Key;
+            }
+        }
+
         public bool CanMove(CognitionState.Group g,Func<CognitionSignal,bool> applied,PassageJourney.LightSpace? targetScope=null)
         {
             var signal=g.Signal;
-            var scope=targetScope??entry.sentenceRuntime.Scope(g);
+            var scope=targetScope??entry.sentenceRuntime.EffectScope(g);
             bool Includes(PassageJourney.LightSpace room)=>(scope&room)!=0;
             var outside=entry.outdoor;
             if(Includes(PassageJourney.LightSpace.Outdoor))return ((ISentenceMovable)outside.World).CanMove(signal);
@@ -40,11 +49,17 @@ namespace PuzzleApple.V5
             if(Includes(PassageJourney.LightSpace.Garden)&&((ISentenceMovable)outside.Garden).CanMove(signal))return true;
             var j=entry.journey;
             if(signal==CognitionSignal.WorldMove)return j.Platform&&Includes(PassageJourney.LightSpace.ReturnPath);
-            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.FarRoom))return j.EndingDoor && j.EndingDoor.CanCycle && (!entry.sentenceRuntime.Owns(signal,PassageJourney.LightSpace.FarRoom,g.Established) || j.EndingDoor.AcceptedCycle(g.Established));
+            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.FarRoom) && j.EndingDoor && j.EndingDoor.CanCycle && (!entry.sentenceRuntime.Owns(signal,PassageJourney.LightSpace.FarRoom,g.Established) || j.EndingDoor.AcceptedCycle(g.Established)))return true;
+            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.ReturnPath) && j.EntranceDoor && j.EntranceDoor.CanCycle &&
+                !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,PassageJourney.LightSpace.ReturnPath) && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,PassageJourney.LightSpace.ReturnPath))return true;
             if(signal==CognitionSignal.LightDoorMove && Includes(PassageJourney.LightSpace.FirstPath) && j.Stars && j.Stars.NeedsGather)return true;
-            if(signal==CognitionSignal.DoorMove)return (scope&(PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom))!=0 && j.CanCycleDoor && !applied(CognitionSignal.DoorOn)&&!applied(CognitionSignal.DoorOff);
+            if(signal==CognitionSignal.DoorMove){
+                var white=scope&(PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom);
+                return white!=0 && j.CanCycleDoor && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,white)&&!entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,white);
+            }
             if(Includes(PassageJourney.LightSpace.SphereRoom)&&j.Tutorial&&j.Tutorial.CanMove(signal))return true;
             if(Includes(PassageJourney.LightSpace.FarRoom)&&j.FarRoomMotion.CanMove(signal))return true;
+            if(Includes(PassageJourney.LightSpace.Ascent)&&j.Ascent && j.Ascent.Stars && j.Ascent.Stars.CanMove(signal))return true;
             if(signal==CognitionSignal.LightMove && (Includes(PassageJourney.LightSpace.FirstPath)&&j.Stars&&j.Stars.Brightness>0 || Includes(PassageJourney.LightSpace.ReturnPath)&&j.ReturnStars&&j.ReturnStars.Brightness>0))return true;
             return Includes(PassageJourney.LightSpace.Chamber)&&entry.room.Opened&&entry.chamberLight.CanMove(signal);
         }
@@ -80,16 +95,16 @@ namespace PuzzleApple.V5
         {
             var next=groups.FirstOrDefault(g=>MovesLamps(g.Rule))?.Signal??CognitionSignal.Empty;
             LightMotion=next;
-            for(int bit=0;bit<9;bit++){
+            for(int bit=0;bit<10;bit++){
                 var space=(PassageJourney.LightSpace)(1<<bit);
-                var current=groups.FirstOrDefault(g=>MovesLamps(g.Rule) && (entry.sentenceRuntime.Scope(g)&space)!=0)?.Signal??CognitionSignal.Empty;
+                var current=groups.FirstOrDefault(g=>MovesLamps(g.Rule) && (entry.sentenceRuntime.EffectScope(g)&space)!=0)?.Signal??CognitionSignal.Empty;
                 activeMotions.TryGetValue(space,out var old);
                 if(current==old)continue;
                 activeMotions[space]=current;revisions[space]=Revision(space)+1;
             }
-            foreach(var group in groups)if(MovesLamps(group.Rule))controlledSpaces|=entry.sentenceRuntime.Scope(group);
             if(!state.Knows("move")){PlayerDirectedLampMotion=false;controlledSpaces=0;}
             else if(next!=CognitionSignal.Empty)PlayerDirectedLampMotion=true;
+            TrackLampControl();
         }
     }
 }

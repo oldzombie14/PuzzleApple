@@ -34,6 +34,9 @@ namespace PuzzleApple.V5
         public float closedOffset = -.08f;
         [Tooltip("Contain the full player capsule while closed, independently of panel collision seams.")]
         public bool containPlayerWhileClosed = true;
+        [Tooltip("Optional outer corridor half width. Side hinges slide inward while folding to stay inside it.")]
+        [Min(0)] public float foldHalfWidth;
+        Vector3[] hingeOrigins;
         [Tooltip("Allowed room centre XZ bounds, keeping the box inside the outer walls.")]
         public Vector2 centreMin = new Vector2(-13,-13), centreMax = new Vector2(13,13);
         public float Progress { get; private set; }
@@ -45,6 +48,8 @@ namespace PuzzleApple.V5
         Bounds closedInterior;
         void Awake()
         {
+            hingeOrigins=new Vector3[panels.Length];
+            for(int i=0;i<panels.Length;i++)if(panels[i].hinge)hingeOrigins[i]=panels[i].hinge.localPosition;
             anchor = transform.position - Vector3.up * closedOffset;
             Apply(); MeasureClosedInterior();
         }
@@ -125,9 +130,11 @@ namespace PuzzleApple.V5
             float time=Progress*(hingeDuration+finishDuration);
             FloorFinishProgress=Mathf.InverseLerp(hingeDuration,hingeDuration+finishDuration,time);
             float immersion=1-PanelCoverage;
-            foreach (var p in panels)
+            for(int index=0;index<panels.Length;index++)
             {
+                var p=panels[index];
                 if (!p.hinge) continue;
+                if(hingeOrigins!=null)p.hinge.localPosition=hingeOrigins[index];
                 // Wall hinges attach to the base; the lid hinge travels with its supporting wall.
                 bool wall=p.hinge.parent==transform;
                 float span=Mathf.Max(.1f,p.durationOverride>0?p.durationOverride:duration);
@@ -143,6 +150,16 @@ namespace PuzzleApple.V5
                 float backFold=wall?immersion*WallBackFoldDegrees:0;
                 p.hinge.localRotation = Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(p.openEuler), eased)
                     * Quaternion.AngleAxis(backFold,p.openEuler.normalized);
+                if(foldHalfWidth>0 && wall && Mathf.Abs(p.openEuler.x)>0){
+                    float lo=float.PositiveInfinity,hi=float.NegativeInfinity;
+                    foreach(var r in p.hinge.GetComponentsInChildren<MeshRenderer>()){
+                        var b=r.bounds;
+                        lo=Mathf.Min(lo,transform.InverseTransformPoint(b.min).z);
+                        hi=Mathf.Max(hi,transform.InverseTransformPoint(b.max).z);
+                    }
+                    float shift=lo < -foldHalfWidth?-foldHalfWidth-lo:hi>foldHalfWidth?foldHalfWidth-hi:0;
+                    p.hinge.localPosition+=Vector3.forward*shift;
+                }
             }
             float drop=floorPanel?Mathf.InverseLerp(sinkStart,1,FloorFinishProgress):Progress;
             transform.position=anchor+Vector3.up*(closedOffset-sinkDepth*Mathf.SmoothStep(0,1,drop));

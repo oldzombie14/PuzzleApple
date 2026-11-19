@@ -72,6 +72,7 @@ namespace PuzzleApple.V5.Editor
             var centre=new Vector3(0,5,j.pathLength*.5f);
             var star=j.Stars.GetComponentsInChildren<MeshRenderer>().OrderBy(r=>(r.transform.localPosition-centre).sqrMagnitude).First().transform;
             yield return Probe(e,"light move","corridor star",()=>star.position);
+            j.doorDuration=1;j.SetDoor(true);yield return Wait(()=>j.DoorProgress==1,"unlock the tutorial before testing its motion");
             At(e,j.Tutorial.Fill.transform.position,root.rotation);yield return null;
             j.Tutorial.SetOn(true);yield return Wait(()=>!j.Tutorial.Settling(true),"tutorial lamps lit");
             var small=root.Find("Move tutorial small sphere 1");
@@ -79,6 +80,7 @@ namespace PuzzleApple.V5.Editor
             yield return Probe(e,"light move","tutorial sphere",()=>small.position);
             At(e,root.TransformPoint(new Vector3(0,.1f,j.Tutorial.ExitZ+4)),root.rotation);yield return null;
             yield return Probe(e,"floor move","rail platform",()=>j.Platform.transform.position);
+            yield return ChargeDoorChecks.UnlockEntrance(e);
             At(e,root.TransformPoint(new Vector3(0,.1f,j.RoomStart+6)),root.rotation);yield return null;
             j.SetLights(true,PassageJourney.LightSpace.FarRoom);
             yield return Wait(()=>j.Brightness==1,"far room lit");
@@ -130,12 +132,10 @@ namespace PuzzleApple.V5.Editor
             yield return Probe(e,"light move","garden lamp",()=>garden.lamp.position);
             var room=pass.Vitruvian;var puzzle=room.puzzle;
             At(e,room.transform.TransformPoint(new Vector3(0,.1f,7)),room.transform.rotation);yield return null;
-            var picture=room.GetComponentsInChildren<ChapterPaintingLight>().First(p=>p.swing);
-            yield return Probe(e,"light move","picture lamp",()=>picture.transform.forward);
             puzzle.ball.SetOn(true);yield return Wait(()=>puzzle.ball.IsOn,"orb lit");
             yield return Probe(e,"light move","orb",()=>puzzle.ball.transform.position);
             yield return Probe(e,"mirror move","corner mirror",()=>puzzle.upper.right);
-            Result="PASS: entrance and corner mirrors, garden and picture lamps, and orbiting ball hold then continue for every pause reason";
+            Result="PASS: entrance and corner mirrors, garden lamp and orbiting ball hold then continue for every pause reason; removed picture fixtures excluded";
         }
     }
 }

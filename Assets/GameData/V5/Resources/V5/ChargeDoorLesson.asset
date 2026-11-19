@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 425830fbd982a484ea448b1f9c915d1a, type: 3}
+  m_Name: ChargeDoorLesson
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.ObservationLesson
+  acquisitionId: observe.charge.light.door
+  verb: {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+  example: {fileID: 11400000, guid: df33420d95af44aab43386025f56a691, type: 2}
+  holdDuration: 2

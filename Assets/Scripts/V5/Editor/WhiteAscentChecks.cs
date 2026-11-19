@@ -41,6 +41,11 @@ namespace PuzzleApple.V5.Editor
             yield return Wait.Wait(()=>!a.Playing,"white flash recovery");
             Check(Time.realtimeSinceStartup-switched>=2.7f && Vector3.Angle(p.view.forward,p.transform.forward)<1,"three-second recovery and level view");
             Check(a.Completed && e.board.State.Groups.Count==0 && !p.CinematicLocked,"completion, cleared workspace and restored control");
+            var marker=e.outdoor.World.IntroWord;var mirror=e.outdoor.World.ChapterWord;
+            Check(marker && mirror && marker.Completed && marker.Glow==1 && !mirror.Completed && mirror.Glow==0,"Intro core word glows after completion, Chapter I remains black");
+            Check(marker.GetComponentsInChildren<Collider>().Length==0 && mirror.GetComponentsInChildren<Collider>().Length==0,"core words do not obstruct crossings");
+            VitruvianChecks.Capture(p,marker.transform.position-e.outdoor.World.door.transform.forward*5,marker.transform.position,"outdoor-light-word");
+            VitruvianChecks.Capture(p,mirror.transform.position-e.outdoor.World.chapterFrame.forward*4,mirror.transform.position,"outdoor-mirror-word");
         }
         public static IEnumerator Revisit(WorldEntry e){
             var a=e.journey.Ascent;
@@ -59,7 +64,7 @@ namespace PuzzleApple.V5.Editor
             Vector3 lower=a.transform.TransformPoint(new Vector3(0,1.8f,5));
             p.Teleport(lower,a.transform.rotation);Cursor.lockState=CursorLockMode.Locked;
             yield return null;yield return new WaitForEndOfFrame();
-            var stars=a.Stars.GetComponentsInChildren<MeshRenderer>();
+            var stars=a.Stars.GetComponentsInChildren<MeshRenderer>().Where(r=>r.name=="Floating star").ToArray();
             Check(stars.Length==a.starCount && a.WhiteAmount==0,"lower flight on black");
             var target=stars.OrderBy(r=>Vector3.Distance(p.view.position,r.transform.position)).First(r=>{
                 var ray=new Ray(p.view.position,r.transform.position-p.view.position);

@@ -67,9 +67,11 @@ namespace PuzzleApple.V5
             }
             var runtime=journey.entry.sentenceRuntime;
             const PassageJourney.LightSpace space=PassageJourney.LightSpace.FarRoom;
-            if(runtime.HasEffect(Cognition.CognitionSignal.LightFloorMove,space)||runtime.HasEffect(Cognition.CognitionSignal.LightDoorMove,space)||runtime.HasEffect(Cognition.CognitionSignal.LightLightMove,space))parked=true;
-            if(runtime.HasEffect(Cognition.CognitionSignal.LightMove,space))parked=false;
-            if(docked && (runtime.HasEffect(Cognition.CognitionSignal.LightMove,space) || runtime.HasEffect(Cognition.CognitionSignal.LightFloorMove,space) || runtime.HasEffect(Cognition.CognitionSignal.LightLightMove,space)))docked=false;
+            if(journey.LampsLit){
+                if(runtime.HasEffect(Cognition.CognitionSignal.LightFloorMove,space)||runtime.HasEffect(Cognition.CognitionSignal.LightDoorMove,space)||runtime.HasEffect(Cognition.CognitionSignal.LightLightMove,space))parked=true;
+                if(runtime.HasEffect(Cognition.CognitionSignal.LightMove,space))parked=false;
+                if(docked && (runtime.HasEffect(Cognition.CognitionSignal.LightMove,space) || runtime.HasEffect(Cognition.CognitionSignal.LightFloorMove,space) || runtime.HasEffect(Cognition.CognitionSignal.LightLightMove,space)))docked=false;
+            }
             if(docked){Hover();return;}
             if(journey.EndingDoor && journey.EndingDoor.Paused){if(!body.isKinematic){body.linearVelocity=Vector3.zero;body.isKinematic=true;}return;}
             if(gathering&&gathering.Step(this,body,motionColliders))return;

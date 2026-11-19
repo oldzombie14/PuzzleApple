@@ -172,10 +172,10 @@ Shader "PuzzleApple/V5/World Surface"
                     // The handle has exactly two tones with a hard light/shadow boundary.
                     result.rgb=step(0,key);
                 }
-                if(_IsDoorLeaf>1.5)result.rgb+=.60*smoothstep(0,1,_P5RoomSentenceGlow[4].y);
+                if(_IsDoorLeaf>1.5)result.rgb+=.60*smoothstep(0,1,_P5SpaceSentenceGlow[4].y);
                 else if(_SurfaceMode==1)
                 {
-                    if(_IsDoorLeaf>.5)result.rgb+=(2.25*smoothstep(0,1,max(_P5RoomSentenceGlow[1].y,_P5RoomSentenceGlow[2].y)));
+                    if(_IsDoorLeaf>.5)result.rgb+=(2.25*smoothstep(0,1,max(_P5SpaceSentenceGlow[1].y,_P5SpaceSentenceGlow[2].y)));
                     else if(normalOS.y>.9)result.rgb+=FloorSentenceGlow(input.positionWS);
                 }
                 float3 inward=TransformObjectToWorldNormal(_InteriorNormal.xyz);

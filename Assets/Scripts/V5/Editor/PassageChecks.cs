@@ -41,8 +41,14 @@ namespace PuzzleApple.V5.Editor
                 foreach(var r in renderers)r.enabled=false;foreach(var c in colliders)c.enabled=false;
                 for(int wall=0;wall<4;wall++)
                 {
+                    e.chamberLight.SetOn(true);yield return Until(()=>e.chamberLight.Brightness==1);
                     var original=source.walls[wall];testWall=GameObject.CreatePrimitive(PrimitiveType.Cube);testWall.name="Temporary passage test wall";
-                    testWall.transform.SetPositionAndRotation(original.position,original.rotation);testWall.transform.localScale=original.lossyScale;testWall.GetComponent<Renderer>().sharedMaterial=renderers[wall].sharedMaterial;
+                    var wallMaterial=renderers[wall].sharedMaterial;
+                    // The source's randomly selected wall is now an aperture-only cover.
+                    // Rebuild from its solid wall material, not that runtime mask.
+                    if(wallMaterial.HasProperty("_PassageCover") && wallMaterial.GetFloat("_PassageCover")>.5f)
+                        wallMaterial=source.Entrance.parent.Find("Wall with passage").GetComponent<Renderer>().sharedMaterial;
+                    testWall.transform.SetPositionAndRotation(original.position,original.rotation);testWall.transform.localScale=original.lossyScale;testWall.GetComponent<Renderer>().sharedMaterial=wallMaterial;
                     testJourney=new GameObject("Temporary passage test journey");var j=testJourney.AddComponent<PassageJourney>();j.enabled=false;j.entry=e;j.whitePath=journey.whitePath;j.blackSurround=journey.blackSurround;j.roomMaterial=journey.roomMaterial;j.lampMaterial=journey.lampMaterial;
                     j.floorSurface=testJourney.AddComponent<FloorImpactSurface>();j.floorSurface.journey=j;j.floorSurface.floorMaterial=journey.floorSurface.floorMaterial;
                     j.movementObservation=testJourney.AddComponent<ObservableBehaviour>();
@@ -67,18 +73,19 @@ namespace PuzzleApple.V5.Editor
                     var pathStart=path.TransformPoint(new Vector3(0,.5f,-.5f));
                     Check(Vector3.Distance(sillEnd,pathStart)<.0001f,"sill and path meet at a single level edge");
                     Check(Mathf.Abs(path.localPosition.z+path.localScale.z*.5f-(floor.localPosition.z-floor.localScale.z*.5f))<.0001f,"floors meet without overlap");
-                    foreach(bool on in new[]{true,false})
+                    foreach(bool on in new[]{true,false,true})
                     {
                         e.chamberLight.SetOn(on);yield return Until(()=>Mathf.Approximately(e.chamberLight.Brightness,on?1:0));yield return null;
-                        Check(testWall.GetComponent<Renderer>().enabled==on,"light conceals passage and darkness reveals it");
-                        var origin=h.Entrance.TransformPoint(new Vector3(0,-h.sillHeight+.08f,on?-1.3f:-3f));
+                        bool concealed=on&&!h.Revealed;
+                        Check(testWall.GetComponent<Renderer>().enabled==concealed,"first darkness reveals passage permanently");
+                        var origin=h.Entrance.TransformPoint(new Vector3(0,-h.sillHeight+.08f,concealed?-1.3f:-3f));
                         p.Teleport(origin,h.Entrance.rotation);Physics.SyncTransforms();Walk(p,180);
-                        if(on)
+                        if(concealed)
                         {
                             Check(h.Entrance.InverseTransformPoint(p.transform.position).z<0,"lit sill requires jump");
                             p.Teleport(origin,h.Entrance.rotation);Physics.SyncTransforms();for(int n=0;n<20;n++)Step.Invoke(p,new object[]{Vector2.zero,true,1f/120,false});Walk(p,110,true);
                         }
-                        Check(h.Entrance.InverseTransformPoint(p.transform.position).z>.35f,"lit jump or dark stair walk enters wall "+wall+" lit="+on);
+                        Check(h.Entrance.InverseTransformPoint(p.transform.position).z>.35f,"concealed jump or revealed stair walk enters wall "+wall+" lit="+on);
                         p.transform.rotation=h.Entrance.rotation*Quaternion.Euler(0,180,0);Walk(p,200);yield return new WaitForEndOfFrame();
                         Check(h.Entrance.InverseTransformPoint(p.transform.position).z<-.3f&&!j.BeyondChamber,"return crosses visual cover without collision");
                     }
@@ -97,7 +104,7 @@ namespace PuzzleApple.V5.Editor
                     Check(!testWall.GetComponent<Renderer>().forceRenderingOff,"return restores original wall rendering");
                     UnityEngine.Object.Destroy(testPassage);UnityEngine.Object.Destroy(testJourney);UnityEngine.Object.Destroy(testWall);yield return null;
                 }
-                Result="PASS: four centred enlarged entries; lit cover and open dark doorway; jump and physical return; open return aperture; black exterior GPU samples near threshold, middle and door at three angles; restored chamber; collection cursor states";
+                Result="PASS: four centred entries; initial lit cover, first reveal and retained lit doorway; jump, stair walk and return; black exterior GPU samples; restored chamber; collection cursor states";
             }
             finally
             {
@@ -133,7 +140,9 @@ namespace PuzzleApple.V5.Editor
                     var c=pixels.GetPixel(x,y);
                     if(Mathf.Max(c.r,Mathf.Max(c.g,c.b))>.02f)
                     {
-                        Debug.LogWarning("Exterior sample "+c+" at inner wall "+atWall+" outer outline "+atOutline);
+                        Debug.LogWarning("Exterior sample "+c+" at inner wall "+atWall+" outer outline "+atOutline+" hits "+string.Join("; ",Physics.RaycastAll(ray,200).OrderBy(hit=>hit.distance).Select(hit=>hit.collider.name+" @ "+hit.distance)));
+                        var capture=UnityEditor.SessionState.GetString("PassageChecks.failureImage","");
+                        if(!string.IsNullOrEmpty(capture))System.IO.File.WriteAllBytes(capture,pixels.EncodeToPNG());
                         return false;
                     }
                 }

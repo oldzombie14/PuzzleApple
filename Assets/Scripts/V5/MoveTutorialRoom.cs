@@ -300,7 +300,7 @@ namespace PuzzleApple.V5
         {
             if (lamp.parked && !journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightMove,PassageJourney.LightSpace.SphereRoom))return false;
             if (lamp != sphere) return journey.DemonstrationLampMoving(lamp.isOn,lamp.relitRevision,PassageJourney.LightSpace.SphereRoom);
-            return lamp.isOn && journey.entry.sentenceRuntime.HasEffect(CognitionSignal.LightMove,PassageJourney.LightSpace.SphereRoom);
+            return lamp.isOn && journey.DemonstrationLampMoving(true,-1,PassageJourney.LightSpace.SphereRoom);
         }
 
         void FixedUpdate()

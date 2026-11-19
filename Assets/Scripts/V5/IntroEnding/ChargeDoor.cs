@@ -7,30 +7,45 @@ namespace PuzzleApple.V5
 {
     public sealed class ChargeDoor : MonoBehaviour, ISwitchableDoor
     {
-        [Min(.1f)] public float width=3.6f,height=3.8f,chargeRadius=2.2f;
+        [Min(.1f)] public float width=3.6f,height=3.8f;
         [Min(.01f)] public float chargeRate=.19f,decayRate=.12f,bonus=1.5f;
         [Min(.1f)] public float riseSeconds=2.2f,lowerSeconds=1.6f,warningSeconds=.4f,fallSeconds=.5f;
         public AudioClip strainClip,slamClip;
+        public ObservationLesson lesson;
+        [Header("Energy sources")]
+        [Range(0,1)] public float baseEnergy=.03f,doorCapacity=.4f,dockedCapacity=.57f,passingCapacity=.1f;
+        [Range(0,1)] public float initialEnergy=.15f,incompleteLimit=.95f;
+        [Min(.1f)] public float passingRadius=4,doorEmission=1.5f,colorFadeSeconds=1.5f;
+        [Min(0)] public float railGap=.18f;
+        public Color fullWarmColor=new Color(1,.90f,.85f);
         public Transform Leaf {get;private set;}
         public float Lift {get;private set;}
-        public bool Charged=>energy[0]>=1 && energy[1]>=1 && energy[2]>=1;
+        public float TotalEnergy {get;private set;}
+        public float DoorGlow {get;private set;}=1;
+        public float DoorEnergy=>doorEnergy;
+        public float DockedEnergy=>dockedEnergy;
+        public float PassingEnergy=>passingEnergy;
+        public float Warmth=>warmth;
+        public float PassingHint=>Mathf.Max(proximityHint[0],Mathf.Max(proximityHint[1],proximityHint[2]));
+        public bool Charged=>TotalEnergy>=.99999f;
         public bool Falling=>fallTime>=0;
         public bool Stunned {get;private set;}
-        public float Energy(int rail)=>energy[rail];
         public float NicheBloomWeight(Transform eye)
         {
             var toDoor=transform.TransformPoint(new Vector3(0,height*.5f,LeafZ))-eye.position;
             float near=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(6,14,toDoor.magnitude));
             float facing=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.1f,.75f,Vector3.Dot(eye.forward,toDoor.normalized)));
-            float charge=Mathf.Min(energy[0],Mathf.Min(energy[1],energy[2]));
-            return Mathf.Lerp(1,.18f,near*facing*charge);
+            return Mathf.Lerp(1,.12f,facing*Mathf.Lerp(.85f,1,near));
         }
-        readonly float[] energy=new float[3];
+        float doorEnergy,dockedEnergy,passingEnergy,warmth,fullLimit;
+        readonly float[] proximityHint=new float[3];
+        readonly float[] nextHint=new float[3];
         readonly Transform[] fills=new Transform[3];
         readonly Transform[] grooves=new Transform[3];
         Renderer frame,passageFloor;
         Mesh frameMesh;
-        Material glow,inscription;
+        Material glow,inscription,doorInk;
+        Light doorLight;
         MaterialPropertyBlock ink;
         PassageJourney journey;
         AudioSource audioSource;
@@ -43,18 +58,36 @@ namespace PuzzleApple.V5
         public float MouthWidth=>width+2*Bevel;
         public float MouthHeight=>height+Bevel;
         public float LeafZ=>WallHalfDepth+LeafDepth*.5f;
-        float RailX=>(MouthWidth+RailWidth)*.5f;
+        float RailX=>(MouthWidth+RailWidth)*.5f+railGap;
+        float RailHeight=>MouthHeight+railGap;
         public bool Owns(Collider hit)=>hit && (hit.transform==Leaf || hit.transform==frame.transform);
         public bool OnStairSide(Vector3 local)=>local.z>=journey.RoomStart+journey.roomSize.z && local.z<journey.RoomStart+journey.roomSize.z+(journey.Ascent?journey.Ascent.TopZ+4:4) && Mathf.Abs(local.x)<=width;
         public bool Paused=>!journey.enabled || !journey.entry.room.Opened || journey.entry.ConfirmingExit ||
             journey.entry.portableClosure&&journey.entry.portableClosure.Isolated;
+        public bool LessonAcquired=>lesson && journey.entry.board.State.HasAcquired(lesson.acquisitionId);
+        public bool LightHeld=>!LessonAcquired || journey.entry.sentenceRuntime.HasEffect(CognitionSignal.IlluminateDoor,PassageJourney.LightSpace.FarRoom);
+        public bool TryCollectLesson(){
+            if(!lesson || LessonAcquired || journey.entry.chamberLight.Collecting)return false;
+            journey.entry.chamberLight.CollectObservation(lesson,showWord:false);return true;
+        }
 
         public void Build(PassageJourney owner)
         {
             journey=owner;ink=new MaterialPropertyBlock();
+            if(!lesson)lesson=Resources.Load<ObservationLesson>("V5/ChargeDoorLesson");
+            doorEnergy=Mathf.Clamp(initialEnergy-baseEnergy,0,doorCapacity);TotalEnergy=baseEnergy+doorEnergy;
+            fullLimit=incompleteLimit;
             transform.SetParent(owner.Root,false);
             transform.localPosition=Vector3.forward*(owner.RoomStart+owner.roomSize.z);
             glow=new Material(owner.lampMaterial);
+            doorInk=new Material(owner.lampMaterial);
+            // Emission lights the slab uniformly; its point light only lights the surroundings.
+            doorInk.SetFloat("_SpecularHighlights",0);doorInk.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            doorInk.SetFloat("_EnvironmentReflections",0);doorInk.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            var emitter=new GameObject("Door soft light",typeof(Light));emitter.transform.SetParent(transform,false);
+            emitter.transform.localPosition=new Vector3(0,height*.5f,-.7f);doorLight=emitter.GetComponent<Light>();
+            doorLight.type=LightType.Point;doorLight.range=owner.LightStyle.LampRange(owner.LightStyle.LampIntensity(.25f));
+            doorLight.shadows=LightShadows.Soft;doorLight.color=Color.white;
             inscription=new Material(Resources.Load<Shader>("V5/DoorInscription"));
             audioSource=gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake=false;audioSource.spatialBlend=1;
@@ -135,7 +168,10 @@ namespace PuzzleApple.V5
                 if(!slab)ink.SetFloat("_EdgeWidth",0);
                 piece.SetPropertyBlock(ink);
             }
-            Bind(frame,wall);Bind(Leaf.GetComponent<Renderer>(),wall,true);Bind(passageFloor,floor);
+            frame.gameObject.layer=wall.gameObject.layer;Leaf.gameObject.layer=wall.gameObject.layer;
+            frame.sharedMaterial=doorInk;Leaf.GetComponent<Renderer>().sharedMaterial=doorInk;
+            frame.SetPropertyBlock(null);Leaf.GetComponent<Renderer>().SetPropertyBlock(null);
+            Bind(passageFloor,floor);
         }
         public Transform Block(string label,Vector3 position,Vector3 size,Material mat,bool solid)
         {
@@ -171,25 +207,48 @@ namespace PuzzleApple.V5
         public bool CanCycle=>Charged && !Falling && !command;
         public bool AcceptedCycle(long established)=>cycle==established;
         public void Reject(){flash=.35f;}
-        float Weight(Vector3 p,int rail){
-            var closest=rail==2?new Vector3(Mathf.Clamp(p.x,-RailX,RailX),MouthHeight,-WallHalfDepth):
-                new Vector3(rail==0?-RailX:RailX,Mathf.Clamp(p.y,0,MouthHeight),-WallHalfDepth);
-            return Mathf.Max(0,1-Vector3.Distance(closest,p)/chargeRadius);
+        float DistanceToRail(Vector3 p,int rail){
+            var closest=rail==1?new Vector3(Mathf.Clamp(p.x,-RailX,RailX),RailHeight,-WallHalfDepth):
+                new Vector3(rail==0?-RailX:RailX,Mathf.Clamp(p.y,0,RailHeight),-WallHalfDepth);
+            return Vector3.Distance(closest,p);
+        }
+        void Charge(float dt){
+            var runtime=journey.entry.sentenceRuntime;
+            const PassageJourney.LightSpace room=PassageJourney.LightSpace.FarRoom;
+            bool held=LightHeld;
+            // Hold the first reveal at its authored energy while the entrance is still locked.
+            if((ProgressLock.Accessible(PassageJourney.LightSpace.All)&room)==0)return;
+            float gain=chargeRate*(runtime.HasEffect(CognitionSignal.IlluminateLight,room)?bonus:1);
+            int count=journey.Lamps.Count,docked=0;float passing=0;
+            System.Array.Clear(nextHint,0,nextHint.Length);
+            foreach(var lamp in journey.Lamps){
+                if(!lamp)continue;
+                if(lamp.Docked){docked++;continue;}
+                var p=transform.InverseTransformPoint(lamp.transform.position);
+                int nearest=0;float distance=DistanceToRail(p,0);
+                for(int rail=1;rail<3;rail++){float next=DistanceToRail(p,rail);if(next<distance){distance=next;nearest=rail;}}
+                float influence=Mathf.Clamp01(1-distance/passingRadius)*journey.Brightness;
+                passing+=influence;nextHint[nearest]=Mathf.Max(nextHint[nearest],influence);
+            }
+            float dockTarget=count>0?dockedCapacity*docked/count*journey.Brightness:0;
+            float passTarget=passingCapacity*Mathf.Clamp01(passing);
+            float Approach(float current,float target)=>Mathf.MoveTowards(current,target,dt*(target>current?gain:decayRate));
+            doorEnergy=Approach(doorEnergy,held?doorCapacity:0);
+            dockedEnergy=Approach(dockedEnergy,dockTarget);passingEnergy=Approach(passingEnergy,passTarget);
+            for(int i=0;i<3;i++)proximityHint[i]=Mathf.MoveTowards(proximityHint[i],nextHint[i],dt/.8f);
+            bool full=held && count>0 && docked==count && journey.Brightness>=.999f;
+            // Lifting the incomplete cap must not reveal accumulated energy in a single frame.
+            fullLimit=full?Mathf.MoveTowards(fullLimit,1,dt*gain):incompleteLimit;
+            TotalEnergy=Mathf.Clamp(baseEnergy+doorEnergy+dockedEnergy+passingEnergy,baseEnergy,fullLimit);
         }
         void Update(){
-            if(!Leaf || Paused || Time.deltaTime<=0)return;
+            if(!Leaf || Paused)return;
+            DoorGlow=Mathf.MoveTowards(DoorGlow,LightHeld?1:0,Time.unscaledDeltaTime/.8f);
+            if(Time.deltaTime<=0){Draw();return;}
             float dt=Time.deltaTime;
             var runtime=journey.entry.sentenceRuntime;
             const PassageJourney.LightSpace room=PassageJourney.LightSpace.FarRoom;
-            float gain=chargeRate;
-            if(runtime.HasEffect(CognitionSignal.IlluminateLight,room))gain*=bonus;
-            if(runtime.HasEffect(CognitionSignal.IlluminateDoor,room))gain*=bonus;
-            for(int i=0;i<3;i++){
-                float power=0;
-                if(journey.Brightness>0)foreach(var lamp in journey.Lamps)
-                    if(lamp)power+=journey.Brightness*Weight(transform.InverseTransformPoint(lamp.transform.position),i);
-                energy[i]=Mathf.Clamp01(energy[i]+(power>0?power*gain:-decayRate)*dt);
-            }
+            Charge(dt);
             flash=Mathf.Max(0,flash-dt);
             float before=SlabFraction;
             if(!Charged && Lift>0 && !Falling){
@@ -224,32 +283,38 @@ namespace PuzzleApple.V5
             var rt=journey.entry.sentenceRuntime;
             // The engraving remains visible below its gradually illuminated surface.
             inscription.SetFloat("_ExposureGain",rt?Mathf.Pow(2,-rt.WorldExposure):1);
-            bool warm=rt && (rt.HasEffect(CognitionSignal.IlluminateDoor,PassageJourney.LightSpace.FarRoom)||rt.HasEffect(CognitionSignal.IlluminateLight,PassageJourney.LightSpace.FarRoom));
-            Color color=warm?new Color(1,.31f,.10f):new Color(1,.94f,.81f);
-            glow.SetColor("_EmissionColor",color*(flash>0?5:3));glow.SetColor("_BaseColor",color);
-            glyphGlow=Mathf.MoveTowards(glyphGlow,Charged?1:0,Time.deltaTime/.8f);
-            inscription.SetColor("_GlyphEmission",color*(3*glyphGlow));
+            bool warm=Charged && rt && rt.HasEffect(CognitionSignal.IlluminateLight,PassageJourney.LightSpace.FarRoom);
+            warmth=Mathf.MoveTowards(warmth,warm?1:0,Time.unscaledDeltaTime/colorFadeSeconds);
+            Color color=Color.Lerp(Color.white,fullWarmColor,warmth);
+            glow.SetColor("_EmissionColor",color*(flash>0?1.6f:1.2f));glow.SetColor("_BaseColor",color);
+            doorInk.SetColor("_BaseColor",Color.Lerp(new Color(.015f,.015f,.015f),Color.black,DoorGlow));
+            doorInk.SetColor("_EmissionColor",Color.white*(doorEmission*DoorGlow));
+            doorLight.intensity=journey.LightStyle.LampIntensity(.25f)*DoorGlow;
+            ink.Clear();ink.SetColor("_EmissionColor",Color.white*(doorEmission*DoorGlow+.25f*PassingHint));frame.SetPropertyBlock(ink);
+            glyphGlow=Mathf.MoveTowards(glyphGlow,Charged?1:0,Time.unscaledDeltaTime/.8f);
+            inscription.SetColor("_GlyphEmission",color*(.3f*glyphGlow));
             float topWidth=2*RailX+RailWidth;
-            float progress=(energy[0]+energy[1]+energy[2])/3f;
-            float remaining=Mathf.Max(flash>0?.015f:0,progress)*(2*MouthHeight+topWidth);
+            float remaining=Mathf.Max(flash>0?.015f:0,TotalEnergy)*(2*RailHeight+topWidth);
             for(int i=0;i<fills.Length;i++){
-                float length=i==1?topWidth:MouthHeight;
+                float length=i==1?topWidth:RailHeight;
                 float t=Mathf.Clamp01(remaining/length);
                 remaining-=length;
                 DrawRail(fills[i],i,0,t);
                 DrawRail(grooves[i],i,t,1);
+                ink.Clear();ink.SetColor("_BaseColor",Color.Lerp(Color.black,Color.white,proximityHint[i]*.35f));
+                grooves[i].GetComponent<Renderer>().SetPropertyBlock(ink);
             }
         }
         void DrawRail(Transform strip,int index,float from,float to)
         {
             bool vertical=index!=1;
-            float length=vertical?MouthHeight:2*RailX+RailWidth;
+            float length=vertical?RailHeight:2*RailX+RailWidth;
             float span=(to-from)*length;
             strip.gameObject.SetActive(span>.00001f);
             if(span<=.00001f)return;
             float mid=(from+to)*.5f;
             float x=vertical?(index==0?-RailX:RailX):(mid-.5f)*length;
-            float y=vertical?(index==0?mid:1-mid)*length:MouthHeight+RailWidth*.5f;
+            float y=vertical?(index==0?mid:1-mid)*length:RailHeight+RailWidth*.5f;
             strip.localPosition=new Vector3(x,y,-WallHalfDepth-.003f);
             strip.localScale=vertical?new Vector3(RailWidth,span,1):new Vector3(span,RailWidth,1);
         }
@@ -264,7 +329,8 @@ namespace PuzzleApple.V5
                 head<SlabFraction*height || centre.y-capsule.bounds.extents.y>before*height)return;
             StartCoroutine(Stun(centre.z>LeafZ));
         }
-        IEnumerator Stun(bool stairs){
+        public void RecoverFromFall(){if(!Stunned)StartCoroutine(Stun(false,false));}
+        IEnumerator Stun(bool stairs,bool impact=true){
             Stunned=true;
             var e=journey.entry;var p=e.player;var panel=e.board.Panel;
             bool move=p.MovementLocked,look=p.CinematicLocked,input=panel.InputBlocked;
@@ -273,7 +339,7 @@ namespace PuzzleApple.V5
             var start=p.view.rotation;var up=Quaternion.AngleAxis(-35,p.view.right)*start;
             try{
                 for(float t=0;t<.38f;t+=Time.unscaledDeltaTime){
-                    p.view.rotation=Quaternion.Slerp(start,up,Mathf.Clamp01(t/.3f));
+                    if(impact)p.view.rotation=Quaternion.Slerp(start,up,Mathf.Clamp01(t/.3f));
                     output.WorldVisibility=1-Mathf.SmoothStep(0,1,t/.38f);yield return null;
                 }
                 output.WorldVisibility=0;
@@ -282,6 +348,6 @@ namespace PuzzleApple.V5
                 for(float t=0;t<.5f;t+=Time.unscaledDeltaTime){output.WorldVisibility=Mathf.SmoothStep(0,1,t/.5f);yield return null;}
             }finally{output.WorldVisibility=1;p.MovementLocked=move;p.CinematicLocked=look;panel.InputBlocked=input;p.SuppressInteractionThisFrame();Stunned=false;}
         }
-        void OnDestroy(){if(frameMesh)Destroy(frameMesh);if(glow)Destroy(glow);if(inscription)Destroy(inscription);}
+        void OnDestroy(){if(frameMesh)Destroy(frameMesh);if(glow)Destroy(glow);if(inscription)Destroy(inscription);if(doorInk)Destroy(doorInk);}
     }
 }

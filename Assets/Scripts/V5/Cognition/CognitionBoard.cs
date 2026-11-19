@@ -53,7 +53,7 @@ namespace PuzzleApple.V5.Cognition
             if(State.RequirePeriod && !view.Group.Independent){
                 var point=view.Root.InverseTransformPoint(PeriodEnd(id));
                 float radius=punctuation.diameter*.5f*view.FontScale;
-                bounds.xMax=Mathf.Max(bounds.xMax,point.x+radius);
+                bounds.xMax=point.x+radius;
                 bounds.yMin=Mathf.Min(bounds.yMin,point.y-radius);
                 bounds.yMax=Mathf.Max(bounds.yMax,point.y+radius);
             }

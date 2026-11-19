@@ -51,6 +51,8 @@ namespace PuzzleApple.V5.Editor
                 var instance=field.ActiveLamps.Select(l=>l.GetComponent<PlayerInstance>()).First(l=>l && l.Shape==shape);
                 var col=instance.GetComponent<Collider>();
                 Check(shape==InstanceShape.Sphere?col is SphereCollider:shape==InstanceShape.Cube?col is BoxCollider:col is MeshCollider mc && mc.convex,"matching mesh collider");
+                Check(Mathf.Abs(col.bounds.size.y-OpeningLightField.CreatedDiameter)<.005f,"equal world height for "+shape);
+                if(shape==InstanceShape.Octahedron)Check(Mathf.Abs(col.bounds.size.x/col.bounds.size.y-1/Mathf.Sqrt(3))<.01f,"diamond retains the corridor star proportions");
                 yield return null;
                 point.x-=Screen.width*.09f;
             }

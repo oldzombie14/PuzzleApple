@@ -31,6 +31,7 @@ namespace PuzzleApple.V5
         public bool DialogReady { get; private set; }
         bool wasPanelOpen;
         Coroutine worldRoutine;
+        FoldingRoom closingBox;
         int worldGroup=-1;
         public bool RunningWorldCommand(int id)=>worldGroup==id;
         string worldRule;
@@ -144,28 +145,36 @@ namespace PuzzleApple.V5
             if(group!=null&&group.Effective&&group.RuleId==worldRule)return;
             if(worldRoutine!=null)StopCoroutine(worldRoutine);
             EndWorldShot();
-            (worldRule=="world.on"?CurrentOpeningBox:room).HoldCurrentPose();worldGroup=-1;Busy=false;
+            (worldRule=="world.on"?CurrentOpeningBox:closingBox?closingBox:room).HoldCurrentPose();worldGroup=-1;Busy=false;
             board.Panel.InputBlocked=false;board.Panel.SetOpen(true);
             // A half-closed portable box still owns the frozen position. Opening it
             // releases the lock; view and editing remain available while paused.
         }
         IEnumerator CloseWorld(int groupId)
         {
+            closingBox=room;
             Busy=true; player.MovementLocked=true;
             board.CancelDrag(); board.Panel.InputBlocked=true;
             // Showing exit confirmation is a visible effect even when no fold is needed.
             if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
             wasPanelOpen=board.Panel.IsOpen; board.Panel.SetOpen(false);
             if(groupId>=0)yield return LevelWorldView(groupId);
-            if(portableClosure&&!portableClosure.CanFold)
+            var gallery=outdoor&&outdoor.InChapter?outdoor.Chapter.box:null;
+            bool atEntrance=gallery && gallery.Progress>0 && (!portableClosure || !portableClosure.Isolated) && outdoor.Chapter.FitsArrivalBox(player.GetComponent<CharacterController>());
+            if(!atEntrance && portableClosure&&!portableClosure.CanFold)
             {
                 yield return FadeWorldShot(true);
                 worldGroup=-1;ShowDialog();yield break;
             }
-            if(portableClosure)portableClosure.Prepare();
-            room.CloseAt(player.transform.position);
+            if(atEntrance){
+                closingBox=gallery;
+                closingBox.CloseInPlace(player.transform.position);
+            }else{
+                if(portableClosure)portableClosure.Prepare();
+                room.CloseAt(player.transform.position);
+            }
             board.Panel.InputBlocked=false;
-            yield return ShowFold(groupId,false,room);
+            yield return ShowFold(groupId,false,closingBox);
             yield return new WaitForSecondsRealtime(closedPauseDuration);
             worldGroup=-1;
             ShowDialog();

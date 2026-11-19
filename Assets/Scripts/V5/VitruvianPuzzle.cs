@@ -17,11 +17,12 @@ namespace PuzzleApple.V5
         public float height=10,navelRatio=.607f;
         [Header("Square")]
         public float amplitude=30,halfPeriod=7,snapTolerance=3,snapSeconds=.35f;
-        public float initialOffset=1,bottomPhaseOffset=0,bottomPeriodScale=1;
+        public float initialOffset=18,bottomPhaseOffset=0,bottomPeriodScale=1;
         public float mirrorLength=1.2f,beamWidth=.03f,meetingTolerance=.09f;
         [Range(2,16)] public int maxReflections=8;
         [Header("Circle")]
         public float orbitSeconds=8,startAngle=-30,trailWidth=.04f,trailFadeSeconds=1.5f;
+        [Min(1)] public int fullGlowTurns=3;
         public UnityEvent<bool> SquareChanged=new UnityEvent<bool>(),CircleChanged=new UnityEvent<bool>();
         public bool SquareSolved {get;private set;}
         public bool CircleSolved {get;private set;}
@@ -35,7 +36,7 @@ namespace PuzzleApple.V5
         public float LowerOffset {get;private set;}
         public float OrbitAngle {get;private set;}
         float upperPhase,lowerPhase,snapTime=-1,fromUpper,fromLower;
-        float arc,trailAlpha;
+        float travelledDegrees,trailAlpha;
         bool swinging,orbiting;
         LineRenderer stem,trail;
         LineRenderer[] branches;
@@ -72,10 +73,12 @@ namespace PuzzleApple.V5
             line.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;line.receiveShadows=false;
             return line;
         }
-        void Tint(LineRenderer line,float brightness,float opacity)
+        void Tint(LineRenderer line,float brightness,float opacity,float tailOpacity=1)
         {
             ink.Clear();ink.SetVector("_CorridorAxis",Vector4.zero);
-            ink.SetColor("_BaseColor",new Color(1,1,1,opacity));ink.SetColor("_EmissionColor",Color.white*brightness);
+            var lightInk=new Color(1,.94f,.82f,opacity);
+            ink.SetColor("_BaseColor",lightInk);ink.SetColor("_EmissionColor",lightInk*brightness);
+            ink.SetFloat("_TailOpacity",tailOpacity);
             ink.SetFloat("_FogInfluence",0);line.SetPropertyBlock(ink);
         }
         LineRenderer[] Rings(string name)
@@ -156,22 +159,27 @@ namespace PuzzleApple.V5
                 runtime.HasEffect(CognitionSignal.LightLightMove,room.Space)?CognitionSignal.LightLightMove:
                 runtime.HasEffect(CognitionSignal.LightDoorMove,room.Space)?CognitionSignal.LightDoorMove:CognitionSignal.Empty;
             if(previousMotion!=motion){previousMotion=motion;createdLightMotion.Apply(signal=>signal==motion);}
-            float boost=runtime.LampBoost(room.Space);source.SetLampMultiplier(boost);ball.SetLampMultiplier(boost);
+            float boost=runtime.LampBoost(room.Space);source.SetLampMultiplier(boost);
             bool running=move && ball.TargetOn && ball.Brightness>.001f && !runtime.MotionFrozen;
+            float fullGlowDegrees=360f*Mathf.Max(1,fullGlowTurns);
             if(running){
-                if(!orbiting)arc=0;
+                if(!orbiting)travelledDegrees=0;
                 float step=360*Time.deltaTime/Mathf.Max(.1f,orbitSeconds);
                 OrbitAngle=Mathf.Repeat(OrbitAngle+step,360);
-                arc=Mathf.Min(360,arc+step);trailAlpha=1;PoseOrbit();
+                travelledDegrees=Mathf.Min(fullGlowDegrees,travelledDegrees+step);
+                trailAlpha=1;PoseOrbit();
             }else trailAlpha=Mathf.MoveTowards(trailAlpha,0,Time.unscaledDeltaTime/Mathf.Max(.01f,trailFadeSeconds));
             orbiting=running;
+            float arc=Mathf.Min(360,travelledDegrees);
+            float charge=Mathf.SmoothStep(0,1,travelledDegrees/fullGlowDegrees);
+            ball.SetLampMultiplier(boost*Mathf.Lerp(.4f,1,charge*trailAlpha));
             bool circle=running && arc>=360;
             if(circle!=CircleSolved){CircleSolved=circle;CircleChanged.Invoke(circle);if(circle)Pulse(pivot.position);}
             trail.enabled=trailAlpha>0 && arc>0;
             if(trail.enabled){
                 trail.positionCount=Mathf.Max(2,Mathf.CeilToInt(arc/3)+1);
                 for(int i=0;i<trail.positionCount;i++)trail.SetPosition(i,OrbitPoint(OrbitAngle-arc*i/(trail.positionCount-1)));
-                Tint(trail,circle?4:2,trailAlpha);
+                Tint(trail,Mathf.Lerp(.65f,4,charge),trailAlpha*ball.Brightness*Mathf.Lerp(.55f,1,charge),charge);
             }
         }
         static float Cross(Vector2 a,Vector2 b)=>a.x*b.y-a.y*b.x;

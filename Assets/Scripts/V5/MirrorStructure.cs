@@ -52,6 +52,8 @@ namespace PuzzleApple.V5
         bool cutting,foldedCopy;
         readonly HashSet<long> retiring=new HashSet<long>();
         MaterialPropertyBlock ink;
+        Material entranceRim;
+        float rimProgress=-1;
         WorldEntry Entry=>room.Entry;
         void Start()
         {
@@ -61,6 +63,14 @@ namespace PuzzleApple.V5
             foreach(var source in originals){
                 var owner=source.GetComponent<SentenceOwnership>();
                 if(!owner)owner=source.gameObject.AddComponent<SentenceOwnership>();owner.room=room;
+                if(interior)foreach(var surface in source.GetComponentsInChildren<MeshRenderer>()){
+                    if(surface.sharedMaterial.HasProperty("_ReflectionTex"))continue;
+                    if(!entranceRim){
+                        entranceRim=new Material(surface.sharedMaterial);
+                        entranceRim.EnableKeyword("_EMISSION");
+                    }
+                    surface.sharedMaterial=entranceRim;
+                }
                 var t=new Twin{source=source};
                 t.root=new GameObject(source.name+" reflection").transform;t.root.SetParent(transform,false);
                 t.solid=Instantiate(source,t.root);t.solid.localPosition=Vector3.zero;t.solid.localRotation=Quaternion.identity;
@@ -104,7 +114,21 @@ namespace PuzzleApple.V5
                 material.SetFloat("_PanelGroundY",room.box.floorPanel.position.y);
             }
         }
-        void OnDestroy(){foreach(var material in sinkingFinishes.Values)Destroy(material);}
+        void UpdateEntranceRim()
+        {
+            if(!entranceRim || rimProgress==room.box.Progress)return;
+            rimProgress=room.box.Progress;
+            float closed=1-Mathf.SmoothStep(0,1,rimProgress);
+            var color=Color.Lerp(new Color(.055f,.055f,.055f),Color.white,closed);
+            var glow=Color.white*(closed*.72f);
+            entranceRim.SetColor("_BaseColor",color);
+            entranceRim.SetColor("_EmissionColor",glow);
+            if(sinkingFinishes.TryGetValue(entranceRim,out var cut)){
+                cut.SetColor("_BaseColor",color);
+                cut.SetColor("_EmissionColor",glow);
+            }
+        }
+        void OnDestroy(){foreach(var material in sinkingFinishes.Values)Destroy(material);if(entranceRim)Destroy(entranceRim);}
         public bool IsMirror(Collider c)
         {
             if(splitter && c.transform.IsChildOf(splitter))return true;
@@ -153,6 +177,7 @@ namespace PuzzleApple.V5
         }
         void LateUpdate(){
             if(!room.Entry || !Entry.outdoor.InChapter || twins.Count==0)return;
+            UpdateEntranceRim();
             var runtime=Entry.sentenceRuntime;var space=room.Space;var board=Entry.board;
             bool box=room.box && !room.box.Opened;
             bool copy=runtime.HasEffect(CognitionSignal.MirrorCopy,space) && HasTargets;

@@ -253,7 +253,7 @@ namespace PuzzleApple.V5
                 bool inProgress=!finished && (lightState.TrySettling(group,out bool settling)?settling:EffectInProgress(group));
                 if(Motion(group) && (MotionFrozen || motion.WaitingForLight(group,EffectScope(group))))inProgress=true;
                 if(inProgress){elapsed=0;board.SetSentenceOpacity(group.Id,1);yield return null;continue;}
-                if(LightStateEffect.Commands(group,false) && !board.Panel.IsOpen) elapsed=duration;
+                if(!board.Panel.IsOpen) elapsed=duration;
                 else elapsed+=Time.unscaledDeltaTime;
                 float opacity=1-Mathf.SmoothStep(0,1,elapsed/duration);
                 board.SetSentenceOpacity(group.Id,opacity);

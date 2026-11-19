@@ -59,6 +59,13 @@ namespace PuzzleApple.V5.Editor
                     player.AdoptCurrentView();
                     observer.Advance(false,0);
                     if(observer.Target!=journey.ActiveStars.Observation)continue;
+                    var aim=(star.transform.position-player.view.position).normalized;
+                    if(entry.chamberLight.PickStar(new Ray(player.view.position,aim),observer.range,out _)!=star)continue;
+                    observer.Advance(true,.12f);
+                    player.view.rotation=Quaternion.LookRotation(Quaternion.AngleAxis(2,Vector3.up)*aim);
+                    if(entry.chamberLight.PickStar(new Ray(player.view.position,player.view.forward),observer.range,out _))continue;
+                    observer.Advance(true,.12f);
+                    if(observer.Target!=journey.ActiveStars.Observation || observer.Progress<=.12f/journey.ActiveStars.Observation.lesson.holdDuration)continue;
                     observer.Advance(true,journey.ActiveStars.Observation.lesson.holdDuration);
                     return entry.chamberLight.Collecting;
                 }

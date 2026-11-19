@@ -29,7 +29,7 @@ namespace PuzzleApple.V5
             }
             return initialState.HasEffect(signal);
         }
-        public Collider MemberAt(Ray ray,float reach)
+        public Collider MemberAt(Ray ray,float reach,Collider tracked=null,float trackingSlack=0)
         {
             if(!isActiveAndEnabled||!Available||!lesson)return null;
             if(Physics.Raycast(ray,out var direct,reach,~0,QueryTriggerInteraction.Ignore)&&
@@ -44,8 +44,10 @@ namespace PuzzleApple.V5
                 if(depth<=0||depth>reach)continue;
                 Vector3 aim=ray.GetPoint(depth);
                 float miss=Mathf.Max(0,Vector3.Distance(aim,member.bounds.center)-member.bounds.extents.x)/depth;
-                if(miss>bestMiss)continue;
+                bool held=tracked && member==tracked;
+                if(miss>(held?Mathf.Tan((aimToleranceDegrees+trackingSlack)*Mathf.Deg2Rad):bestMiss))continue;
                 if(!Physics.Raycast(ray.origin,offset.normalized,out var visible,reach,~0,QueryTriggerInteraction.Ignore)||visible.collider!=member)continue;
+                if(held)return member;
                 best=member;bestMiss=miss;
             }
             return best;

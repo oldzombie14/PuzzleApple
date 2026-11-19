@@ -3,6 +3,7 @@ using UnityEngine.UI;
 
 namespace PuzzleApple.V5
 {
+    [RequireComponent(typeof(CanvasRenderer))]
     public sealed class ShapeOutline : MaskableGraphic
     {
         public InstanceShape shape;

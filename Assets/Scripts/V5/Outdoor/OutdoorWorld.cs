@@ -149,7 +149,7 @@ namespace PuzzleApple.V5.Outdoor
         public bool TryPlaceLamp(Ray ray,Plane[] frustum,InstanceShape shape,WorldDropRegion region,OpeningLightField field,Collider ground)
         {
             if(!region || !region.Accepts("light") || System.Array.IndexOf(region.shapes,shape)<0 || field.PlayerCount>=region.maxInstances)return false;
-            float radius=OpeningLightField.Radius(field.scaleRange.y,shape)+spawnClearance;
+            float radius=OpeningLightField.CreatedDiameter*.5f+spawnClearance;
             Vector3 preferred=ray.GetPoint(airSpawnDistance);
             if(Physics.Raycast(ray,out var hit,35,~0,QueryTriggerInteraction.Ignore))preferred=hit.point+hit.normal*radius;
             preferred.y=Mathf.Max(preferred.y,ground.bounds.max.y+radius);

@@ -145,6 +145,14 @@ namespace PuzzleApple.V5
                 if(changing!=0)candidates&=changing;
             }
             var space=runtime.PreferredSpace(group,group!=null?candidates&runtime.EffectScope(group):candidates);
+            if(space==PassageJourney.LightSpace.FarRoom && (shot.rule=="light.move" || shot.focus==Focus.Light)){
+                if(shot.rule=="light.move" && !j.LampsLit && j.ReturnStars && j.ReturnStars.Brightness>0 &&
+                    (runtime.EffectScope(group)&PassageJourney.LightSpace.ReturnPath)!=0)
+                    return j.ReturnStars.FocusNear(j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart-4)));
+                var eye=Entry.player.view;
+                var lamp=j.Lamps.Where(l=>l).OrderByDescending(l=>Vector3.Dot(eye.forward,(l.transform.position-eye.position).normalized)).FirstOrDefault();
+                if(lamp)return lamp.transform.position+shot.offset;
+            }
             if(roomMotion && shot.focus!=Focus.Door && (space==PassageJourney.LightSpace.Chamber || space==PassageJourney.LightSpace.SphereRoom || space==PassageJourney.LightSpace.FarRoom)){
                 var centre=space==PassageJourney.LightSpace.SphereRoom?j.Tutorial.Fill.transform.position:space==PassageJourney.LightSpace.FarRoom?j.FarRoomFill.transform.position:Entry.chamberLight.RoomCentre;
                 var eye=Entry.player.view;var heading=Vector3.ProjectOnPlane(centre-eye.position,Vector3.up);

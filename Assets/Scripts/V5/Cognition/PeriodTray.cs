@@ -167,12 +167,25 @@ namespace PuzzleApple.V5.Cognition
         public void OnDrag(PointerEventData e){if(dragged)owner.Move(e.position);}
         public void OnEndDrag(PointerEventData e){if(dragged)owner.End(e.position);pressed=dragged=false;}
         protected override void OnPopulateMesh(VertexHelper mesh){
-            mesh.Clear();const int segments=48;float radius=diameter*.5f;Color clear=color;clear.a=0;
+            mesh.Clear();const int segments=48;float radius=diameter*.5f;
+            if(ring){
+                for(int i=0;i<=segments;i++){
+                    float angle=i*2*Mathf.PI/segments;
+                    var dir=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));
+                    mesh.AddVert(dir*radius,color,Vector2.zero);
+                    mesh.AddVert(dir*(radius-.8f),color,Vector2.zero);
+                    if(i==0)continue;
+                    int n=i*2;
+                    mesh.AddTriangle(n-2,n-1,n);mesh.AddTriangle(n,n-1,n+1);
+                }
+                return;
+            }
+            Color clear=color;clear.a=0;
             for(int i=0;i<=segments;i++){
                 float angle=i*2*Mathf.PI/segments;var direction=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));
                 mesh.AddVert(direction*(radius+.5f),clear,Vector2.zero);
                 mesh.AddVert(direction*(radius-.5f),color,Vector2.zero);
-                mesh.AddVert(direction*(ring?radius*.82f:0),ring?clear:color,Vector2.zero);
+                mesh.AddVert(Vector2.zero,color,Vector2.zero);
                 if(i==0)continue;int n=i*3;
                 mesh.AddTriangle(n-3,n-2,n);mesh.AddTriangle(n,n-2,n+1);
                 mesh.AddTriangle(n-2,n-1,n+1);mesh.AddTriangle(n+1,n-1,n+2);

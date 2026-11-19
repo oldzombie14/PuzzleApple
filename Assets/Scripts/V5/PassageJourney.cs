@@ -50,7 +50,9 @@ namespace PuzzleApple.V5
         }
         public bool DemonstrationLampMoving(bool isOn,int relitRevision=-1,LightSpace space=LightSpace.FarRoom)
         {
-            if((roomsWithMoveKnown & space)!=0)
+            bool approachingWithMove=space==LightSpace.FarRoom && (roomsIntroduced&space)==0 &&
+                entry && entry.board && entry.board.State!=null && entry.board.State.Knows("move");
+            if(approachingWithMove || (roomsWithMoveKnown & space)!=0)
                 return isOn && entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,space);
             return entry&&entry.board&&entry.board.State!=null&&movementObservation&&
             (entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(space)
@@ -238,7 +240,8 @@ namespace PuzzleApple.V5
             if(movingFloor)
             {
                 Platform=path.gameObject.AddComponent<PassagePlatform>();
-                Platform.Bind(this,pathStart+inset,roomStart-inset);
+                float stopInset=Mathf.Min(length*.5f,pathWidth*.5f+.02f);
+                Platform.Bind(this,pathStart+stopInset,roomStart-stopInset);
             }
             var pathSurface=new MaterialPropertyBlock();pathSurface.SetFloat("_FrontWhite",0);
             pathSurface.SetColor("_ShadeColor",new Color(.42f,.42f,.42f,1));

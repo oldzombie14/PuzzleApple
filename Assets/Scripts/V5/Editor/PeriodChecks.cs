@@ -62,6 +62,7 @@ namespace PuzzleApple.V5.Editor
             var board=e.board;var state=board.State;Check(state.RequirePeriod,"enable Require Period before Play");
             board.Panel.SetOpen(true);yield return new WaitForSecondsRealtime(.4f);
             Check(!GameObject.Find("Period supply"),"no corner supply");
+            Check(!e.blackBackground.raycastTarget,"opening fade passes pointer input to the board");
             var one=Draft(board,"light");yield return null;
             Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>(true).Any(p=>p.group==one.Id),"single word has no period");
             RemoveByRightClick(board,one);
@@ -84,6 +85,10 @@ namespace PuzzleApple.V5.Editor
             Drag(board,g.Id,Vector2.zero);Check(!board.IsDragging && !g.Spoken,"draft cannot drag or speak by dragging");
             Click(board,g.Id,false,true);yield return null;
             Check(g.Spoken && g.Effective && state.History.Count==1 && !GameObject.Find("Period first-click ripple"),"click speaks and permanently dismisses guide");
+            var row=board.GroupRect(g.Id);
+            var period=row.InverseTransformPoint(board.PeriodEnd(g.Id));
+            float inkScale=row.GetComponentInChildren<CenteredSymbolImage>().rectTransform.lossyScale.x/row.lossyScale.x;
+            Check(Mathf.Abs(board.GroupContentBounds(g.Id).xMax-period.x-board.punctuation.diameter*.5f*inkScale)<.01f,"ripple padding begins at the circular ink edge");
             while(board.Panel.InputBlocked)yield return null;
             board.Panel.SetOpen(true);while(!board.Panel.FullyOpen)yield return null;
             Drag(board,g.Id,board.GroupRect(g.Id).TransformPoint(board.GroupRect(g.Id).rect.center));

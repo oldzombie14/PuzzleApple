@@ -12,6 +12,7 @@ namespace PuzzleApple.V5
         public float Progress {get;private set;}
         public bool Open {get;private set;}
         public bool Driving {get;private set;}
+        public PassageJourney.LightSpace ControlSpaces=>ProgressLock.DoorBoundary(this);
         public bool CanCycle=>journey && journey.enabled && journey.entry.room.Opened && !journey.entry.ConfirmingExit &&
             (!journey.entry.portableClosure || !journey.entry.portableClosure.Isolated);
         Renderer leaf,pin,cover,backWall;
@@ -76,7 +77,7 @@ namespace PuzzleApple.V5
         void Update(){
             if(!journey || !Leaf)return;
             if(CanCycle){
-                var runtime=journey.entry.sentenceRuntime;const PassageJourney.LightSpace space=PassageJourney.LightSpace.ReturnPath;
+                var runtime=journey.entry.sentenceRuntime;var space=ControlSpaces;
                 bool cycling=!Driving && runtime.HasEffect(CognitionSignal.DoorMove,space) && !runtime.HasEffect(CognitionSignal.DoorOn,space) && !runtime.HasEffect(CognitionSignal.DoorOff,space);
                 if(cycling){if(Progress==0)cycleOpening=true;if(Progress==1)cycleOpening=false;Open=cycleOpening;}
                 float target=Open?1:0,next=Driving||cycling?Mathf.MoveTowards(Progress,target,Time.deltaTime/Mathf.Max(.01f,journey.doorDuration)):Progress;

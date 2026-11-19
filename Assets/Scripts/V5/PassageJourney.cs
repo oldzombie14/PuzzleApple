@@ -306,6 +306,7 @@ namespace PuzzleApple.V5
         WhiteDoorState whiteDoor;
         // The white door between corridor and tutorial room, as commanded by on/off door.
         public ISwitchableDoor WhiteDoor => whiteDoor ??= new WhiteDoorState(this);
+        public LightSpace WhiteDoorSpaces=>ProgressLock.DoorBoundary(this);
         sealed class WhiteDoorState : ISwitchableDoor
         {
             readonly PassageJourney journey;
@@ -366,7 +367,7 @@ namespace PuzzleApple.V5
 
         public LightSpace ChapterSpaces=>entry.outdoor && entry.outdoor.IsOutside?LightSpace.Outdoor:
             entry.outdoor && entry.outdoor.InChapter?LightSpace.Gallery|LightSpace.Garden|LightSpace.Vitruvian:LightSpace.All;
-        public LightSpace SentenceScope()=>MembraneDoor.Region(entry.player.transform.position,ChapterSpaces)&ProgressLock.Accessible(ChapterSpaces);
+        public LightSpace SentenceScope()=>MembraneDoor.Region(entry.player.transform.position,ChapterSpaces)&ProgressLock.Region(ChapterSpaces,PlayerSpace);
         public LightSpace ConnectedLights()=>SentenceScope();
 
         // Switchable light sources by space, in a fixed order. A new light source joins here.
@@ -470,8 +471,8 @@ namespace PuzzleApple.V5
         {
             var runtime = entry.sentenceRuntime;
             bool cycling = !DoorTransitionEnabled && CanCycleDoor && runtime &&
-                runtime.HasEffect(Cognition.CognitionSignal.DoorMove,LightSpace.FirstPath|LightSpace.SphereRoom) &&
-                !runtime.HasEffect(Cognition.CognitionSignal.DoorOn,LightSpace.FirstPath|LightSpace.SphereRoom) && !runtime.HasEffect(Cognition.CognitionSignal.DoorOff,LightSpace.FirstPath|LightSpace.SphereRoom);
+                runtime.HasEffect(Cognition.CognitionSignal.DoorMove,WhiteDoorSpaces) &&
+                !runtime.HasEffect(Cognition.CognitionSignal.DoorOn,WhiteDoorSpaces) && !runtime.HasEffect(Cognition.CognitionSignal.DoorOff,WhiteDoorSpaces);
             if (cycling)
             {
                 if (DoorProgress <= 0) cycleOpening = true;

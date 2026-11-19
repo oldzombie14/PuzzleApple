@@ -65,7 +65,8 @@ namespace PuzzleApple.V5
         public bool Paused=>!journey.enabled || !journey.entry.room.Opened || journey.entry.ConfirmingExit ||
             journey.entry.portableClosure&&journey.entry.portableClosure.Isolated;
         public bool LessonAcquired=>lesson && journey.entry.board.State.HasAcquired(lesson.acquisitionId);
-        public bool LightHeld=>!LessonAcquired || journey.entry.sentenceRuntime.HasEffect(CognitionSignal.IlluminateDoor,PassageJourney.LightSpace.FarRoom);
+        public PassageJourney.LightSpace ControlSpaces=>ProgressLock.DoorBoundary(this);
+        public bool LightHeld=>!LessonAcquired || journey.entry.sentenceRuntime.HasEffect(CognitionSignal.IlluminateDoor,ControlSpaces);
         public bool TryCollectLesson(){
             if(!lesson || LessonAcquired || journey.entry.chamberLight.Collecting)return false;
             journey.entry.chamberLight.CollectObservation(lesson,showWord:false);return true;
@@ -247,7 +248,6 @@ namespace PuzzleApple.V5
             if(Time.deltaTime<=0){Draw();return;}
             float dt=Time.deltaTime;
             var runtime=journey.entry.sentenceRuntime;
-            const PassageJourney.LightSpace room=PassageJourney.LightSpace.FarRoom;
             Charge(dt);
             flash=Mathf.Max(0,flash-dt);
             float before=SlabFraction;
@@ -262,7 +262,7 @@ namespace PuzzleApple.V5
                 Lift=Mathf.Max(0,fallFrom*(1-t*t)-Mathf.Min(fallFrom,.008f)*Mathf.Clamp01(fallTime/warningSeconds));
                 if(t>=1 || Lift<=0){Lift=0;fallTime=-1;}
             }else if(Charged){
-                bool swing=cycle>=0 && runtime.Owns(CognitionSignal.DoorMove,room,cycle);
+                bool swing=cycle>=0 && runtime.Owns(CognitionSignal.DoorMove,ControlSpaces,cycle);
                 if(command || swing){
                     bool up=command?raise:cyclingUp;
                     Lift=Mathf.MoveTowards(Lift,up?1:0,dt/(up?riseSeconds:lowerSeconds));

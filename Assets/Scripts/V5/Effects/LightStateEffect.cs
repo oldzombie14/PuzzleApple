@@ -42,7 +42,7 @@ namespace PuzzleApple.V5
             foreach(var group in lights)
                 if(!commandProgress.ContainsKey(group.Id)||added.Contains(group))
                     // Unlocking expands sustained effects, not a light command already in flight.
-                    commandProgress[group.Id]=ProgressLock.Accessible(entry.journey.ChapterSpaces);
+                    commandProgress[group.Id]=entry.sentenceRuntime.Scope(group);
         }
         public void Commit(CognitionState.Group[] groups,CognitionState.Group[] added){
             var next=new Dictionary<ISwitchableLight,CognitionState.Group>();

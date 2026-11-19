@@ -49,12 +49,12 @@ namespace PuzzleApple.V5
             if(Includes(PassageJourney.LightSpace.Garden)&&((ISentenceMovable)outside.Garden).CanMove(signal))return true;
             var j=entry.journey;
             if(signal==CognitionSignal.WorldMove)return j.Platform&&Includes(PassageJourney.LightSpace.ReturnPath);
-            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.FarRoom) && j.EndingDoor && j.EndingDoor.CanCycle && (!entry.sentenceRuntime.Owns(signal,PassageJourney.LightSpace.FarRoom,g.Established) || j.EndingDoor.AcceptedCycle(g.Established)))return true;
-            if(signal==CognitionSignal.DoorMove && Includes(PassageJourney.LightSpace.ReturnPath) && j.EntranceDoor && j.EntranceDoor.CanCycle &&
-                !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,PassageJourney.LightSpace.ReturnPath) && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,PassageJourney.LightSpace.ReturnPath))return true;
+            if(signal==CognitionSignal.DoorMove && j.EndingDoor && Includes(j.EndingDoor.ControlSpaces) && j.EndingDoor.CanCycle && (!entry.sentenceRuntime.Owns(signal,j.EndingDoor.ControlSpaces,g.Established) || j.EndingDoor.AcceptedCycle(g.Established)))return true;
+            if(signal==CognitionSignal.DoorMove && j.EntranceDoor && Includes(j.EntranceDoor.ControlSpaces) && j.EntranceDoor.CanCycle &&
+                !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,j.EntranceDoor.ControlSpaces) && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,j.EntranceDoor.ControlSpaces))return true;
             if(signal==CognitionSignal.LightDoorMove && Includes(PassageJourney.LightSpace.FirstPath) && j.Stars && j.Stars.NeedsGather)return true;
             if(signal==CognitionSignal.DoorMove){
-                var white=scope&(PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom);
+                var white=scope&j.WhiteDoorSpaces;
                 return white!=0 && j.CanCycleDoor && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,white)&&!entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,white);
             }
             if(Includes(PassageJourney.LightSpace.SphereRoom)&&j.Tutorial&&j.Tutorial.CanMove(signal))return true;

@@ -23,26 +23,26 @@ namespace PuzzleApple.V5
             foreach(var id in commandProgress.Keys.Where(id=>!commands.Any(g=>g.Id==id)).ToArray())commandProgress.Remove(id);
             foreach(var group in commands)
                 if(!commandProgress.ContainsKey(group.Id)||added.Contains(group))
-                    // A one-shot command never recruits doors behind a lock it just opened.
-                    commandProgress[group.Id]=ProgressLock.Accessible(entry.journey.ChapterSpaces);
+                    // Opening a boundary never recruits more doors into the command already in flight.
+                    commandProgress[group.Id]=entry.sentenceRuntime.Scope(group);
         }
 
         IEnumerable<ISwitchableDoor> Targets(CognitionState.Group group){
             var scope=entry.sentenceRuntime.EffectScope(group);
             var journey=entry.journey;
             if((scope&PassageJourney.LightSpace.Outdoor)!=0)yield return entry.outdoor.World;
-            if((scope&(PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom))!=0)yield return journey.WhiteDoor;
-            if((scope&PassageJourney.LightSpace.ReturnPath)!=0 && journey.EntranceDoor)yield return journey.EntranceDoor;
-            if((scope&PassageJourney.LightSpace.FarRoom)!=0 && journey.EndingDoor)yield return journey.EndingDoor;
+            if((scope&journey.WhiteDoorSpaces)!=0)yield return journey.WhiteDoor;
+            if(journey.EntranceDoor && (scope&journey.EntranceDoor.ControlSpaces)!=0)yield return journey.EntranceDoor;
+            if(journey.EndingDoor && (scope&journey.EndingDoor.ControlSpaces)!=0)yield return journey.EndingDoor;
         }
         public void ChangeSpace(){foreach(var door in owners.Keys)door.Hold();owners.Clear();commandProgress.Clear();}
         public PassageJourney.LightSpace ChangingSpaces(CognitionState.Group group){
             var spaces=(PassageJourney.LightSpace)0;
             foreach(var target in Targets(group)){
                 if(!target.WouldChange(Commands(group,true)))continue;
-                if(ReferenceEquals(target,entry.journey.WhiteDoor))spaces|=PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom;
-                else if(ReferenceEquals(target,entry.journey.EntranceDoor))spaces|=PassageJourney.LightSpace.ReturnPath;
-                else if(ReferenceEquals(target,entry.journey.EndingDoor))spaces|=PassageJourney.LightSpace.FarRoom;
+                if(ReferenceEquals(target,entry.journey.WhiteDoor))spaces|=entry.journey.WhiteDoorSpaces;
+                else if(ReferenceEquals(target,entry.journey.EntranceDoor))spaces|=entry.journey.EntranceDoor.ControlSpaces;
+                else if(ReferenceEquals(target,entry.journey.EndingDoor))spaces|=entry.journey.EndingDoor.ControlSpaces;
                 else spaces|=PassageJourney.LightSpace.Outdoor;
             }
             return spaces&entry.sentenceRuntime.EffectScope(group);

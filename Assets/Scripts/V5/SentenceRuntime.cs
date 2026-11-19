@@ -287,7 +287,7 @@ namespace PuzzleApple.V5
             if(entry.outdoor&&entry.outdoor.IsOutside)entry.outdoor.World.ApplyMotion(HasEffect,kind==CognitionChange.Split);
             doorState.Commit(groups,added);
             foreach(var g in groups)
-                if(g.Signal==CognitionSignal.DoorMove && (EffectScope(g)&PassageJourney.LightSpace.FarRoom)!=0 && entry.journey.EndingDoor && !entry.journey.EndingDoor.AcceptedCycle(g.Established))entry.journey.EndingDoor.StartCycle(g.Established);
+                if(g.Signal==CognitionSignal.DoorMove && entry.journey.EndingDoor && (EffectScope(g)&entry.journey.EndingDoor.ControlSpaces)!=0 && !entry.journey.EndingDoor.AcceptedCycle(g.Established))entry.journey.EndingDoor.StartCycle(g.Established);
             foreach(var g in added)
             {
                 if(Kind(g)==SentenceKind.Command)FinishCommand(g.Id);

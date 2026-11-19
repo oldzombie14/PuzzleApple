@@ -48,8 +48,9 @@ namespace PuzzleApple.V5
             new Shot("floor.move",Focus.Sky),new Shot("floor.move.light",Focus.Floor),new Shot("floor.move.door",Focus.Floor)};
         Shot Profile(string rule)=>Array.Find(Profiles,s=>s!=null&&s.rule==rule)??Array.Find(migrated,s=>s.rule==rule);
         bool tutorialMoveShown;
-        public bool HasShot(string rule)=>enabledShots&&Profile(rule)!=null&&
-            !(rule=="light.move"&&Entry.journey&&Entry.journey.InTutorial&&tutorialMoveShown);
+        public bool HasShot(Cognition.CognitionState.Group group)=>enabledShots&&Profile(group.RuleId)!=null&&
+            (group.RuleId!="light.move" || !Entry.journey || !Entry.journey.InTutorial || !tutorialMoveShown ||
+             Entry.journey.Tutorial.SphereWillChange(group));
         void Update()
         {
             if(Playing&&CanInterrupt&&Keyboard.current!=null&&Keyboard.current.tabKey.wasPressedThisFrame)InterruptForEditing();
@@ -88,12 +89,10 @@ namespace PuzzleApple.V5
             var view=Entry.player.view;
             shotRoll=view.eulerAngles.z;
             var journey=Entry.journey;
-            bool corridorShot=(rule=="light.on"||rule=="light.off")&&journey&&journey.InCorridor&&
-                !(Entry.outdoor&&Entry.outdoor.IsOutside)&&!(Entry.portableClosure&&Entry.portableClosure.Isolated);
-            bool holdView=corridorShot;
-            bool roomMotion=journey && !journey.InCorridor && MotionEffect.MovesLamps(Entry.board.Catalog.Rules.FirstOrDefault(r=>r.Id==rule));
-            Quaternion start=view.rotation,goal=start;
-            if(!holdView)goal=LookAt(Target(current,roomMotion));
+            Quaternion start=view.rotation;
+            Vector3? point=LocalTarget(current,focusGroup);
+            bool holdView=!point.HasValue;
+            Quaternion goal=holdView?start:Nudge(start,point.Value+current.offset);
             for(float t=0;t<current.enter&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 float u=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,current.enter));
@@ -108,12 +107,6 @@ namespace PuzzleApple.V5
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 FadeCaption(t);
-                if(current.follow&&!holdView)
-                {
-                    var target=LookAt(Target(current,roomMotion));var e=view.eulerAngles;var d=target.eulerAngles;
-                    view.rotation=Quaternion.Euler(Mathf.MoveTowardsAngle(e.x,d.x,current.followSpeed*Time.unscaledDeltaTime),
-                        Mathf.MoveTowardsAngle(e.y,d.y,current.followSpeed*Time.unscaledDeltaTime),shotRoll);
-                }
                 yield return null;
             }
             for(float t=0;t<current.exit&&token==revision;t+=Time.unscaledDeltaTime)
@@ -129,60 +122,56 @@ namespace PuzzleApple.V5
         {
             if(caption)caption.alpha=1-Mathf.SmoothStep(0,1,elapsed/Mathf.Max(.001f,current.hold+current.exit));
         }
-        Vector3 Target(Shot shot,bool roomMotion)
+        Vector3? LocalTarget(Shot shot,Cognition.CognitionState.Group group)
         {
-            if(Entry.outdoor&&Entry.outdoor.IsOutside)return Entry.outdoor.World.Focus(shot.focus)+shot.offset;
+            if (group==null || shot.rule=="light.move.door" || shot.rule=="door.off") return null;
             var j=Entry.journey;
-            var group=focusGroup!=null&&focusGroup.RuleId==shot.rule?focusGroup:Entry.board.State.Groups.FirstOrDefault(g=>g.Effective&&g.RuleId==shot.rule);
-            if(Entry.outdoor&&Entry.outdoor.InChapter){
-                var room=Entry.outdoor.CurrentRoom;
-                var point=shot.focus==Focus.Floor?room.floor.bounds.center:room.puzzle?room.puzzle.ball.transform.position:room.lamp?room.lamp.position:room.paintingLens?room.paintingLens.bounds.center:room.floor.bounds.center;
-                return point+shot.offset;
+            var here=j.PlayerSpace;
+            if ((runtime.EffectScope(group)&here)==0) return null;
+            if (here==PassageJourney.LightSpace.Outdoor)
+            {
+                if (shot.focus==Focus.Door && (shot.rule!="door.on" || ((ISwitchableDoor)Entry.outdoor.World).WouldChange(true)))
+                    return Entry.outdoor.World.Focus(shot.focus);
+                return null;
             }
-            var candidates=shot.focus==Focus.Door?PassageJourney.LightSpace.FirstPath|PassageJourney.LightSpace.SphereRoom|PassageJourney.LightSpace.ReturnPath|PassageJourney.LightSpace.FarRoom:PassageJourney.LightSpace.All;
-            if(shot.focus==Focus.Door && DoorStateEffect.Handles(group)){
-                var changing=runtime.DoorPresentationScope(group);
-                if(changing!=0)candidates&=changing;
+            if (shot.focus==Focus.Door)
+            {
+                bool opening=shot.rule=="door.on";
+                switch(here)
+                {
+                    case PassageJourney.LightSpace.FarRoom:
+                    case PassageJourney.LightSpace.Ascent:
+                        if (opening?j.EndingDoor.WouldChange(true):j.EndingDoor.CanCycle) return j.EndingDoor.Leaf.position;
+                        break;
+                    case PassageJourney.LightSpace.FirstPath:
+                    case PassageJourney.LightSpace.SphereRoom:
+                        if (opening?j.WhiteDoor.WouldChange(true):j.CanCycleDoor) return j.Door.position;
+                        break;
+                    case PassageJourney.LightSpace.ReturnPath:
+                        if (opening?j.EntranceDoor.WouldChange(true):j.EntranceDoor.CanCycle) return j.EntranceDoor.Leaf.position;
+                        break;
+                }
+                return null;
             }
-            var space=runtime.PreferredSpace(group,group!=null?candidates&runtime.EffectScope(group):candidates);
-            if(space==PassageJourney.LightSpace.FarRoom && (shot.rule=="light.move" || shot.focus==Focus.Light)){
-                if(shot.rule=="light.move" && !j.LampsLit && j.ReturnStars && j.ReturnStars.Brightness>0 &&
-                    (runtime.EffectScope(group)&PassageJourney.LightSpace.ReturnPath)!=0)
-                    return j.ReturnStars.FocusNear(j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart-4)));
-                var eye=Entry.player.view;
-                var lamp=j.Lamps.Where(l=>l).OrderByDescending(l=>Vector3.Dot(eye.forward,(l.transform.position-eye.position).normalized)).FirstOrDefault();
-                if(lamp)return lamp.transform.position+shot.offset;
-            }
-            if(roomMotion && shot.focus!=Focus.Door && (space==PassageJourney.LightSpace.Chamber || space==PassageJourney.LightSpace.SphereRoom || space==PassageJourney.LightSpace.FarRoom)){
-                var centre=space==PassageJourney.LightSpace.SphereRoom?j.Tutorial.Fill.transform.position:space==PassageJourney.LightSpace.FarRoom?j.FarRoomFill.transform.position:Entry.chamberLight.RoomCentre;
-                var eye=Entry.player.view;var heading=Vector3.ProjectOnPlane(centre-eye.position,Vector3.up);
-                if(heading.sqrMagnitude<.01f)heading=Quaternion.Euler(0,eye.eulerAngles.y,0)*Vector3.forward;
-                return eye.position+heading;
-            }
-            if(shot.rule=="floor.move" && (runtime.Scope(group)&PassageJourney.LightSpace.ReturnPath)!=0 && j.Platform)
-                return Entry.player.StandingOn(j.Platform.Deck)?Entry.player.view.position+j.Platform.TravelDirection:j.Platform.Deck.bounds.center;
-            Vector3 target=Entry.player.view.position+Entry.player.view.forward*5;
-            if(shot.focus==Focus.Door)target=space==PassageJourney.LightSpace.FarRoom?j.EndingDoor.Leaf.position:space==PassageJourney.LightSpace.ReturnPath?j.EntranceDoor.Leaf.position:j.Door.position;
-            else if(space==PassageJourney.LightSpace.FarRoom)target=shot.focus==Focus.Floor?j.floorSurface.Surface.bounds.center:LampCentre(j);
-            else if(space==PassageJourney.LightSpace.SphereRoom)target=j.Tutorial.Sphere.position;
-            else if(space==PassageJourney.LightSpace.FirstPath)target=j.Stars.FocusNear(Entry.player.view.position);
-            else if(space==PassageJourney.LightSpace.ReturnPath)target=j.ReturnStars.FocusNear(Entry.player.view.position);
-            else if(space==PassageJourney.LightSpace.Ascent)target=j.Ascent.transform.TransformPoint(new Vector3(0,2,5));
-            else if(space==PassageJourney.LightSpace.Chamber)target=Entry.chamberLight.surface.bounds.center;
-            return target+shot.offset;
+            if (here==PassageJourney.LightSpace.ReturnPath && shot.rule=="floor.move" && j.Platform)
+                return j.Platform.Deck.bounds.center;
+            if (here==PassageJourney.LightSpace.SphereRoom && j.Tutorial.SphereWillChange(group))
+                return j.Tutorial.Sphere.position;
+            if (here==PassageJourney.LightSpace.Chamber &&
+                (LightStateEffect.Handles(group)?Entry.chamberLight.WouldChange(LightStateEffect.Commands(group,true)):Entry.chamberLight.CanMove(group.Signal)))
+                return Entry.chamberLight.surface.bounds.center;
+            return null;
         }
-        static Vector3 LampCentre(PassageJourney journey)
+
+        Quaternion Nudge(Quaternion start,Vector3 point)
         {
-            Vector3 sum=Vector3.zero;
-            foreach(var lamp in journey.Lamps)sum+=lamp.transform.position;
-            return journey.Lamps.Count>0?sum/journey.Lamps.Count:journey.Root.TransformPoint(new Vector3(0,0,journey.floorSurface.HoleCentreZ));
+            Vector3 delta=point-Entry.player.view.position;
+            if (delta.sqrMagnitude<.0001f) return start;
+            var desired=Quaternion.LookRotation(delta,Vector3.up).eulerAngles;
+            var initial=start.eulerAngles;
+            return Quaternion.Euler(Mathf.MoveTowardsAngle(initial.x,desired.x,10),
+                Mathf.MoveTowardsAngle(initial.y,desired.y,15),shotRoll);
         }
-        Quaternion LookAt(Vector3 point)
-        {
-            var delta=point-Entry.player.view.position;
-            return delta.sqrMagnitude<.001f?Level(Entry.player.view.rotation):Level(Quaternion.LookRotation(delta,Vector3.up));
-        }
-        Quaternion Level(Quaternion q){var e=q.eulerAngles;return Quaternion.Euler(e.x,e.y,shotRoll);}
         static Quaternion Blend(Quaternion a,Quaternion b,float t)
         {var x=a.eulerAngles;var y=b.eulerAngles;return Quaternion.Euler(Mathf.LerpAngle(x.x,y.x,t),Mathf.LerpAngle(x.y,y.y,t),x.z);}
         void Bars(float amount)=>SetBarsHeight(current==null?0:current.letterbox*amount);

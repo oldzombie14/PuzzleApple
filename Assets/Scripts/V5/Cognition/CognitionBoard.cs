@@ -35,6 +35,7 @@ namespace PuzzleApple.V5.Cognition
         public Font ChalkFont => chalkFont;
         [SerializeField] RectTransform surface;
         public RectTransform Surface => surface;
+        internal SentenceSelection Selection { get; private set; }
         public bool IsDragging => drag != null || periods && periods.Dragging;
         public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
         internal float PeriodVisibility(int id)=>views.TryGetValue(id,out var v)?Mathf.Clamp01(v.Fade.alpha/(v.Conflicted?ConflictAlpha:1)):0;
@@ -45,11 +46,16 @@ namespace PuzzleApple.V5.Cognition
             view.Fade.alpha = opacity * (view.Conflicted ? ConflictAlpha : 1);
             view.Fade.blocksRaycasts = opacity >= 1;
         }
-        public Rect GroupContentBounds(int id)
+        public Rect GroupContentBounds(int id, bool fitToInkHeight = false)
         {
             if (!views.TryGetValue(id, out var view)) return default;
             var rect = view.Root.rect;
             var bounds=new Rect(rect.xMin+view.InkStart,rect.yMin,view.InkEnd-view.InkStart,rect.height);
+            if (fitToInkHeight)
+            {
+                bounds.yMin = view.InkBottom;
+                bounds.yMax = view.InkTop;
+            }
             if(State.RequirePeriod && !view.Group.Independent){
                 var point=view.Root.InverseTransformPoint(PeriodEnd(id));
                 float radius=punctuation.diameter*.5f*view.FontScale;
@@ -183,6 +189,7 @@ namespace PuzzleApple.V5.Cognition
             public float TextCenterX;
             public float TextStart, TextEnd;
             public float InkStart, InkEnd;
+            public float InkBottom, InkTop;
             public RectTransform LeadingHandle;
             public CanvasGroup HandleFade;
             public bool AwaitHoverExit = true;
@@ -222,6 +229,7 @@ namespace PuzzleApple.V5.Cognition
             snapHint.gameObject.SetActive(false);
             previewBullet.gameObject.SetActive(false);
             if(State.RequirePeriod){periods=gameObject.AddComponent<PeriodTray>();periods.Initialize(this,dragLayer,ChalkColor);}
+            Selection = SentenceSelection.Create(this);
             State.Changed += Refresh;
             panel.OpenChanged.AddListener(OnPanelChanged);
             lastSurfaceSize = Surface.rect.size;
@@ -233,7 +241,7 @@ namespace PuzzleApple.V5.Cognition
             if (State != null) State.Changed -= Refresh;
             if (panel) panel.OpenChanged.RemoveListener(OnPanelChanged);
         }
-        void OnPanelChanged(bool open) { if (!open) { CancelDrag(); ClearRemovalEffects(); } }
+        void OnPanelChanged(bool open) { if (!open) { Selection?.Clear(); CancelDrag(); ClearRemovalEffects(); } }
         internal float PeriodScale(int id)=>views[id].FontScale;
         public Vector3 PeriodEnd(int id)
         {
@@ -288,9 +296,12 @@ namespace PuzzleApple.V5.Cognition
                 else if (old != null) view.FloatIndependently = old.FloatIndependently;
                 next[group.Id] = view;
             }
+            if (drag != null && (!next.TryGetValue(drag.GroupId, out var moving) || views[drag.GroupId] != moving))
+                CancelDrag();
             foreach (var old in previous)
                 if (!next.TryGetValue(old.Group.Id, out var same) || same != old)
                 { old.Root.name = "Retired group"; old.Root.gameObject.SetActive(false); Destroy(old.Root.gameObject); }
+            if (previous.Any(v => v.Group.Id == Selection.Selected && (!next.TryGetValue(v.Group.Id, out var sameView) || sameView.Signature != v.Signature))) Selection.Clear();
             views.Clear(); foreach (var pair in next) views.Add(pair.Key, pair.Value);
             if (centerFirstWord)
             {
@@ -341,6 +352,8 @@ namespace PuzzleApple.V5.Cognition
             v.InkStart = (v.Offsets[0] + SymbolUI.InkRect(v.Words[0]).xMin) * v.FontScale;
             v.InkEnd = (v.Offsets[v.Offsets.Count - 1] + SymbolUI.InkRect(v.Words[v.Words.Count - 1]).xMax) * v.FontScale;
             v.TextCenterX = (v.InkStart + v.InkEnd) * .5f;
+            v.InkBottom = v.Words.Min(word => SymbolUI.InkRect(word).yMin) * v.FontScale;
+            v.InkTop = v.Words.Max(word => SymbolUI.InkRect(word).yMax) * v.FontScale;
             if (!group.Independent)
             {
                 var hit = Instantiate(sentenceHandlePrefab,v.Mask);hit.name="Sentence handle";
@@ -509,7 +522,7 @@ namespace PuzzleApple.V5.Cognition
         void UpdateDragPreview()
         {
             var pos = drag.Point - drag.GrabOffset;
-            bool canJoin = drag.Whole || drag.WasIndependent;
+            bool canJoin = drag.GroupId != Selection.Selected && (drag.Whole || drag.WasIndependent);
             bool prepend = false;
             var target = canJoin ? SnapTarget(drag, out prepend) : null;
             var source = views[drag.GroupId];
@@ -598,7 +611,7 @@ namespace PuzzleApple.V5.Cognition
                     CancelDrag();State.ReturnToLibrary(d.GroupId,d.WordId,false);return;
                 }
             }
-            var target = d.Whole || d.WasIndependent ? SnapTarget(d, out var unused) : null;
+            var target = d.GroupId != Selection.Selected && (d.Whole || d.WasIndependent) ? SnapTarget(d, out var unused) : null;
             bool before = false; if (target != null) SnapTarget(d, out before);
             Vector2 position = d.Point - d.GrabOffset;
             CancelDrag();

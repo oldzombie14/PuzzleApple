@@ -14,9 +14,9 @@ namespace PuzzleApple.V5
         public WallPassage passageReveal;
         [Range(0,1)] public float passableProgress=.5f;
         public bool Unlocked {get;private set;}
-        // Progress is permanent. A physical door separately joins its two regions only while passable.
-        public bool Connected=>Unlocked && (whiteDoor?whiteDoor.DoorProgress>=passableProgress:
-            entranceDoor?entranceDoor.Progress>=passableProgress:chargeDoor?chargeDoor.Lift>=passableProgress:true);
+        // Progress is permanent. A physical door separately joins its two regions only until fully closed.
+        public bool Connected=>Unlocked && (whiteDoor?whiteDoor.DoorProgress>0:
+            entranceDoor?entranceDoor.Progress>0:chargeDoor?chargeDoor.Lift>0:true);
         public Space BoundarySpaces=>requiresSpaces|unlocksSpaces;
         public static Space DoorBoundary(Component owner){
             foreach(var gate in active)

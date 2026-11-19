@@ -17,10 +17,12 @@ namespace PuzzleApple.V5
         Vector3 dockPosition;
         float dockTime;
         public bool Docked=>docked;
+        public float ChargePower => journey.LightStyle.LampIntensity(transform.localScale.x);
+        public bool AtChargeDoor { get; private set; }
         public int SlotIndex {get;set;}
-        public void DockAtDoor(){
+        public void DockAtDoor(bool atChargeDoor=true){
             if(docked)return;
-            docked=true;dockPosition=body.position;dockTime=0;
+            AtChargeDoor=atChargeDoor;docked=true;dockPosition=body.position;dockTime=0;
         }
         void Hover(){
             dockTime+=Time.fixedDeltaTime;

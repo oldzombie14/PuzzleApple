@@ -17,7 +17,6 @@ namespace PuzzleApple.V5
         readonly Dictionary<int,string> pendingTakeovers=new Dictionary<int,string>();
         readonly HashSet<CognitionSignal> applied=new HashSet<CognitionSignal>();
         readonly Dictionary<CognitionSignal,PassageJourney.LightSpace> appliedScopes=new Dictionary<CognitionSignal,PassageJourney.LightSpace>();
-        readonly Dictionary<int,PassageJourney.LightSpace> commandOrigins=new Dictionary<int,PassageJourney.LightSpace>();
         PassageJourney.LightSpace currentScope;
         public PassageJourney.LightSpace Scope(CognitionState.Group group)=>entry.journey.SentenceScope();
         public PassageJourney.LightSpace DoorPresentationScope(CognitionState.Group group)=>doorState.ChangingSpaces(group);
@@ -27,23 +26,10 @@ namespace PuzzleApple.V5
             // Presentation may choose one focus; effects visit every eligible object in scope.
             return Scope(group);
         }
-        public PassageJourney.LightSpace PreferredSpace(CognitionState.Group group,PassageJourney.LightSpace candidates){
-            candidates&=Scope(group);if(candidates==0)return 0;
-            var origin=entry.journey.PlayerSpace;
-            if(group!=null && !commandOrigins.TryGetValue(group.Id,out origin))commandOrigins[group.Id]=origin=entry.journey.PlayerSpace;
-            if((candidates&origin)!=0)return origin;
-            var order=new[]{PassageJourney.LightSpace.Chamber,PassageJourney.LightSpace.FirstPath,PassageJourney.LightSpace.SphereRoom,
-                PassageJourney.LightSpace.ReturnPath,PassageJourney.LightSpace.FarRoom,PassageJourney.LightSpace.Ascent,
-                PassageJourney.LightSpace.Outdoor,PassageJourney.LightSpace.Gallery,PassageJourney.LightSpace.Garden,PassageJourney.LightSpace.Vitruvian};
-            int index=System.Array.IndexOf(order,origin),distance=int.MaxValue;PassageJourney.LightSpace nearest=0;
-            for(int i=0;i<order.Length;i++)if((candidates&order[i])!=0 && System.Math.Abs(i-index)<=distance){distance=System.Math.Abs(i-index);nearest=order[i];}
-            return nearest;
-        }
         void Update(){ReevaluateScope();motion?.TrackLampControl();}
         public void ReevaluateScope(){
             if(!entry || !entry.Entered || entry.board.State==null)return;
             var next=entry.journey.SentenceScope();if(next==currentScope)return;
-            if((currentScope&next)!=currentScope)commandOrigins.Clear();
             currentScope=next;
             // Only retarget effects already committed; pending presentation still owns its start.
             var groups=entry.board.State.Groups.Where(g=>g.Effective && previous.TryGetValue(g.Id,out var rule) && rule==g.RuleId).OrderBy(g=>g.Established).ToArray();
@@ -82,7 +68,6 @@ namespace PuzzleApple.V5
 
         public void ChangeSpace()
         {
-            commandOrigins.Clear();
             currentScope=entry.journey.SentenceScope();
             doorState.ChangeSpace();
             illumination.Apply(this);
@@ -127,8 +112,6 @@ namespace PuzzleApple.V5
                 .Where(g=>!MotionFrozen || !WorldFlow(g)
                     || (previous.TryGetValue(g.Id,out var activeRule) && activeRule==g.RuleId))
                 .OrderBy(g=>g.Established).ToArray();
-            foreach(var id in commandOrigins.Keys.Where(id=>!groups.Any(g=>g.Id==id)).ToArray())commandOrigins.Remove(id);
-            foreach(var g in groups)if(!commandOrigins.ContainsKey(g.Id))commandOrigins[g.Id]=entry.journey.PlayerSpace;
             if(state.RequirePeriod){
                 var acceptedIds=groups.Select(g=>g.Established);
                 var rejectedIds=state.Groups.Where(g=>g.Conflicted).Select(g=>g.Established);
@@ -187,7 +170,7 @@ namespace PuzzleApple.V5
             {
                 bool changed=VisibleChange(g);
                 if(!WorldFlow(g))entry.feedback.Play(g.Id,changed);
-                if(changed&&!MotionFrozen&&!(entry.outdoor&&entry.outdoor.InChapter)&&shot==null&&presentation.HasShot(g.RuleId)
+                if(changed&&!MotionFrozen&&!(entry.outdoor&&entry.outdoor.InChapter)&&shot==null&&presentation.HasShot(g)
                     &&lightState.ShotAllowed(g))shot=g;
             }
             if(shot!=null&&!entry.Busy)

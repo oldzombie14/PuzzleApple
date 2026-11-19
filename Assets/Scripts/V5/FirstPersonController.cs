@@ -35,6 +35,7 @@ namespace PuzzleApple.V5
         public float VerticalVelocity=>vertical;
         public void Launch(Vector3 velocity){launchVelocity=Vector3.ProjectOnPlane(velocity,Vector3.up);vertical=velocity.y;}
         Quaternion panelRotation;
+        float viewRoll;
         float pitch,vertical,idleTime,panelSway,panelPitch;
 
         int closedFrame=-1;
@@ -72,10 +73,11 @@ namespace PuzzleApple.V5
         }
         public void AdoptCurrentView()
         {
+            viewRoll=view.eulerAngles.z;
             var forward=view.forward;
             float yaw=Mathf.Atan2(forward.x,forward.z)*Mathf.Rad2Deg;
             pitch=-Mathf.Asin(Mathf.Clamp(forward.y,-1,1))*Mathf.Rad2Deg;
-            transform.rotation=Quaternion.Euler(0,yaw,0);view.localRotation=Quaternion.Euler(pitch,0,0);
+            transform.rotation=Quaternion.Euler(0,yaw,0);view.localRotation=Quaternion.Euler(pitch,0,viewRoll);
             panelRotation=transform.rotation;idleTime=0;
         }
         void Update()
@@ -143,7 +145,7 @@ namespace PuzzleApple.V5
             carrierTravel=Vector3.zero;
             float sway=PanelOpen?(Mathf.Sin(idleTime*.5f)*panelSway+Mathf.Sin(idleTime*.37f)*panelPitch)*Mathf.Clamp01(idleTime*.5f):0;
 
-            view.localRotation=Quaternion.Euler(pitch+sway,0,0);view.localPosition=normalView;
+            view.localRotation=Quaternion.Euler(pitch+sway,0,viewRoll);view.localPosition=normalView;
         }
     }
 }

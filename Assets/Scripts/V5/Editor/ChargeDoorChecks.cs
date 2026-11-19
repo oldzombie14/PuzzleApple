@@ -45,8 +45,8 @@ namespace PuzzleApple.V5.Editor
             var wall=j.Root.Find("Room far wall").GetComponent<Renderer>();
             var reveal=door.transform.Find("Stone reveal");
             var stone=reveal.GetComponent<Renderer>();
-            Check(stone.sharedMaterial.shader==j.lampMaterial.shader &&
-                door.Leaf.GetComponent<Renderer>().sharedMaterial==stone.sharedMaterial,"door and niche use plain lamp HDR material without wall outlines");
+            Check(stone.sharedMaterial.shader==wall.sharedMaterial.shader &&
+                door.Leaf.GetComponent<Renderer>().sharedMaterial==stone.sharedMaterial,"door and niche use the wall shader with independent emission without wall outlines");
             Check(j.WordAt(reveal.GetComponent<MeshCollider>(),2)=="door","bevel shares the door interaction");
             var floor=j.floorSurface.Surface.transform;
             var bridge=door.transform.Find("Doorway floor");
@@ -55,12 +55,12 @@ namespace PuzzleApple.V5.Editor
             Check(Vector3.Distance(roomEdge,bridgeEdge)<.001f && bridge.GetComponent<Renderer>().sharedMaterial==j.floorSurface.Surface.sharedMaterial,"level floor meets without overlapping the threshold");
             s.TryAcquireSentence("ending.reject","positive door",out var denied);
             yield return Wait(()=>s.Find(denied.Id)==null,"rejected command retires");
-            Check(j.DoorProgress==1 && j.EntranceDoor.Progress==1 && door.Lift==0,"unpowered slab stays closed while other eligible doors open");
+            Check(j.DoorProgress==0 && j.EntranceDoor.Progress==1 && door.Lift==0,"only the local entrance opens, without recruiting the white door mid-command");
             s.TryAcquireSentence("ending.on","positive light");yield return Wait(()=>j.Brightness==1,"lamps lit");
             s.TryAcquireSentence("ending.gather","light move door",out var gather);
             // Global scope also waits for tutorial spheres travelling across their room.
             yield return Wait(()=>s.Find(gather.Id)==null,"gather command retires",90);
-            Check(j.Lamps.All(l=>l.Docked),"all lamps dock outside the door");
+            Check(j.Lamps.All(l=>l.Docked) && j.Lamps.Any(l=>!l.AtChargeDoor) && j.Lamps.Where(l=>l.AtChargeDoor).Sum(l=>l.ChargePower)>=j.ChargePowerRequired,"both doors receive lamps and the slab receives enough power");
             yield return Wait(()=>door.Charged,"door glow plus all docked lamps fill total energy");
             var strips=door.transform.Cast<Transform>().Where(t=>t.name=="Charge fill").ToArray();
             Check(strips.Length==3 && strips.All(t=>t.gameObject.activeSelf) && strips[0].localPosition.x<0 && strips[2].localPosition.x>0,"continuous three-sided fill reaches the right foot");
@@ -102,25 +102,13 @@ namespace PuzzleApple.V5.Editor
             p.Teleport(j.Root.TransformPoint(new Vector3(0,.12f,j.RoomStart+2)),j.Root.rotation);
             p.MovementLocked=true;yield return Wait(()=>j.InSecondRoom,"current room selects charging anchor");
             var show=e.sentenceRuntime.presentation;show.enabledShots=true;
+            var viewBefore=p.view.rotation;
             s.TryAcquireSentence("corridor.to.gate","light move door",out var gather);
             yield return Wait(()=>show.Playing && show.CanInterrupt,"gather shot starts and locks target");
-            Check(Vector3.Angle(p.view.forward,(d.Leaf.position-p.view.position).normalized)<3,"shot faces the selected recessed door");
+            Check(Quaternion.Angle(p.view.rotation,viewBefore)<.1f,"gather preserves the current view");
             yield return Wait(()=>s.Find(gather.Id)==null && d.Charged,"corridor command reaches gate",90);
             Check(j.Lamps.All(l=>l.Docked && d.transform.InverseTransformPoint(l.transform.position).z<0) && !j.DoorOpen,"lamps stay outside the energized threshold");
-            var shot=new SentencePresentation.Shot("light.move",SentencePresentation.Focus.LightGroup);
-            var target=typeof(SentencePresentation).GetMethod("Target",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
-            Vector3 Aim()=> (Vector3)target.Invoke(show,new object[]{shot,true});
-            var mouth=j.Root.TransformPoint(new Vector3(0,1.5f,j.RoomStart));
-            p.Teleport(mouth+j.Root.forward*7-Vector3.up*1.4f,Quaternion.LookRotation(-j.Root.forward));
-            yield return Wait(()=>j.InSecondRoom,"camera samples the far room");
-            Check(j.Root.InverseTransformPoint(Aim()).z>=j.RoomStart,"lit room keeps its local motion focus even facing away");
-            p.Teleport(mouth+j.Root.forward*1.5f-Vector3.up*1.4f,Quaternion.LookRotation(-j.Root.forward));
-            yield return null;
-            Check(j.Lamps.Any(l=>Vector3.Distance(l.transform.position,Aim())<.05f),"a lit room keeps its lamp as the subject near the door");
-            p.Teleport(mouth+j.Root.forward*8-Vector3.up*1.4f,j.Root.rotation);
-            j.SetLights(false,PassageJourney.LightSpace.FarRoom);
-            yield return Wait(()=>!j.LampsLit,"dark far room");
-            Check(j.Root.InverseTransformPoint(Aim()).z<j.RoomStart && j.ReturnStars.Brightness>0,"dark room motion focuses the still-lit stars in its unlocked scope");
+            Check(j.Lamps.Any(l=>l.AtChargeDoor) && j.Lamps.Any(l=>!l.AtChargeDoor),"gather reaches both doors");
             Result="PASS: all unpowered commands, rejected feedback, corridor camera and approach, parked lamps and independent swing door";
         }
         public static void RunEnergy(){

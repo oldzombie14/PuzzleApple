@@ -25,7 +25,9 @@ namespace PuzzleApple.V5.Editor
             Check(j.SentenceScope()==(start|middle|Space.FarRoom),"two open gates join unlocked regions");
             var motion=VitruvianChecks.Say(b,"light","move");yield return null;yield return null;
             Check(rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"sustained sentence reaches connected room three");
-            j.SetDoor(false);yield return Wait(()=>j.DoorProgress==0,"close white door");yield return null;
+            j.SetDoor(false);yield return Wait(()=>j.DoorProgress<.45f && j.DoorProgress>0,"closing below first-unlock threshold");
+            Check(j.SentenceScope()==(start|middle|Space.FarRoom) && rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"partly closed door still connects both sides");
+            yield return Wait(()=>j.DoorProgress==0,"close white door");yield return null;
             Check(j.SentenceScope()==start && !rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"outside side stops at closed white door");
             Check((ProgressLock.Accessible(Space.All)&Space.FarRoom)!=0,"closing preserves permanent progress");
             p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength+4)),j.Root.rotation);yield return null;yield return null;
@@ -35,6 +37,8 @@ namespace PuzzleApple.V5.Editor
             p.Teleport(j.EndingDoor.RoomLanding,j.EndingDoor.transform.rotation);yield return null;yield return null;
             Check(j.SentenceScope()==Space.FarRoom,"room three side stops at its entrance and unopened exit");
             var open=VitruvianChecks.Say(b,"positive","door");
+            yield return Wait(()=>j.EntranceDoor.Progress>0 && j.EntranceDoor.Progress<.45f,"first opening frames");
+            Check(j.SentenceScope()==(middle|Space.FarRoom),"unlocked membrane reconnects before passable height");
             yield return Wait(()=>j.EntranceDoor.Progress==1 && b.State.Find(open.Id)==null,"boundary entrance can reopen from its inside");
             Check(j.DoorProgress==0 && j.SentenceScope()==(middle|Space.FarRoom),"opening command does not recruit doors across its original boundary");
             b.State.ClearWorkspace();

@@ -24,12 +24,13 @@ namespace PuzzleApple.V5.Cognition
                 board.RemoveToken(groupId,WordId,wholeSentence);
                 e.Use();return;
             }
-            if (e.button != PointerEventData.InputButton.Left) return;
+            if (e.button != PointerEventData.InputButton.Left || wholeSentence) return;
+            board.Selection.PressWord(groupId);
             pressed = true; began = false; pointer = e.position;
         }
         public void OnBeginDrag(PointerEventData e)
-        { pointer = e.position; if (pressed) Begin(); }
-        void Begin() { board.BeginDrag(groupId, WordId, wholeSentence, pointer); began = board.IsDragging; }
+        { if (pressed) Begin(); }
+        void Begin() { board.BeginDrag(groupId, WordId, board.Selection.Selected==groupId, pointer); began = board.IsDragging; }
         public void OnDrag(PointerEventData e) { pointer = e.position; if (began) board.MoveDrag(pointer); }
         public void OnPointerUp(PointerEventData e) { Finish(e); }
         public void OnEndDrag(PointerEventData e) { Finish(e); }

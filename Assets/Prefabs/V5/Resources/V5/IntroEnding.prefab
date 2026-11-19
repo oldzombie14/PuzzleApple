@@ -115,9 +115,9 @@ MonoBehaviour:
   strainClip: {fileID: 0}
   slamClip: {fileID: 0}
   lesson: {fileID: 11400000, guid: cbacd8e7d5b91e34b9dcb27adba701c9, type: 2}
-  baseEnergy: 0.03
+  baseEnergy: 0.005
   doorCapacity: 0.4
-  dockedCapacity: 0.57
+  dockedCapacity: 0.595
   passingCapacity: 0.1
   initialEnergy: 0.15
   incompleteLimit: 0.95

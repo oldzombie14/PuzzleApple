@@ -118,10 +118,10 @@ namespace PuzzleApple.V5.Editor
             var handle=entrance.transform.Find("Round handle").GetComponent<Renderer>();
             var a=new MaterialPropertyBlock();var c=new MaterialPropertyBlock();original.GetPropertyBlock(a);handle.GetPropertyBlock(c);
             Check(handle.sharedMaterial==original.sharedMaterial && c.GetFloat("_RoundOutline")==a.GetFloat("_RoundOutline") && c.GetFloat("_RoundOutline")==1 && c.GetFloat("_CorridorPureWhite")==a.GetFloat("_CorridorPureWhite"),"room three handle copies room two material and runtime shading");
-            rt.presentation.enabledShots=true;var entranceFocus=entrance.Leaf.position;
+            rt.presentation.enabledShots=true;var beforeClose=p.view.rotation;
             var close=VitruvianChecks.Say(b,"negative","door");
             yield return Wait(()=>rt.presentation.Playing && rt.presentation.CanInterrupt,"global close presentation begins");
-            Check(Vector3.Angle(p.view.forward,entranceFocus-p.view.position)<3,"room-side close camera shows the eligible entrance rather than the unpowered slab");
+            Check(Quaternion.Angle(p.view.rotation,beforeClose)<.1f,"off door preserves the view");
             yield return Wait(()=>entrance.Progress<.8f && j.DoorProgress<.8f,"room-side off door closes both eligible doors");
             Check(charge.Lift==0 && !charge.Charged,"unpowered charge door does not block the other doors");
             yield return Wait(()=>entrance.Progress==0 && j.DoorProgress==0 && s.Find(close.Id)==null,"global close waits for both doors and retires");
@@ -130,7 +130,10 @@ namespace PuzzleApple.V5.Editor
             yield return new WaitForEndOfFrame();
             VitruvianChecks.Capture(p,handle.bounds.center+entrance.transform.TransformDirection(new Vector3(1,.25f,-1.6f)),handle.bounds.center,"room-three-handle");
             var open=VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(()=>entrance.Progress==1 && j.DoorProgress==1 && s.Find(open.Id)==null,"on door opens all eligible doors from room three");
+            yield return Wait(()=>entrance.Progress==1 && s.Find(open.Id)==null,"on door opens the boundary from room three");
+            Check(j.DoorProgress==0,"the closed entrance excludes the white door at command start");
+            open=VitruvianChecks.Say(b,"positive","door");
+            yield return Wait(()=>j.DoorProgress==1 && s.Find(open.Id)==null,"a new command reaches the reconnected white door");
             var cycle=VitruvianChecks.Say(b,"door","move");
             yield return Wait(()=>entrance.Progress<.7f && j.DoorProgress<.7f,"door move reaches both unlocked hinged doors");
             s.ReturnToLibrary(cycle.Id,0,true);yield return null;yield return null;
@@ -310,23 +313,31 @@ namespace PuzzleApple.V5.Editor
             Check(visibleHint,"nearest groove uses a visible native material property");
             before=d.PassingEnergy;first.position=d.transform.TransformPoint(new Vector3(0,2,-8));yield return new WaitForSeconds(.4f);
             Check(d.PassingEnergy<before,"passing energy and hint fade after departure");
-            for(int i=0;i<j.Lamps.Count-1;i++){
-                var lamp=j.Lamps[i];var body=lamp.GetComponent<Rigidbody>();body.constraints=RigidbodyConstraints.FreezeRotation;
-                body.position=d.Slot(i,j.Lamps.Count);lamp.DockAtDoor();
+            float supply=0;
+            DriftingLight last=null;
+            var sorted=j.Lamps.OrderByDescending(l=>l.ChargePower).ToArray();
+            for(int i=0;i<sorted.Length;i++){
+                var lamp=sorted[i];var body=lamp.GetComponent<Rigidbody>();
+                body.constraints=RigidbodyConstraints.FreezeRotation;
+                bool atSlab=supply<j.ChargePowerRequired;
+                body.position=atSlab?d.Slot(i,sorted.Length):j.Root.TransformPoint(new Vector3(3,1,j.RoomStart+1));
+                if(atSlab){
+                    supply+=lamp.ChargePower;
+                    if(supply>=j.ChargePowerRequired){last=lamp;continue;}
+                }
+                lamp.DockAtDoor(atSlab);
             }
-            var last=j.Lamps.Last();last.enabled=false;
-            last.GetComponent<Rigidbody>().position=d.Slot(j.Lamps.Count-1,j.Lamps.Count)-d.transform.forward*.6f;
-            yield return Wait(()=>Mathf.Abs(d.TotalEnergy-d.incompleteLimit)<.0001f,"passing last lamp holds charge at the incomplete cap");
-            last.GetComponent<Rigidbody>().constraints=RigidbodyConstraints.FreezeRotation;last.enabled=true;
-            var gather=VitruvianChecks.Say(b,"light","move","door");
-            float deadline=Time.time+15;bool sawFinalDock=false;
+            Check(last && sorted.Any(l=>l.Docked&&!l.AtChargeDoor),"a subset of larger lamps can supply the slab");
+            float expected=d.dockedCapacity*(supply-last.ChargePower)/j.ChargePowerRequired;
+            yield return Wait(()=>Mathf.Abs(d.DockedEnergy-expected)<.0001f,"energy follows the size of bright lamps docked at the charge door");
+            Check(!d.Charged,"underpowered docks and passing lights do not unlock the slab");
+            last.DockAtDoor();
+            float deadline=Time.time+15;
             while(!d.Charged && Time.time<deadline){
                 float previous=d.TotalEnergy;yield return null;
-                sawFinalDock|=j.Lamps.All(l=>l.Docked);
                 Check(d.TotalEnergy-previous<=d.chargeRate*Time.deltaTime+.0001f,"last lamp docking never jumps the charge animation");
             }
-            Check(sawFinalDock && d.Charged,"door plus every docked lamp smoothly reaches full");
-            yield return Wait(()=>s.Find(gather.Id)==null,"gather command retires after docking");
+            Check(d.Charged,"sufficient local lamp power smoothly reaches full");
             Check(d.DoorEnergy==d.doorCapacity && Mathf.Abs(d.DockedEnergy-d.dockedCapacity)<.001f && d.Warmth==0,"full white charge has authored capacities");
             boost=VitruvianChecks.Say(b,"light","light");yield return null;yield return null;yield return new WaitForSeconds(.2f);
             Check(d.Warmth>0 && d.Warmth<.5f,"full boost begins a slow color transition");yield return Wait(()=>d.Warmth==1,"warmth settles after full charge");
@@ -343,7 +354,7 @@ namespace PuzzleApple.V5.Editor
             plain=VitruvianChecks.Say(b,"light","door");yield return Wait(()=>d.DoorGlow==1,"restoring light while motion is frozen");s.ReturnToLibrary(freeze.Id,0,true);
             e.RequestExit();yield return Wait(()=>e.DialogReady,"close world");before=d.TotalEnergy;yield return new WaitForSecondsRealtime(.3f);Check(d.TotalEnergy==before,"closed world retains energy");
             e.CancelExit();e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"reopen world");
-            Result="PASS: actual click lesson once, seamless ownership, .15 start/.03 base, four capped sources, necessary full gate, plain door rate, 1.5x boost, delayed subtle color, passing hint, pause and closure";
+            Result="PASS: lesson ownership, dark base, weighted docked power, boost, warm color, passing hint, pause and closure";
         }
     }
 }

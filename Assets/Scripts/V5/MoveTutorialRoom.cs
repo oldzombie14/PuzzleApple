@@ -44,6 +44,14 @@ namespace PuzzleApple.V5
         bool IBrightenableLight.Lit => AnyLit;
         // Brightest sphere glow, 0 dark to 1 lit; drives the sphere-sourced "move" memory.
         public float SphereBrightness => Mathf.SmoothStep(0, 1, lamps.Count == 0 ? 0 : lamps.Max(lamp => lamp.level));
+        public bool ExitClearedOnce { get; private set; }
+        public bool SphereWillChange(CognitionState.Group group)
+        {
+            if (ExitClearedOnce || !ExitBlocked || group == null) return false;
+            if (LightStateEffect.Handles(group)) return sphere.level != (LightStateEffect.Commands(group,true) ? 1 : 0);
+            return MotionEffect.MovesLamps(group.Rule) && sphere.isOn &&
+                (group.Signal == CognitionSignal.LightMove || CanDirect(sphere,group.Signal));
+        }
         public bool ExitBlocked
         {
             get
@@ -273,6 +281,7 @@ namespace PuzzleApple.V5
 
         void Update()
         {
+            if (sphere != null && !ExitClearedOnce && !ExitBlocked) ExitClearedOnce = true;
             if (fading && (!targetOn || lamps.TrueForAll(lamp => lamp.level >= 1))) roomLevel = RoomLighting.AdvanceLevel(roomLevel, targetOn ? 1 : 0,
                 Time.unscaledDeltaTime / Mathf.Max(.01f, journey.lightFadeDuration));
             foreach(var lamp in lamps) UpdateLamp(lamp);

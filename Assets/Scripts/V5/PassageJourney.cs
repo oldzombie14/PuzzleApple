@@ -14,7 +14,10 @@ namespace PuzzleApple.V5
         [Min(.1f)] public float platformSpeed=2.2f;
         public PassagePlatform Platform {get;private set;}
         public Vector3 roomSize=new Vector3(16,8,18);
-        [Range(2,24)] public int lampCount=10;
+        [Range(2,24)] public int lampCount=14;
+        public float ChargePowerRequired { get; private set; }
+        const int ReferenceLampCount=10;
+        float LampOutputScale => Mathf.Min(1,(float)ReferenceLampCount/lampCount);
         public Vector2 lampScaleRange=new Vector2(.12f,.35f);
         [Tooltip("Shared indoor lighting rule: lamp output from lamp size, room fill from total light. Empty uses Resources/V5/RoomLightStyle.")]
         public RoomLightStyle lightStyle;
@@ -216,8 +219,9 @@ namespace PuzzleApple.V5
                 go.GetComponent<BoxCollider>().enabled=false;Destroy(go.GetComponent<BoxCollider>());var sphere=go.AddComponent<SphereCollider>();sphere.radius=.65f;
                 var motion=go.AddComponent<DriftingLight>();motion.journey=this;motion.speed=lampSpeed;motion.SlotIndex=i;
                 var lightObject=new GameObject("Soft local light",typeof(Light));lightObject.transform.SetParent(go.transform,false);
-                var light=lightObject.GetComponent<Light>();light.type=LightType.Point;light.range=LightStyle.LampRange(LightStyle.LampIntensity(scale));light.intensity=0;light.shadows=LightShadows.Soft;light.cullingMask=~0;motion.glow=light;
+                var light=lightObject.GetComponent<Light>();light.type=LightType.Point;light.range=LightStyle.LampRange(LightStyle.LampIntensity(scale)*LampOutputScale);light.intensity=0;light.shadows=LightShadows.Soft;light.cullingMask=~0;motion.glow=light;
                 r.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;lamps.Add(motion);
+                ChargePowerRequired += motion.ChargePower * ReferenceLampCount / lampCount;
             }
             if(!collideLamps)for(int a=0;a<lamps.Count;a++)for(int b=a+1;b<lamps.Count;b++)Physics.IgnoreCollision(lamps[a].GetComponent<SphereCollider>(),lamps[b].GetComponent<SphereCollider>());
             RefreshCollisionExclusions();
@@ -531,7 +535,7 @@ namespace PuzzleApple.V5
             float boosted=amount*(entry.sentenceRuntime?entry.sentenceRuntime.LampBoost(LightSpace.FarRoom):1);
             lampInk.SetColor("_BaseColor",Color.Lerp(new Color(.12f,.12f,.12f),Color.white,amount));
             lampInk.SetColor("_EmissionColor",emission*(boosted*emissionStrength));
-            foreach(var l in lamps)l.glow.intensity=LightStyle.LampIntensity(l.transform.localScale.x)*boosted;
+            foreach(var l in lamps)l.glow.intensity=LightStyle.LampIntensity(l.transform.localScale.x)*boosted*LampOutputScale;
         }
         void UpdateDoorAppearance()
         {

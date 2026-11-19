@@ -35,6 +35,7 @@ Shader "PuzzleApple/V5/World Surface"
         _MuralEnabled("Mural enabled",Float)=0
         [HideInInspector] _Dissolve("Surface fade",Range(0,1))=0
         [HideInInspector] _RoomExitWidth("Far doorway opening",Float)=0
+        [HideInInspector] _ChargeDoorEmission("Charge door emission",Float)=0
         [HideInInspector] _NicheFillAnchor("Room-side fill sample",Vector)=(0,0,0,0)
         [HideInInspector] _IsDoorLeaf("Door leaf",Float)=0
         [HideInInspector] _DoorBackBrightness("Room-side brightness",Float)=0
@@ -94,6 +95,7 @@ Shader "PuzzleApple/V5/World Surface"
             float4 _PassageOrigin,_PassageRight,_PassageUp,_PassageSize;
             float4 _InkRoomMin,_InkRoomMax;
             float4 _InkColor,_NicheFillAnchor;
+            float _ChargeDoorEmission;
             // Per-room diffuse fill from RoomLightBalance (world AABBs, linear colour).
             float4 _RoomFillMin[4],_RoomFillMax[4],_RoomFillColor[4];
             float _RoomFillCount;
@@ -219,6 +221,7 @@ Shader "PuzzleApple/V5/World Surface"
                 }
                 if(!roomFace)result.rgb*=lerp(float3(1,1,1),_InkColor.rgb,ink);
                 if((_RoundOutline<.5||_RoundOutline>1.5)&&!(_SurfaceMode==1&&!roomFace&&_CorridorPureWhite>.5))result.rgb=MixFog(result.rgb,lighting.fogCoord);
+                result.rgb+=_ChargeDoorEmission;
                 float3 edges=min(p-_InteriorEdgeMin.xyz,_InteriorEdgeMax.xyz-p)*_PanelSize.xyz;
                 float3 axis=abs(_InteriorNormal.xyz);
                 float distance=axis.x>.5?min(edges.y,edges.z):(axis.y>.5?min(edges.x,edges.z):min(edges.x,edges.y));

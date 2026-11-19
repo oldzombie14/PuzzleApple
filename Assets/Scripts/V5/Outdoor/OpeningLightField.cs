@@ -24,7 +24,7 @@ namespace PuzzleApple.V5.Outdoor
         public int PlayerCount=>lamps.Count(l=>l && l.TryGetComponent<PlayerInstance>(out _));
         public void Remove(OpeningLight lamp)=>lamps.Remove(lamp);
         // Player-created lights share a world-space tip-to-tip diameter, including the tilted cube.
-        public const float CreatedDiameter=.42f;
+        public const float CreatedDiameter=.60f;
         internal const float StarAspect=.57735027f; // The corridor diamond has a 60-degree tip.
         GameObject CreateBody(InstanceShape shape)
         {

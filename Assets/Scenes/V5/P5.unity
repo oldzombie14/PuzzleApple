@@ -3329,7 +3329,7 @@ MonoBehaviour:
   glowVolume: {fileID: 445868993}
   pathLength: 18
   roomSize: {x: 16, y: 8, z: 18}
-  lampCount: 10
+  lampCount: 14
   lampScaleRange: {x: 0.12, y: 0.35}
   lightStyle: {fileID: 0}
   emissionStrength: 1.8

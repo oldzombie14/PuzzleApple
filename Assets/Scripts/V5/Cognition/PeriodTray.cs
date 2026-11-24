@@ -22,17 +22,15 @@ namespace PuzzleApple.V5.Cognition
     {
         CognitionBoard board;
         RectTransform layer;
-        PeriodGlyph ghost,ring;
+        PeriodGlyph ghost;
         readonly Dictionary<int,PeriodGlyph> attached=new Dictionary<int,PeriodGlyph>();
         readonly HashSet<int> returning=new HashSet<int>();
         Color chalk;
         int source;
-        float guide;
         PeriodStyle Style=>board.punctuation;
         public bool Dragging=>ghost;
         public void Initialize(CognitionBoard owner,RectTransform overlay,Color ink){
             board=owner;layer=overlay;chalk=ink;
-            ring=Glyph("Period first-click ripple",board.Surface,-1,false);ring.ring=true;
         }
         PeriodGlyph Glyph(string name,RectTransform parent,int id,bool touch){
             var token=new GameObject(name,typeof(RectTransform),typeof(PeriodGlyph)).GetComponent<PeriodGlyph>();
@@ -49,9 +47,12 @@ namespace PuzzleApple.V5.Cognition
                 if(!attached.TryGetValue(group.Id,out var token)||!token){
                     // Independent of word opacity, inside the panel mask and fade.
                     token=Glyph("Sentence period",board.Surface,group.Id,true);attached[group.Id]=token;
+                    token.guide=Glyph("Period prompt",token.rectTransform,group.Id,false);
+                    token.guide.ring=true;
                 }
                 if(token.wasSpoken!=group.Spoken){token.born=Time.unscaledTime;token.opacity=group.Spoken?1:CognitionBoard.ConflictAlpha;}
                 token.wasSpoken=group.Spoken;
+                token.transform.SetAsLastSibling();
                 Place(token);token.gameObject.SetActive(!returning.Contains(group.Id));
             }
             foreach(int id in attached.Keys.Where(id=>!active.Contains(id)).ToArray()){
@@ -64,13 +65,21 @@ namespace PuzzleApple.V5.Cognition
             token.rectTransform.localScale=Vector3.one*board.PeriodScale(token.group);
             token.canvasRenderer.SetAlpha(ghost && token.group==source?0:token.opacity*board.PeriodVisibility(token.group));
         }
-        public bool Interactable(int group)=>board.Panel.IsOpen&&!board.Panel.InputBlocked&&board.PeriodVisibility(group)>.99f;
+        internal void DetachForFade(int id,RectTransform parent){
+            if(!attached.Remove(id,out var token) || !token)return;
+            token.raycastTarget=false;
+            token.guide.gameObject.SetActive(false);
+            token.transform.SetParent(parent,true);
+        }
+        public bool Interactable(int group)=>board.Panel.IsOpen&&!board.Panel.InputBlocked&&board.State.Find(group)?.ExecutionLocked==false&&board.PeriodVisibility(group)>.99f;
         public void Click(int group){
             if(!Interactable(group)||board.IsDragging)return;
-            board.LearnedPeriod=true;ring.gameObject.SetActive(false);guide=0;board.State.Speak(group);
+            board.State.Speak(group);
         }
-        public void Pause(int group){
+        internal void RightClick(int group,PointerEventData e){
+            if(board.Selection.RemoveSelectedAt(e))return;
             if(!Interactable(group)||returning.Contains(group)||!attached.TryGetValue(group,out var token)||!token)return;
+            e.Use();
             board.BeginRemovalEffect(token,token.canvasRenderer.GetAlpha());
             returning.Add(group);token.gameObject.SetActive(false);
             board.PauseSentence(group);StartCoroutine(ReturnAfterRemoval(group));
@@ -94,7 +103,8 @@ namespace PuzzleApple.V5.Cognition
             if(rect && RectTransformUtility.RectangleContainsScreenPoint(rect,screen)){
                 Destroy(dot.gameObject);Refresh();return;
             }
-            returning.Add(id);board.State.Unsay(id);StartCoroutine(FadeAndReturn(dot,id));
+            if(!board.State.Unsay(id)){Destroy(dot.gameObject);Refresh();return;}
+            returning.Add(id);StartCoroutine(FadeAndReturn(dot,id));
         }
         IEnumerator FadeAndReturn(PeriodGlyph dot,int id){
             for(float time=0;time<Style.returnSeconds;time+=Time.unscaledDeltaTime){
@@ -126,19 +136,23 @@ namespace PuzzleApple.V5.Cognition
                 var token=pair.Value;var group=board.State.Find(pair.Key);
                 if(!token||group==null)continue;
                 float breath=.5f-.5f*Mathf.Cos(2*Mathf.PI*(Time.unscaledTime-token.born)/Style.breathSeconds);
-                float alpha=group.Spoken||token.hovered?1:Mathf.Lerp(CognitionBoard.ConflictAlpha,1,breath);
+                bool prompt=board.Panel.IsOpen && !returning.Contains(group.Id) && board.State.CanPrompt(group);
+                bool waiting=group.AwaitingRetry && !prompt;
+                float alpha=waiting ? CognitionBoard.ConflictAlpha : group.Spoken||token.hovered?1:Mathf.Lerp(CognitionBoard.ConflictAlpha,1,breath);
                 token.opacity=group.Spoken?1:Mathf.MoveTowards(token.opacity,alpha,dt/Style.hoverSeconds);
                 token.raycastTarget=Interactable(pair.Key)&&(!ghost||source!=pair.Key);Place(token);
+                var guide=token.guide;
+                if (guide.gameObject.activeSelf!=prompt)
+                {
+                    guide.gameObject.SetActive(prompt);
+                    if (prompt) guide.born=Time.unscaledTime;
+                }
+                if (!prompt) continue;
+                float phase=Mathf.Repeat(Time.unscaledTime-guide.born,Style.rippleSeconds*1.6f);
+                float u=Mathf.Clamp01(phase/Style.rippleSeconds);
+                guide.rectTransform.localScale=Vector3.one*(Style.rippleScale+u*Style.rippleGrowth);
+                guide.canvasRenderer.SetAlpha((1-u)*Style.rippleOpacity*board.PeriodVisibility(group.Id));
             }
-            var first=board.State.Groups.FirstOrDefault(g=>!g.Independent&&g.Recognized&&!g.Spoken);
-            bool show=board.Panel.IsOpen&&!board.LearnedPeriod&&first!=null&&!returning.Contains(first.Id)&&!ghost;
-            ring.gameObject.SetActive(show);
-            if(!show){guide=0;return;}
-            guide=Mathf.Repeat(guide+dt,Style.rippleSeconds*1.6f);
-            float u=Mathf.Clamp01(guide/Style.rippleSeconds);
-            ring.transform.position=board.PeriodEnd(first.Id);
-            ring.rectTransform.localScale=Vector3.one*board.PeriodScale(first.Id)*(Style.rippleScale+u*Style.rippleGrowth);
-            ring.canvasRenderer.SetAlpha((1-u)*Style.rippleOpacity*board.PeriodVisibility(first.Id));
         }
     }
     [RequireComponent(typeof(CanvasRenderer))]
@@ -148,15 +162,15 @@ namespace PuzzleApple.V5.Cognition
         public PeriodTray owner;
         public int group;
         public float diameter,born,opacity;
+        internal PeriodGlyph guide;
         public bool ring,hovered,wasSpoken;
         bool pressed,dragged;
         public void OnPointerEnter(PointerEventData e){hovered=true;}
         public void OnPointerExit(PointerEventData e){hovered=false;}
         public void OnPointerDown(PointerEventData e){
             pressed=dragged=false;
-            if(!owner.Interactable(group))return;
-            if(e.button==PointerEventData.InputButton.Right){owner.Pause(group);e.Use();}
-            else if(e.button==PointerEventData.InputButton.Left)pressed=true;
+            if(e.button==PointerEventData.InputButton.Right)owner.RightClick(group,e);
+            else if(e.button==PointerEventData.InputButton.Left && owner.Interactable(group))pressed=true;
         }
         public void OnPointerUp(PointerEventData e){
             if(e.button==PointerEventData.InputButton.Left && pressed && !dragged && RectTransformUtility.RectangleContainsScreenPoint(rectTransform,e.position))owner.Click(group);

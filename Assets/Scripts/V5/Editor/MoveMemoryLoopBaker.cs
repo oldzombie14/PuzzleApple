@@ -26,7 +26,6 @@ namespace PuzzleApple.V5.Editor
             (new Vector2(70.9f, 193.8f), new Vector2(-69, 3), 7.6f, .80f),
         };
 
-        [MenuItem("PuzzleApple/V5/Bake Move Memory Loop")]
         public static string Bake()
         {
             var lit = new Texture2D(Width * Columns, Height * Rows, TextureFormat.RGB24, false);

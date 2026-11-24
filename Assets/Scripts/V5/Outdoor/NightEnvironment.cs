@@ -61,7 +61,7 @@ namespace PuzzleApple.V5.Outdoor
             bool ready=true;
             if(ready && (!Application.isPlaying || lamp && lamp.TransitionEnabled))
                 blend = Application.isPlaying && transitionDuration > 0
-                    ? Mathf.MoveTowards(blend, night ? 1 : 0, Time.unscaledDeltaTime / transitionDuration) : night ? 1 : 0;
+                    ? SentenceStateOutput.Advance(blend,night?1:0,Time.unscaledDeltaTime/transitionDuration,lamp?lamp.LightOutput:null) : night ? 1 : 0;
             Apply(blend);
             clouds.cloudsEnabled = blend < .98f;
             clouds.FollowFacing = WorldMoving;
@@ -85,10 +85,25 @@ namespace PuzzleApple.V5.Outdoor
             float cloudRadians=Vector3.Cross(ray,clouds.DriftDirection*clouds.ActualDriftSpeed).magnitude/distance;
             return projectedStar>.001f?cloudRadians/projectedStar*Mathf.Rad2Deg:0;
         }
+        internal Quaternion StarRotation => starRotation;
+        internal void RestoreRotation(Quaternion rotation)
+        {
+            starRotation = rotation;
+            if (skyInstance) skyInstance.SetMatrix("_StarRotation", Matrix4x4.Rotate(Quaternion.Inverse(starRotation)));
+        }
+        internal void RestoreBlend(float value)
+        {
+            blend = value;
+            if (isActiveAndEnabled && sun && daySky && nightSky && clouds)
+            {
+                Apply(blend);
+                clouds.cloudsEnabled = blend < .98f;
+            }
+        }
         public void ApplyCurrentLighting()=>Apply(blend);
         void Apply(float t)
         {
-            if (!skyInstance) skyInstance = new Material(nightSky) { name = "V4 night preview", hideFlags = HideFlags.HideAndDontSave };
+            if (!skyInstance) skyInstance = new Material(nightSky) { name = "Outdoor night preview", hideFlags = HideFlags.HideAndDontSave };
             skyInstance.SetColor("_DayZenith", daySky.GetColor("_Zenith"));
             skyInstance.SetColor("_DayHorizon", daySky.GetColor("_Horizon"));
             skyInstance.SetVector("_SunDirection", -sun.transform.forward);

@@ -28,9 +28,14 @@ namespace PuzzleApple.V5.Editor
                 Check(light.Collecting,"ordinary left press collects immediately even on a long frame");
                 light.AdvancePointer(false,false,true,0);yield return Until(()=>!light.Collecting);
                 Check(e.board.State.Knows("light"),"light acquired");
+                e.sentenceRuntime.presentation.enabledShots=false;
+                e.board.Panel.SetOpen(false);
+                Cursor.lockState=CursorLockMode.Locked;
+                yield return Until(()=>p.CanInteractWithWorld);
+                p.view.LookAt(light.transform);p.AdoptCurrentView();
                 e.board.State.TryAcquireSentence("test.off","negative light");
                 yield return Until(()=>!light.TargetOn);yield return null;
-                Check(light.Brightness>0,"gradual fade");
+                Check(light.Brightness>0 && light.LookingAtLight(),"emitting lamp remains collectible during gradual fade");
                 var hole=UnityEngine.Object.FindFirstObjectByType<WallPassage>();int chosen=hole.SelectedWall;
                 yield return Until(()=>light.Brightness<.7f);yield return null;
                 Check(hole.Reveal>0&&hole.Reveal<1,"passage and filaments reveal during light fade");
@@ -41,9 +46,10 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>light.Brightness==0);yield return null;
                 Check(!light.TryCollect(),"off light cannot collect");
                 Check(!hole.walls[chosen].GetComponent<Renderer>().enabled,"dark opening reveals the passage");
+                yield return Until(()=>!System.Linq.Enumerable.Any(e.board.State.Groups,g=>g.RuleId=="light.off"));
                 e.board.State.TryAcquireSentence("test.on","positive light");
-                var off=System.Linq.Enumerable.First(e.board.State.Groups,g=>g.RuleId=="light.off");
-                e.board.State.ReturnToLibrary(off.Id,0,true);
+                yield return Until(()=>light.Brightness>0);
+                Check(light.LookingAtLight(),"lamp is collectible as soon as emission returns");
                 yield return Until(()=>light.Brightness==1);
                 Check(hole.Revealed && hole.Reveal==1 && !hole.walls[chosen].GetComponent<Renderer>().enabled,"relighting preserves the revealed passage");
                 e.board.State.ClearWorkspace();yield return null;Check(light.TargetOn,"splitting preserves lamp state");

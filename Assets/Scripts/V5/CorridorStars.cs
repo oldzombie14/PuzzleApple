@@ -3,8 +3,11 @@ using UnityEngine;
 
 namespace PuzzleApple.V5
 {
-    public sealed class CorridorStars : MonoBehaviour, ISwitchableLight
+    public sealed class CorridorStars : MonoBehaviour, ISwitchableLight, ISentenceOutputState<CorridorStars.LightState>,
+        ISentenceOutputState<CorridorStars.FlightState>
     {
+        internal SentenceStateOutput LightOutput;
+        public SentenceMotionOutput MotionOutput {get;internal set;}
         sealed class Star
         {
             public Transform shape;
@@ -14,10 +17,10 @@ namespace PuzzleApple.V5
             Vector3 direction;
             float travel, roadContact, speed, flightOpacity = 1;
             Bounds tunnel, road;
-            public float age, period;
-            public float height, size=1, transitionAge, transitionDuration, startSize;
-            public float Opacity => Mathf.SmoothStep(0,1,size/.3f);
-            public bool targetOn=true, transitioning;
+            public StarLight light = new StarLight { size = 1, targetOn = true };
+            public float height;
+            public float Opacity => Mathf.SmoothStep(0,1,light.size/.3f);
+            public float FlightOpacity => flightOpacity;
             public void SetFlightBounds(float pathLength, float pathWidth, float doorHeight)
             {
                 // Reserve space for the fully grown star at any orientation.
@@ -30,6 +33,26 @@ namespace PuzzleApple.V5
                 ChooseFlight();
             }
 
+            public Flight CaptureFlight() => new Flight {
+                home = home, position = shape.localPosition, direction = direction, travel = travel,
+                speed = speed, opacity = flightOpacity
+            };
+            public void RestoreFlight(Flight flight)
+            {
+                home = flight.home;
+                shape.localPosition = flight.position;
+                direction = flight.direction;
+                speed = flight.speed;
+                travel = flight.travel;
+                flightOpacity = flight.opacity;
+                UpdateRoadContact();
+            }
+            void UpdateRoadContact()
+            {
+                roadContact = road.IntersectRay(new Ray(home,direction),out float hit)
+                    ? Mathf.Max(0,hit) : float.PositiveInfinity;
+            }
+
             void ChooseFlight()
             {
                 travel = 0;
@@ -37,14 +60,13 @@ namespace PuzzleApple.V5
                 direction = Random.onUnitSphere;
                 // Launch away from the nearby end wall, especially for doorway stars.
                 direction.z = home.z < tunnel.center.z ? Mathf.Abs(direction.z) : -Mathf.Abs(direction.z);
-                roadContact = road.IntersectRay(new Ray(home,direction),out float hit)
-                    ? Mathf.Max(0,hit) : float.PositiveInfinity;
+                UpdateRoadContact();
             }
 
             public void ResumeFlight(){
                 home=shape.localPosition;
                 travel=0;
-                roadContact=road.IntersectRay(new Ray(home,direction),out float hit)?Mathf.Max(0,hit):float.PositiveInfinity;
+                UpdateRoadContact();
             }
             public float AdvanceFlight(bool moving, float delta, float visualDelta)
             {
@@ -63,32 +85,33 @@ namespace PuzzleApple.V5
                 }
                 return flightOpacity;
             }
-            public void Advance(float delta,bool on,bool enabled,float fadeDuration,Vector3 viewer)
+            public void Advance(float delta,bool on,bool enabled,float fadeDuration,Vector3 viewer,float finishFraction=0)
             {
-                if(on!=targetOn)
+                if (!enabled) on = light.targetOn;
+                if(on!=light.targetOn)
                 {
-                    targetOn=on;transitioning=true;transitionAge=0;
-                    startSize=size;
+                    light.targetOn=on;light.transitioning=true;light.transitionAge=0;
+                    light.startSize=light.size;
                     float distanceSquared=(shape.position-viewer).sqrMagnitude;
                     bool distantSmall=distanceSquared>=144 && height*height<.025f*.025f*distanceSquared;
                     // Shorten each star's remaining cycle proportionally, preserving its phase.
-                    float remainingCycle = period - age;
-                    transitionDuration = Mathf.Max(.001f, on ? fadeDuration :
+                    float remainingCycle = light.period - light.age;
+                    light.transitionDuration = Mathf.Max(.001f, on ? fadeDuration :
                         remainingCycle * (distantSmall ? .08f : .55f));
                 }
-                if(transitioning)
+                if(light.transitioning)
                 {
                     if(!enabled)return;
-                    transitionAge=Mathf.Min(transitionDuration,transitionAge+delta);
-                    float t=transitionAge/transitionDuration;
+                    light.transitionAge=Mathf.Min(light.transitionDuration,light.transitionAge+Mathf.Max(delta,(light.transitionDuration-light.transitionAge)*finishFraction));
+                    float t=light.transitionAge/light.transitionDuration;
                     float u=on?Mathf.SmoothStep(0,1,t):t*t*t;
-                    size=Mathf.Lerp(startSize,on?TwinkleSize():0,u);
-                    if(transitionAge>=transitionDuration) transitioning=false;
+                    light.size=Mathf.Lerp(light.startSize,on?TwinkleSize():0,u);
+                    if(light.transitionAge>=light.transitionDuration) light.transitioning=false;
                 }
                 else if(on)
                 {
-                    age=Mathf.Repeat(age+delta,period);
-                    size=TwinkleSize();
+                    light.age=Mathf.Repeat(light.age+delta,light.period);
+                    light.size=TwinkleSize();
                 }
             }
 
@@ -97,12 +120,69 @@ namespace PuzzleApple.V5
                 const float ramp = 1.5f;
                 // The dark hold straddles the wrap; split the non-ramping time
                 // equally between full brightness and darkness.
-                float halfDarkHold = (period - 2*ramp) * .25f;
-                float fromDark = Mathf.Min(age,period-age) - halfDarkHold;
+                float halfDarkHold = (light.period - 2*ramp) * .25f;
+                float fromDark = Mathf.Min(light.age,light.period-light.age) - halfDarkHold;
                 return Mathf.SmoothStep(0,1,fromDark/ramp);
             }
         }
 
+        [System.Serializable]
+        public struct Flight
+        {
+            public Vector3 home, position, direction;
+            public float travel, speed, opacity;
+            public bool Valid => float.IsFinite(home.sqrMagnitude) && float.IsFinite(position.sqrMagnitude) &&
+                Mathf.Abs(direction.sqrMagnitude - 1) < .001f && float.IsFinite(travel) && travel >= 0 &&
+                float.IsFinite(speed) && speed > 0 && opacity >= 0 && opacity <= 1;
+        }
+        [System.Serializable]
+        public struct FlightState
+        {
+            public bool parked;
+            public Flight[] stars;
+        }
+        FlightState ISentenceOutputState<FlightState>.CaptureState() => new FlightState {
+            parked = parked, stars = System.Array.ConvertAll(stars, star => star.CaptureFlight())
+        };
+        public bool TryRestoreState(FlightState state)
+        {
+            if (!journey || stars == null || state.stars == null || state.stars.Length != stars.Length ||
+                System.Array.Exists(state.stars, star => !star.Valid)) return false;
+            parked = state.parked;
+            for (int i = 0; i < stars.Length; i++) stars[i].RestoreFlight(state.stars[i]);
+            UpdateStars(false);
+            return true;
+        }
+
+        [System.Serializable]
+        public struct StarLight
+        {
+            public float age, period, size, transitionAge, transitionDuration, startSize;
+            public bool targetOn, transitioning;
+            public bool Valid => period > 0 && !float.IsInfinity(period) && age >= 0 && age <= period &&
+                size >= 0 && size <= 1 && startSize >= 0 && startSize <= 1 && transitionAge >= 0 &&
+                transitionAge <= transitionDuration && !float.IsInfinity(transitionDuration) &&
+                (!transitioning || transitionDuration > 0);
+        }
+        [System.Serializable]
+        public struct LightState
+        {
+            public EmissionState path;
+            public StarLight[] stars;
+        }
+        public LightState CaptureState() => new LightState {
+            path = new EmissionState(Brightness), stars = System.Array.ConvertAll(stars, star => star.light)
+        };
+        public bool TryRestoreState(LightState state)
+        {
+            if (!journey || stars == null || !state.path.Valid || state.stars == null ||
+                state.stars.Length != stars.Length || System.Array.Exists(state.stars, star => !star.Valid)) return false;
+            Brightness = state.path.brightness;
+            for (int i = 0; i < stars.Length; i++) stars[i].light = state.stars[i];
+            ApplyPathBrightness();
+            UpdateStars(false);
+            return true;
+        }
         Star[] stars;
         bool parked;
         Vector3 GatherPoint(int id){
@@ -136,6 +216,8 @@ namespace PuzzleApple.V5
         public bool On { get; private set; } = true;
         public bool TransitionEnabled { get; private set; }
         public float Brightness { get; private set; } = 1;
+        // The stars shrink on their own phases after the path-light fade has reached zero.
+        public float EmissionLevel { get; private set; }
         public bool Changing => TransitionEnabled && (Brightness!=(On?1:0) || SwitchPending(On));
         public void SetOn(bool on) { On=on; TransitionEnabled=true; }
         public void Hold() { TransitionEnabled=false; }
@@ -143,7 +225,7 @@ namespace PuzzleApple.V5
         public bool Settling(bool on) => Brightness!=(on?1:0) || SwitchPending(on);
         public ObservableBehaviour Observation { get; private set; }
         public bool Moving => journey && journey.entry.sentenceRuntime && !journey.entry.sentenceRuntime.MotionFrozen &&
-            journey.DemonstrationLampMoving(true,-1,this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath);
+            journey.DemonstrationLampMoving(MotionOutput,true,-1,this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath);
 
         public void Bind(PassageJourney owner, float startZ, float doorHeight, float entranceThickness,
             Material pathMaterial, Material edgeMaterial)
@@ -176,7 +258,7 @@ namespace PuzzleApple.V5
                     home = renderer.transform.localPosition,
                     renderer = renderer,
                     height = renderer.transform.localScale.y,
-                    period = Random.Range(5.5f, 8.5f)
+                    light = new StarLight { period = Random.Range(5.5f, 8.5f), size = 1, targetOn = true }
                 };
                 var mesh = renderer.GetComponent<MeshFilter>().sharedMesh;
                 if (mesh.bounds.size.z > .001f)
@@ -197,9 +279,9 @@ namespace PuzzleApple.V5
                     }
                     star.shape.localRotation = Quaternion.Euler(0,(i*137.5f)%360,0);
                 }
-                star.age = Random.Range(0f, star.period);
+                star.light.age = Random.Range(0f, star.light.period);
                 star.halo=StarGlowStyle.CreateHalo(star.shape,haloInk);
-                star.size = star.TwinkleSize();
+                star.light.size = star.TwinkleSize();
                 star.SetFlightBounds(owner.pathLength,owner.PathWidth,doorHeight);
                 stars[i] = star;
             }
@@ -209,40 +291,54 @@ namespace PuzzleApple.V5
         public bool SwitchPending(bool on)
         {
             foreach(var star in stars)
-                if(star!=null&&(star.targetOn!=on||star.transitioning))return true;
+                if(star!=null&&(star.light.targetOn!=on||star.light.transitioning))return true;
             return false;
         }
-        void LateUpdate()
+        void ApplyPathBrightness()
         {
+            float level=Mathf.SmoothStep(0,1,Brightness);
+            pathInk.SetFloat("_CorridorLight",Mathf.Lerp(.065f,1,level));
+            if(edgeInk)edgeInk.SetFloat("_Visibility",Mathf.Lerp(.09f,1,level));
+        }
+        void LateUpdate() => UpdateStars(true);
+        void UpdateStars(bool advance)
+        {
+            EmissionLevel = 0;
             if(!journey || stars==null)return;
             bool visible=journey.isActiveAndEnabled&&
                 (!journey.entry.portableClosure||!journey.entry.portableClosure.Isolated);
             Color emission=Color.white*((glowStyle?glowStyle.emission:1f)*journey.entry.sentenceRuntime.LampBoost(this==journey.Stars?PassageJourney.LightSpace.FirstPath:PassageJourney.LightSpace.ReturnPath));
             var view=journey.entry.player.view;
-            if (TransitionEnabled)
+            float finishFraction=LightOutput?.FinishFraction??0;
+            if (advance && TransitionEnabled)
             {
-                Brightness=RoomLighting.AdvanceLevel(Brightness,On?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,journey.lightFadeDuration));
-                float level=Mathf.SmoothStep(0,1,Brightness);
-                pathInk.SetFloat("_CorridorLight",Mathf.Lerp(.065f,1,level));
-                if(edgeInk)edgeInk.SetFloat("_Visibility",Mathf.Lerp(.09f,1,level));
+                Brightness=RoomLighting.AdvanceLevel(Brightness,On?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,journey.lightFadeDuration),finishFraction);
+                ApplyPathBrightness();
             }
-            var runtime=journey.entry.sentenceRuntime;
-            bool gather=this==journey.Stars && runtime.HasEffect(Cognition.CognitionSignal.LightDoorMove,PassageJourney.LightSpace.FirstPath);
-            if(gather)parked=true;
-            if(this==journey.Stars && runtime.HasEffect(Cognition.CognitionSignal.LightMove,PassageJourney.LightSpace.FirstPath)){
+            bool gather=this==journey.Stars && (MotionOutput?.HasMotion(SentenceMotion.LightToDoor)==true);
+            if(advance && gather)parked=true;
+            if(advance && this==journey.Stars && (MotionOutput?.HasMotion(SentenceMotion.Light)==true)){
                 if(parked)foreach(var s in stars)s.ResumeFlight();
                 parked=false;
             }
             bool moving = visible && Moving && On && !parked;
+            bool approachingDoor=advance && gather && On && !journey.EndingDoor.Paused;
+            float gatherFraction=approachingDoor?MotionOutput.DirectedStep(0,1,Time.deltaTime):0;
             for(int i=0;i<stars.Length;i++)
             {
                 var star=stars[i];
-                star.Advance(Time.unscaledDeltaTime,On,TransitionEnabled,journey.lightFadeDuration,view.position);
-                if(gather && On && !journey.EndingDoor.Paused)star.shape.localPosition=Vector3.MoveTowards(star.shape.localPosition,GatherPoint(i),4*Time.deltaTime);
+                if(advance)star.Advance(Time.unscaledDeltaTime,On,TransitionEnabled,journey.lightFadeDuration,view.position,finishFraction);
+                if(approachingDoor){
+                    var target=GatherPoint(i);
+                    var position=star.shape.localPosition;
+                    float step=Mathf.Max(4*Time.deltaTime,gatherFraction*Vector3.Distance(position,target));
+                    star.shape.localPosition=Vector3.MoveTowards(position,target,step);
+                }
                 if(!visible){star.renderer.enabled=star.halo.enabled=false;continue;}
-                float flight=parked?1:star.AdvanceFlight(moving,Time.deltaTime,Time.unscaledDeltaTime);
+                float flight = parked ? 1 : star.FlightOpacity;
+                if (advance && !parked) flight = star.AdvanceFlight(moving,Time.deltaTime,Time.unscaledDeltaTime);
                 float reveal=star.Opacity*flight;
-                star.shape.localScale=Vector3.one*(star.height*star.size*Mathf.Lerp(.4f,1,flight));
+                star.shape.localScale=Vector3.one*(star.height*star.light.size*Mathf.Lerp(.4f,1,flight));
                 Vector3 fromView=star.shape.position-view.position;
                 if(star.faces==null && fromView.sqrMagnitude>.000001f)
                     star.shape.rotation=Quaternion.LookRotation(fromView,Vector3.up);
@@ -251,6 +347,7 @@ namespace PuzzleApple.V5
                 glow.SetColor("_BaseColor",new Color(0,0,0,reveal));
                 star.renderer.SetPropertyBlock(glow);
                 star.renderer.enabled=reveal>.005f;
+                if (star.renderer.enabled) EmissionLevel = Mathf.Max(EmissionLevel, reveal);
                 if(glowStyle)glowStyle.DrawHalo(star.halo,star.renderer.enabled,glow);
                 star.halo.transform.rotation=Quaternion.LookRotation(fromView,Vector3.up);
             }
@@ -258,7 +355,7 @@ namespace PuzzleApple.V5
 
         public Renderer Pick(Ray ray,float reach)
         {
-            if(!journey.InCorridor||!On||Brightness<.999f)return null;
+            if(!journey.InCorridor || EmissionLevel<=0)return null;
             Renderer best=null;
             foreach(var star in stars)
             {

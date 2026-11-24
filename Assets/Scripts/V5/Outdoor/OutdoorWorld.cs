@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 namespace PuzzleApple.V5.Outdoor
 {
-    public sealed class OutdoorWorld : MonoBehaviour, ISwitchableLight, ISwitchableDoor, ISentenceMovable, IBrightenableLight
+    public sealed class OutdoorWorld : MonoBehaviour, ISwitchableLight, ISwitchableDoor, ISentenceMovable, IBrightenableLight, ISentenceOutputState<OutdoorWorld.LightState>
     {
         public Collider ground;
         public Light sun;
@@ -31,32 +31,39 @@ namespace PuzzleApple.V5.Outdoor
         bool ownsMaterials;
         Material groundMaterial, luminousGround;
         // Outdoor light state: the lamps follow stateSource and the sky follows them into night.
+        [System.Serializable]
+        public struct LightState
+        {
+            public EmissionState lamps;
+            public float nightBlend;
+        }
+        public LightState CaptureState() => new LightState { lamps = stateSource.CaptureState(), nightBlend = environment.NightBlend };
+        public bool TryRestoreState(LightState state)
+        {
+            if (!environment || !stateSource || !(state.nightBlend >= 0 && state.nightBlend <= 1) ||
+                !stateSource.TryRestoreState(state.lamps)) return false;
+            environment.RestoreBlend(state.nightBlend);
+            return true;
+        }
         bool ISwitchableLight.WouldChange(bool on)=>on
             ?stateSource.Brightness<.999f||environment.NightBlend>.001f
             :stateSource.Brightness>.001f||environment.NightBlend<.999f;
-        bool ISwitchableLight.Settling(bool on)=>((ISwitchableLight)this).WouldChange(on);
+        bool ISwitchableLight.Settling(bool on)=>stateSource.Brightness!=(on?1:0) || environment.NightBlend!=(on?0:1);
         void ISwitchableLight.SetOn(bool on)=>stateSource.SetOn(on);
         void ISwitchableLight.Hold()=>stateSource.HoldCurrentState();
         bool IBrightenableLight.Lit=>stateSource.Brightness>0;
-        // Outdoor threshold door: glows on/off once revealed. Its state follows the effective
-        // DoorOn/DoorOff signals in DoorSentenceEffects.Apply (ApplyMotion), so SetOpen/Hold are not
-        // driven separately here; retiring the command releases the state-driven hold.
+        // The registered emission output drives the threshold door's brightness transition.
         bool ISwitchableDoor.WouldChange(bool open)=>door.Revealed&&(open?doors.appearance.Brightness<.999f:doors.appearance.Brightness>.001f);
-        void ISwitchableDoor.SetOpen(bool open){}
-        void ISwitchableDoor.Hold(){}
-        void ISwitchableDoor.Release()=>doors.ReleaseStateCommand();
+        void ISwitchableDoor.SetOpen(bool open)=>doors.SetState(open);
+        void ISwitchableDoor.Hold()=>doors.HoldState();
+        void ISwitchableDoor.Release()=>doors.HoldState();
         // Outdoor motion: lamps, the threshold door and the ground each move by their own effects.
-        bool ISentenceMovable.CanMove(CognitionSignal motion)
+        bool ISentenceMovable.CanMove(SentenceMotion motion)
         {
-            switch(motion)
-            {
-                case CognitionSignal.LightMove:case CognitionSignal.LightFloorMove:
-                case CognitionSignal.LightDoorMove:case CognitionSignal.LightLightMove:return lights.CanMove(motion);
-                case CognitionSignal.WorldLightMove:case CognitionSignal.WorldDoorMove:return world.CanRise(motion);
-                case CognitionSignal.DoorMove:return door.Revealed;
-                case CognitionSignal.WorldMove:return true;
-                default:return false;
-            }
+            if (motion.Subject == SentenceCapabilityCatalog.Default.light) return lights.CanMove(motion);
+            if (motion == SentenceMotion.FloorToLight || motion == SentenceMotion.FloorToDoor) return world.CanRise(motion);
+            if (motion == SentenceMotion.Door) return door.Revealed;
+            return motion == SentenceMotion.Floor;
         }
         public void SetFloorIlluminated(float value)
         {
@@ -102,7 +109,7 @@ namespace PuzzleApple.V5.Outdoor
             var data=camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();if(data)data.renderPostProcessing=true;
             Audio=entry.gameObject.AddComponent<SessionAudio>();Audio.Play(music);
             // Keep one board, its acquisition IDs, notes and sentences across the passage.
-            ApplyMotion(entry.board.State.HasEffect,false);
+            SentenceSceneBindings.BindOutdoor(this);
         }
         static Bounds FrameBounds(Transform frame,MeshFilter surface)
         {
@@ -114,29 +121,27 @@ namespace PuzzleApple.V5.Outdoor
                 bounds.Encapsulate(matrix.MultiplyPoint3x4(mesh.center+Vector3.Scale(mesh.extents,new Vector3(x,y,z))));
             return bounds;
         }
-        public void ApplyMotion(System.Func<CognitionSignal,bool> hasEffect,bool split)
-        {
-            lights.Apply(hasEffect);doors.Apply(hasEffect,split);world.Apply(hasEffect);
-        }
         public string LookedAtWord(Ray ray)=>LookedAtWord(ray,out _);
-        public string LookedAtWord(Ray ray,out Renderer emitter)
+        public string LookedAtWord(Ray ray,out Renderer emitter)=>LookedAtWord(ray,out emitter,out _);
+        public string LookedAtWord(Ray ray,out Renderer emitter,out Collider target)
         {
-            emitter=null;
+            emitter=null;target=null;
             if(!Active)return null;
             var camera=Entry.player.view.GetComponent<Camera>();
             var hits=Physics.RaycastAll(ray,camera.farClipPlane,~0,QueryTriggerInteraction.Ignore);
             var hit=hits.Where(h=>!h.collider.transform.IsChildOf(Entry.player.transform)).OrderBy(h=>h.distance).FirstOrDefault();
+            target=hit.collider;
             if(hit.collider)
             {
                 if(hit.collider==ground&&hit.distance<=7&&Entry.board.State.Knows("floor"))return "floor";
                 if(chapterFrame&&hit.collider.transform.IsChildOf(chapterFrame)&&hit.distance<=7)return "door";
                 var lamp=hit.collider.GetComponentInParent<OpeningLight>();
-                if(lamp&&lamp!=stateSource&&lamp.TargetOn&&lamp.Brightness>=.999f&&lamp.RevealAmount>=.99f&&hit.distance<=7){emitter=lamp.surface;return "light";}
+                if(lamp&&lamp!=stateSource&&lamp.EmitsLight&&hit.distance<=7){emitter=lamp.surface;return "light";}
                 if(hit.collider.GetComponentInParent<ThresholdDoor>()==door&&hit.distance<=door.collectionDistance)return "door";
                 return null;
             }
             // Same visible-disc limit as V4; no selection through foreground geometry.
-            return stateSource.TargetOn&&stateSource.Brightness>=.999f&&environment.NightBlend<.98f&&
+            return stateSource.Brightness>0&&environment.NightBlend<1&&
                 Vector3.Dot(ray.direction,-sun.transform.forward)>=.9995f?"light":null;
         }
         public bool TrySpawnInView(Vector2 screen){if(!Active || !Entry)return false;var camera=Entry.player.view.GetComponent<Camera>();return TrySpawnInView(camera.ScreenPointToRay(screen),GeometryUtility.CalculateFrustumPlanes(camera),InstanceShape.Cube,GetComponent<WorldDropRegion>());}
@@ -148,7 +153,7 @@ namespace PuzzleApple.V5.Outdoor
         }
         public bool TryPlaceLamp(Ray ray,Plane[] frustum,InstanceShape shape,WorldDropRegion region,OpeningLightField field,Collider ground)
         {
-            if(!region || !region.Accepts("light") || System.Array.IndexOf(region.shapes,shape)<0 || field.PlayerCount>=region.maxInstances)return false;
+            if(!region || !region.Accepts("light") || System.Array.IndexOf(region.shapes,shape)<0 || PlayerInstance.Remaining<=0)return false;
             float radius=OpeningLightField.CreatedDiameter*.5f+spawnClearance;
             Vector3 preferred=ray.GetPoint(airSpawnDistance);
             if(Physics.Raycast(ray,out var hit,35,~0,QueryTriggerInteraction.Ignore))preferred=hit.point+hit.normal*radius;
@@ -167,15 +172,6 @@ namespace PuzzleApple.V5.Outdoor
                 return field.Spawn(point,0,shape,region)!=null;
             }
             return false;
-        }
-        public Vector3 Focus(SentencePresentation.Focus focus)
-        {
-            if(focus==SentencePresentation.Focus.Sky)return Entry.player.view.position+Vector3.ProjectOnPlane(Entry.player.view.forward,Vector3.up).normalized*10+Vector3.up*6;
-            if(focus==SentencePresentation.Focus.Door)return door.transform.TransformPoint(new Vector3(0,3,0));
-            if(focus==SentencePresentation.Focus.Floor)return Entry.player.view.position+Vector3.ProjectOnPlane(Entry.player.view.forward,Vector3.up).normalized*10+Vector3.down*2;
-            var candidates=field.ActiveLamps.Where(l=>l&&(l.transform.position-Entry.player.transform.position).sqrMagnitude<2500).ToArray();
-            if(candidates.Length>0)return candidates.Aggregate(Vector3.zero,(p,l)=>p+l.transform.position)/candidates.Length;
-            return Entry.player.view.position-sun.transform.forward*100;
         }
         void OnDestroy()
         {

@@ -18,7 +18,6 @@ namespace PuzzleApple.V5.Studies.Editor
         public const string ScenePath="Assets/Scenes/V5/Studies/ShaderStudyRefined.unity";
         const string Key="PuzzleApple.RefinedStudy.PendingPlay";
         static RefinedShaderStudySetup(){EditorApplication.playModeStateChanged+=Changed;}
-        [MenuItem("PuzzleApple/V5/Shader Study Refined/Play (preserve open scenes)")]
         public static void Preview()
         {
             if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Stop current Play before previewing.");
@@ -31,13 +30,11 @@ namespace PuzzleApple.V5.Studies.Editor
             {SessionState.SetBool(Key,false);EditorSceneManager.LoadSceneInPlayMode(ScenePath,new LoadSceneParameters(LoadSceneMode.Single));}
             if(state==PlayModeStateChange.EnteredEditMode)SessionState.SetBool(Key,false);
         }
-        [MenuItem("PuzzleApple/V5/Shader Study Refined/Open additively")]
         public static void Open()
         {
             if(EditorApplication.isPlayingOrWillChangePlaymode)return;
             if(!SceneManager.GetSceneByPath(ScenePath).isLoaded)EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Additive);
         }
-        [MenuItem("PuzzleApple/V5/Shader Study Refined/Create if missing")]
         public static void Create()
         {
             if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Create outside Play.");

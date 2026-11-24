@@ -1,0 +1,16 @@
+# Keep archived design and version trees out of routine ripgrep searches.
+**/Archive/
+
+# Superseded P5 shader study. The refined study still uses shared controller/UI code.
+/Assets/Scenes/V5/Studies/ShaderStudy.unity*
+/Assets/Materials/V5/Studies/CircuitStreams.mat*
+/Assets/Materials/V5/Studies/ExpandingFrames.mat*
+/Assets/Materials/V5/Studies/RainStreak.mat*
+/Assets/Materials/V5/Studies/StudyFloor.mat*
+/Assets/Materials/V5/Studies/SquareParticle.mat*
+/Assets/Materials/V5/Studies/TileCascade.mat*
+/Assets/Shaders/V5/Studies/CircuitStreams.shader*
+/Assets/Shaders/V5/Studies/ExpandingFrames.shader*
+/Assets/Shaders/V5/Studies/RainStreak.shader*
+/Assets/Shaders/V5/Studies/TileCascade.shader*
+/Assets/Shaders/V5/Studies/StudyCommon.hlsl*

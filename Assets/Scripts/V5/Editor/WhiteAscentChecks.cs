@@ -23,7 +23,12 @@ namespace PuzzleApple.V5.Editor
             yield return null;Check(a.WhiteAmount>.99f && a.LookingAtSymbol(),"white altar is visible and interactive");
             Check(a.Symbol.GetComponentsInChildren<ParticleSystem>().All(ps=>!ps.isPlaying && ps.particleCount==0),"quiet altar before clicking");
             var aim=p.view.rotation;
+            e.board.State.TryAcquireWord("check.ordinary.light",e.board.Catalog.Word("light"));
+            var library=e.board.GetComponentInChildren<WordLibrary>(true);
+            if(!library)library=UnityEngine.Object.FindFirstObjectByType<WordLibrary>(FindObjectsInactive.Include);
+            Check(!e.LightUnderstood && !library.GetComponentInChildren<LightCapacityDots>(true),"ordinary light has no instance energy");
             e.chamberLight.AdvancePointer(true,true,false,.02f);e.chamberLight.AdvancePointer(false,false,true,.03f);
+            Check(e.LightUnderstood && library.GetComponentInChildren<LightCapacityDots>(true),"altar click upgrades the existing light tile");
             yield return new WaitForSecondsRealtime(.32f);
             Check(Quaternion.Angle(aim,p.view.rotation)<.2f,"altar keeps the player's aim");
             var rings=a.GetComponentsInChildren<LineRenderer>().Where(r=>r.name=="Altar ripple").ToArray();

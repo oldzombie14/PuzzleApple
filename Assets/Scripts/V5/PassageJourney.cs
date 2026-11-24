@@ -3,8 +3,24 @@ using UnityEngine;
 
 namespace PuzzleApple.V5
 {
-    public sealed class PassageJourney : MonoBehaviour
+    public sealed class PassageJourney : MonoBehaviour, IProgressBoundary, ISentenceOutputState<PassageJourney.LampMotionState>
     {
+        [System.Serializable]
+        public struct LampMotionState { public DriftingLight.State[] lamps; }
+        public LampMotionState CaptureState() => new LampMotionState {
+            lamps = lamps.ConvertAll(lamp => lamp.CaptureMotion()).ToArray()
+        };
+        public bool TryRestoreState(LampMotionState state)
+        {
+            if (state.lamps == null) return false;
+            var saved = new Dictionary<int, DriftingLight.State>();
+            foreach (var record in state.lamps)
+                if (!record.Valid || !saved.TryAdd(record.slot, record)) return false;
+            foreach (var lamp in lamps)
+                if (saved.TryGetValue(lamp.SlotIndex, out var record)) lamp.RestoreMotion(record);
+            return true;
+        }
+
         public WorldEntry entry;
         public Material whitePath,blackSurround,roomMaterial,lampMaterial;
         public Shader floorPortalShader;
@@ -37,30 +53,21 @@ namespace PuzzleApple.V5
         public ObservableBehaviour movementObservation;
         public FloorImpactSurface floorSurface;
         public FloorDirectedMotion floorMotion;
-        public bool LampsMoving=>!LampsLit || (entry && entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(LightSpace.FarRoom)
-            ? entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,LightSpace.FarRoom)
-            : DemonstrationLampMoving(true));
-        // A brightness command preserves an autonomous drift until the player changes the motion sentence.
-        public int RelitDriftRevision(LightSpace space)=>entry.sentenceRuntime.HasLampMotion(space)?-1:entry.sentenceRuntime.LightMotionRevision(space);
+        internal SentenceStateOutput FarLightOutput, WhiteDoorOutput;
+        public SentenceMotionOutput FarRoomMotionOutput {get;internal set;}
+        public SentenceMotionOutput WhiteDoorMotionOutput {get;internal set;}
+        public bool LampsMoving=>!LampsLit || (FarRoomMotionOutput?.ControlsLamps==true
+            ? FarRoomMotionOutput?.HasMotion(SentenceMotion.Light)==true
+            : DemonstrationLampMoving(FarRoomMotionOutput,true));
         // Shared by the drifting room and the corridor stars: learning only the verb
         // does not transfer the preset motion to player-owned sentences.
-        LightSpace roomsIntroduced, roomsWithMoveKnown;
-        void IntroduceRoom(LightSpace space)
+        public bool DemonstrationLampMoving(SentenceMotionOutput motion,bool isOn,int lampSlot=-1,LightSpace space=LightSpace.FarRoom)
         {
-            if((roomsIntroduced & space)!=0)return;
-            roomsIntroduced |= space;
-            if(entry.board.State.Knows("move"))roomsWithMoveKnown |= space;
-        }
-        public bool DemonstrationLampMoving(bool isOn,int relitRevision=-1,LightSpace space=LightSpace.FarRoom)
-        {
-            bool approachingWithMove=space==LightSpace.FarRoom && (roomsIntroduced&space)==0 &&
+            bool approachingWithMove=space==LightSpace.FarRoom && motion?.Introduced!=true &&
                 entry && entry.board && entry.board.State!=null && entry.board.State.Knows("move");
-            if(approachingWithMove || (roomsWithMoveKnown & space)!=0)
-                return isOn && entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,space);
-            return entry&&entry.board&&entry.board.State!=null&&movementObservation&&
-            (entry.sentenceRuntime && entry.sentenceRuntime.ControlsLamps(space)
-                ? !isOn||relitRevision==entry.sentenceRuntime.LightMotionRevision(space)||entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,space)
-                : movementObservation.Demonstrates(entry.board.Catalog,Cognition.CognitionSignal.LightMove));
+            bool demonstration=entry&&entry.board&&entry.board.State!=null&&movementObservation&&
+                movementObservation.DemonstratesMotion(entry.board.Catalog,SentenceMotion.Light);
+            return motion!=null&&motion.DemonstrationMoving(isOn,demonstration,approachingWithMove,lampSlot);
         }
         [Tooltip("Prototype choice, not a final design restriction.")]
         public bool allowCorridorClosure=true;
@@ -77,7 +84,15 @@ namespace PuzzleApple.V5
         public float DoorwayLighting {get;private set;}
         public float RoomBloom {get;private set;}
         public bool DoorOpen {get;private set;}
-        public float DoorProgress {get;private set;}
+        HingeState hinge = new HingeState {cycleOpening = true};
+        public float DoorProgress
+        {
+            get => hinge.progress;
+            private set { if (hinge.progress == value) return; hinge.progress = value; BoundaryChanged?.Invoke(); }
+        }
+        public float BoundaryProgress => DoorProgress;
+        public bool AllowsConnection => DoorProgress > 0;
+        public event System.Action BoundaryChanged;
         public bool LightsOn {get;private set;}
         public bool LampsLit=>Brightness>0;
         public float Brightness {get;private set;}
@@ -104,7 +119,6 @@ namespace PuzzleApple.V5
         Collider[] doorColliders;
         CharacterController doorPlayer;
         bool ignoringDoorPlayer;
-        bool cycleOpening = true;
 
         readonly List<Renderer> roomEdges=new List<Renderer>();
         Renderer doorLeaf,hingePin;
@@ -153,7 +167,7 @@ namespace PuzzleApple.V5
             doorLeaf=Block("White hinged door",new Vector3(0,doorHeight*.5f,pathLength),new Vector3(doorWidth,doorHeight,.3f),corridorMaterial);
             Door=doorLeaf.transform;
             var lockTemplate=Resources.Load<ProgressLock>("V5/WhiteDoorProgressLock");
-            if(lockTemplate){var gate=Instantiate(lockTemplate,Door,false);gate.whiteDoor=this;}
+            if(lockTemplate){var gate=Instantiate(lockTemplate,Door,false);gate.BindBoundary(this);}
             Door.SetParent(doorHinge,true);
             PrepareDoorBack();
             Door.gameObject.layer=29;
@@ -234,6 +248,7 @@ namespace PuzzleApple.V5
             secondStars.Bind(this, Tutorial.ExitZ, openingHeight, .3f, returnMaterial, returnEdge);
             EntranceDoor=PassageEntranceDoor.Build(this,doorHinge,Root.Find("Door wall").GetComponent<Renderer>());
             ApplyLight();
+            SentenceSceneBindings.BindIntro(entry);
         }
         void BuildPath(float pathStart,float roomStart,float h,Material pathMaterial,Material edge,bool movingFloor=false)
         {
@@ -311,37 +326,46 @@ namespace PuzzleApple.V5
         // The white door between corridor and tutorial room, as commanded by on/off door.
         public ISwitchableDoor WhiteDoor => whiteDoor ??= new WhiteDoorState(this);
         public LightSpace WhiteDoorSpaces=>ProgressLock.DoorBoundary(this);
-        sealed class WhiteDoorState : ISwitchableDoor
+        sealed class WhiteDoorState : ISwitchableDoor, ISentenceOutputState<HingeState>
         {
             readonly PassageJourney journey;
+            public HingeState CaptureState() => journey.hinge;
+            public bool TryRestoreState(HingeState state)
+            {
+                if (!journey.doorHinge || !journey.doorPlayer || !(state.progress >= 0 && state.progress <= 1)) return false;
+                if (state.progress < journey.DoorProgress && journey.PlayerBlocksSwing(state.progress)) return false;
+                journey.hinge.cycleOpening = state.cycleOpening;
+                journey.ApplyDoorProgress(state.progress);
+                Physics.SyncTransforms();
+                if (journey.ignoringDoorPlayer && !journey.DoorOverlapsPlayer()) journey.SetDoorPlayerCollision(false);
+                journey.UpdateDoorAppearance();
+                foreach (var edge in journey.roomEdges) edge.enabled = state.progress > 0;
+                return true;
+            }
             public WhiteDoorState(PassageJourney owner) { journey=owner; }
             public bool WouldChange(bool open) => open ? journey.DoorProgress<.999f : journey.DoorProgress>.001f;
             public void SetOpen(bool open) => journey.SetDoor(open);
             public void Hold() => journey.HoldDoor();
-            public void Release() { }
+            public void Release() => journey.HoldDoor();
         }
         // Motion-sentence targets per space; each object keeps its own motion presentation.
         MotionTarget whiteDoorMotion, corridorMotion, farRoomMotion;
-        public ISentenceMovable WhiteDoorMotion => whiteDoorMotion ??= new MotionTarget(s => s==Cognition.CognitionSignal.DoorMove && CanCycleDoor);
-        public ISentenceMovable CorridorMotion => corridorMotion ??= new MotionTarget(s => s==Cognition.CognitionSignal.LightMove && CorridorBrightness>0);
+        public ISentenceMovable WhiteDoorMotion => whiteDoorMotion ??= new MotionTarget(s => s==SentenceMotion.Door && CanCycleDoor);
+        public ISentenceMovable CorridorMotion => corridorMotion ??= new MotionTarget(s => s==SentenceMotion.Light && CorridorBrightness>0);
         public ISentenceMovable FarRoomMotion => farRoomMotion ??= new MotionTarget(FarRoomCanMove);
-        bool FarRoomCanMove(Cognition.CognitionSignal s)
+        bool FarRoomCanMove(SentenceMotion s)
         {
-            switch (s)
-            {
-                case Cognition.CognitionSignal.LightMove: return Brightness>0 && Lamps.Count>0;
-                case Cognition.CognitionSignal.LightDoorMove: case Cognition.CognitionSignal.LightLightMove:
-                    return TryGetComponent<RoomLightGathering>(out var gathering) && gathering.CanMove(s);
-                case Cognition.CognitionSignal.LightFloorMove:
-                    return Brightness>0 && floorMotion && System.Linq.Enumerable.Any(Lamps, l=>!floorMotion.IsArrived(l));
-                default: return false;
-            }
+            if (s == SentenceMotion.Light) return Brightness>0 && Lamps.Count>0;
+            if (s == SentenceMotion.LightToDoor || s == SentenceMotion.LightToLight)
+                return TryGetComponent<RoomLightGathering>(out var gathering) && gathering.CanMove(s);
+            return s == SentenceMotion.LightToFloor && Brightness>0 && floorMotion &&
+                System.Linq.Enumerable.Any(Lamps, lamp => !floorMotion.IsArrived(lamp));
         }
         sealed class MotionTarget : ISentenceMovable
         {
-            readonly System.Func<Cognition.CognitionSignal,bool> canMove;
-            public MotionTarget(System.Func<Cognition.CognitionSignal,bool> test) { canMove=test; }
-            public bool CanMove(Cognition.CognitionSignal motion) => canMove(motion);
+            readonly System.Func<SentenceMotion,bool> canMove;
+            public MotionTarget(System.Func<SentenceMotion,bool> test) { canMove=test; }
+            public bool CanMove(SentenceMotion motion) => canMove(motion);
         }
         // "light light" targets per space; the lamps read SentenceRuntime.LampMultiplier themselves.
         BrightenTarget corridorGlow, farRoomGlow;
@@ -354,11 +378,12 @@ namespace PuzzleApple.V5
             public bool Lit => lit();
         }
         [System.Flags]
-        public enum LightSpace { Chamber=1, FirstPath=2, SphereRoom=4, ReturnPath=8, FarRoom=16, All=543, Outdoor=32, Gallery=64, Garden=128, Vitruvian=256, Ascent=512 }
+        public enum LightSpace { Chamber=1, FirstPath=2, SphereRoom=4, ReturnPath=8, FarRoom=16, All=543, Outdoor=32, Gallery=64, Garden=128, Vitruvian=256, Ascent=512, ChapterLesson=1024 }
 
         public LightSpace PlayerSpace {
             get {
                 var outdoor=entry.outdoor;
+                if(outdoor && outdoor.InLesson)return LightSpace.ChapterLesson;
                 if(outdoor && outdoor.InChapter)return outdoor.CurrentRoom.Space;
                 if(outdoor && outdoor.IsOutside)return LightSpace.Outdoor;
                 if(!BeyondChamber || entry.portableClosure && entry.portableClosure.Isolated)return LightSpace.Chamber;
@@ -369,9 +394,17 @@ namespace PuzzleApple.V5
             }
         }
 
-        public LightSpace ChapterSpaces=>entry.outdoor && entry.outdoor.IsOutside?LightSpace.Outdoor:
+        public LightSpace ChapterSpaces=>entry.outdoor && entry.outdoor.InLesson?LightSpace.ChapterLesson:
+            entry.outdoor && entry.outdoor.IsOutside?LightSpace.Outdoor:
             entry.outdoor && entry.outdoor.InChapter?LightSpace.Gallery|LightSpace.Garden|LightSpace.Vitruvian:LightSpace.All;
-        public LightSpace SentenceScope()=>MembraneDoor.Region(entry.player.transform.position,ChapterSpaces)&ProgressLock.Region(ChapterSpaces,PlayerSpace);
+        public SentenceScopePool ScopePool { get; } = new SentenceScopePool();
+        public SentenceSpaceSet SentenceRegion()
+        {
+            var catalog = SentenceSpaceCatalog.Default;
+            var chapter = catalog.FromLegacy(ChapterSpaces);
+            return ScopePool.Resolve(chapter, catalog.FromLegacy(PlayerSpace), MembraneDoor.Region(entry.player.transform.position, chapter));
+        }
+        public LightSpace SentenceScope()=>SentenceSpaceCatalog.Default.ToLegacy(SentenceRegion());
         public LightSpace ConnectedLights()=>SentenceScope();
 
         // Switchable light sources by space, in a fixed order. A new light source joins here.
@@ -386,9 +419,17 @@ namespace PuzzleApple.V5
         }
         FarRoomLights farRoom;
         public ISwitchableLight FarRoom => farRoom ??= new FarRoomLights(this);
-        sealed class FarRoomLights : ISwitchableLight
+        sealed class FarRoomLights : ISwitchableLight, ISentenceOutputState<EmissionState>
         {
             readonly PassageJourney journey;
+            public EmissionState CaptureState() => new EmissionState(journey.Brightness);
+            public bool TryRestoreState(EmissionState state)
+            {
+                if (!state.Valid || !journey.lampInk) return false;
+                journey.Brightness = state.brightness;
+                journey.ApplyLight();
+                return true;
+            }
             public FarRoomLights(PassageJourney owner) { journey=owner; }
             public bool WouldChange(bool on) => Mathf.Abs(journey.Brightness-(on?1:0))>.001f;
             public bool Settling(bool on) => journey.Brightness!=(on?1:0);
@@ -436,7 +477,7 @@ namespace PuzzleApple.V5
                 var p=Root.InverseTransformPoint(entry.player.transform.position);
                 BeyondChamber=p.z>chamberBoundary&&(p.z<RoomStart+roomSize.z+1 || EndingDoor && EndingDoor.OnStairSide(p))&&Mathf.Abs(p.x)<(p.z>=pathLength&&p.z<=Tutorial.ExitZ?Tutorial.HalfWidth:roomSize.x*.5f)+1;
                 InSecondRoom=BeyondChamber&&p.z>RoomStart+.3f;
-                if(InSecondRoom)IntroduceRoom(LightSpace.FarRoom);
+                if(InSecondRoom)FarRoomMotionOutput?.Introduce(entry.board.State.Knows("move"));
                 InTutorial=BeyondChamber&&p.z>pathLength+.15f&&p.z<Tutorial.ExitZ;
                 InReturnPath=InCorridor&&p.z>=Tutorial.ExitZ;
             }
@@ -451,7 +492,7 @@ namespace PuzzleApple.V5
             UpdateDoorSwing();
             // Both doorway faces remain visible while open, regardless of the viewing side.
             foreach(var edge in roomEdges)edge.enabled=DoorProgress>0;
-            if(LightTransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,LightsOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,lightFadeDuration));ApplyLight();
+            if(LightTransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,LightsOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,lightFadeDuration),FarLightOutput?.FinishFraction??0);ApplyLight();
             UpdateDoorAppearance();
             if(movementObservation)movementObservation.Available=InSecondRoom&&!entry.sentenceRuntime.MotionFrozen&&LampsMoving&&(!entry.portableClosure||!entry.portableClosure.Isolated);
             float sphereRoomBloom = InTutorial ? 1 : 0;
@@ -473,30 +514,28 @@ namespace PuzzleApple.V5
 
         void UpdateDoorSwing()
         {
-            var runtime = entry.sentenceRuntime;
-            bool cycling = !DoorTransitionEnabled && CanCycleDoor && runtime &&
-                runtime.HasEffect(Cognition.CognitionSignal.DoorMove,WhiteDoorSpaces) &&
-                !runtime.HasEffect(Cognition.CognitionSignal.DoorOn,WhiteDoorSpaces) && !runtime.HasEffect(Cognition.CognitionSignal.DoorOff,WhiteDoorSpaces);
+            bool cycling = !DoorTransitionEnabled && CanCycleDoor && WhiteDoorMotionOutput?.HasMotion(SentenceMotion.Door) == true;
             if (cycling)
             {
-                if (DoorProgress <= 0) cycleOpening = true;
-                if (DoorProgress >= 1) cycleOpening = false;
-                DoorOpen = cycleOpening;
+                DoorOpen = hinge.CycleTarget();
             }
             float target = DoorOpen ? 1 : 0;
             float next = DoorTransitionEnabled || cycling
-                ? Mathf.MoveTowards(DoorProgress, target, Time.deltaTime / Mathf.Max(.01f, doorDuration))
+                ? SentenceStateOutput.Advance(DoorProgress,target,Time.deltaTime/Mathf.Max(.01f,doorDuration),WhiteDoorOutput)
                 : DoorProgress;
             bool opening = next > DoorProgress;
-            if(opening)IntroduceRoom(LightSpace.SphereRoom);
-            if (opening && !ignoringDoorPlayer) SetDoorPlayerCollision(true);
-            if (opening || next < DoorProgress && !PlayerBlocksSwing(next))
-            {
-                DoorProgress = next;
-                doorHinge.localRotation = Quaternion.Euler(0, SwingAngle(next), 0);
-            }
+            if(opening)Tutorial.MotionOutput?.Introduce(entry.board.State.Knows("move"));
+            if (opening || next < DoorProgress && !PlayerBlocksSwing(next)) ApplyDoorProgress(next);
             if (DoorProgress == target) DoorTransitionEnabled = false;
             if (!opening && ignoringDoorPlayer && !DoorOverlapsPlayer()) SetDoorPlayerCollision(false);
+        }
+
+        void ApplyDoorProgress(float next)
+        {
+            if (next == DoorProgress) return;
+            if (next > DoorProgress && !ignoringDoorPlayer) SetDoorPlayerCollision(true);
+            doorHinge.localRotation = Quaternion.Euler(0, SwingAngle(next), 0);
+            DoorProgress = next;
         }
 
         void SetDoorPlayerCollision(bool ignore)

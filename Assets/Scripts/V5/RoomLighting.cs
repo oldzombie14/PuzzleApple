@@ -27,11 +27,11 @@ namespace PuzzleApple.V5
         Color currentAmbient;
         float currentFog;
         bool initialized;
-        public static float AdvanceLevel(float current, float target, float step)
+        public static float AdvanceLevel(float current, float target, float step,float finishFraction=0)
         {
             float dark = 1 - Mathf.Clamp01(current);
             if (target < current) step *= 1 + 1.5f*dark*dark;
-            return Mathf.MoveTowards(current,target,step);
+            return Mathf.MoveTowards(current,target,Mathf.Max(step,Mathf.Abs(target-current)*finishFraction));
         }
         public Color FoldingAmbient(Color unfolded, float blend)=>Color.Lerp(closedAmbient,unfolded,blend);
         public float FoldingIntensity(float unfolded, float blend)=>Mathf.Lerp(closedIntensity,unfolded,blend);

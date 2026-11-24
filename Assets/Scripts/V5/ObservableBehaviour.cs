@@ -1,5 +1,6 @@
 using PuzzleApple.V5.Cognition;
 using UnityEngine;
+using System.Linq;
 
 namespace PuzzleApple.V5
 {
@@ -20,14 +21,18 @@ namespace PuzzleApple.V5
             if(playerState.HasAcquired(lesson.acquisitionId))return playerState.HasEffect(signal);
             return Demonstrates(catalog,signal);
         }
-        public bool Demonstrates(CognitionCatalog catalog,CognitionSignal signal){
-            if(!lesson || !lesson.example)return false;
+        public bool Demonstrates(CognitionCatalog catalog,CognitionSignal signal) => Demonstration(catalog)?.HasEffect(signal) == true;
+        public bool DemonstratesMotion(CognitionCatalog catalog, SentenceMotion motion) =>
+            Demonstration(catalog)?.Groups.Any(group => group.Effective && group.Intent?.Motion == motion) == true;
+
+        CognitionState Demonstration(CognitionCatalog catalog){
+            if(!lesson || !lesson.example)return null;
             if(initialState==null)
             {
                 initialState=new CognitionState(catalog);
                 initialState.TryAcquireSentence(lesson.acquisitionId,lesson.Sentence);
             }
-            return initialState.HasEffect(signal);
+            return initialState;
         }
         public Collider MemberAt(Ray ray,float reach,Collider tracked=null,float trackingSlack=0)
         {

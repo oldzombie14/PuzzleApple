@@ -35,8 +35,8 @@ namespace PuzzleApple.V5
         void Apply()
         {
             float eased = Mathf.SmoothStep(0, 1, progress);
-            drawer.localScale = new Vector3(eased, 1, 1);
-            visibility.alpha = eased;
+            drawer.anchoredPosition = Vector2.left * (drawer.rect.width * (1 - eased));
+            visibility.alpha = IsVisible ? 1 : 0;
             visibility.blocksRaycasts = IsOpen && board.Panel.IsOpen && !board.Panel.InputBlocked;
             visibility.interactable = visibility.blocksRaycasts;
         }

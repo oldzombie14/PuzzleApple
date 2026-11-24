@@ -21,7 +21,6 @@ namespace PuzzleApple.V5.Studies.Editor
         static Font font;
         static readonly Color Paper=new Color(.84f,.86f,.83f),Muted=new Color(.51f,.55f,.53f),Panel=new Color(.075f,.083f,.083f);
         static ShaderStudySetup(){EditorApplication.playModeStateChanged+=PlayChanged;}
-        [MenuItem("PuzzleApple/V5/Shader Study/Play (preserve open scenes)")]
         public static void Preview()
         {
             if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Stop the current Play session before previewing Shader Study.");
@@ -39,14 +38,12 @@ namespace PuzzleApple.V5.Studies.Editor
             }
             if(state==PlayModeStateChange.EnteredEditMode)SessionState.SetBool(PreviewKey,false);
         }
-        [MenuItem("PuzzleApple/V5/Shader Study/Open additively")]
         public static void Open()
         {
             if(EditorApplication.isPlayingOrWillChangePlaymode)return;
             var existing=SceneManager.GetSceneByPath(ScenePath);
             if(!existing.isLoaded)EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Additive);
         }
-        [MenuItem("PuzzleApple/V5/Shader Study/Create if missing")]
         public static void Create()
         {
             if(EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("Create the study only outside Play mode.");

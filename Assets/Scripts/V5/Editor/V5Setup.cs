@@ -12,7 +12,6 @@ namespace PuzzleApple.V5.Editor
     public static class V5Setup
     {
         const string ScenePath="Assets/Scenes/V5/P5.unity";
-        [MenuItem("PuzzleApple/V5/Open")]
         public static void Open()
         {
             if(EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())

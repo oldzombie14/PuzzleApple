@@ -6,8 +6,11 @@ using UnityEngine.UI;
 
 namespace PuzzleApple.V5
 {
-    public sealed class ChamberLight : MonoBehaviour, ISwitchableLight, ISentenceMovable, IBrightenableLight
+    public sealed class ChamberLight : MonoBehaviour, ISwitchableLight, ISentenceMovable, IBrightenableLight,
+        ISentenceOutputState<EmissionState>, ISentenceOutputState<DriftPose>
     {
+        internal SentenceStateOutput LightOutput;
+        public SentenceMotionOutput MotionOutput {get;internal set;}
         public WorldEntry entry;
         public Renderer surface;
         public Image hoverEye, collectionSymbol;
@@ -23,7 +26,34 @@ namespace PuzzleApple.V5
         [Min(.1f)] public float knownSymbolDuration=.9f;
         public Vector2 knownSymbolScale=new Vector2(.8f,1.2f);
         public bool TargetOn {get;private set;}=true;
-        public float Brightness {get;private set;}=1;
+        float brightness = 1;
+        public float Brightness
+        {
+            get => brightness;
+            private set { if (brightness == value) return; brightness = value; BrightnessChanged?.Invoke(); }
+        }
+        public event System.Action BrightnessChanged;
+
+        DriftPose ISentenceOutputState<DriftPose>.CaptureState() =>
+            new DriftPose {position = motionBody.position, direction = moveDirection};
+        public bool TryRestoreState(DriftPose pose)
+        {
+            if (!motionBody || !pose.Valid || pose.direction == Vector3.zero) return false;
+            moveDirection = pose.direction;
+            DriftPose.Place(motionBody, pose.position);
+            if (!motionBody.isKinematic) motionBody.linearVelocity = Moving ? moveDirection * moveSpeed : Vector3.zero;
+            return true;
+        }
+        public EmissionState CaptureState() => new EmissionState { brightness = Brightness };
+
+        public bool TryRestoreState(EmissionState state)
+        {
+            if (!material || !entry || !entry.sentenceRuntime ||
+                !(state.brightness >= 0 && state.brightness <= 1)) return false;
+            Brightness = state.brightness;
+            ApplyEmission();
+            return true;
+        }
         public bool TransitionEnabled {get;private set;}
         public bool Collecting {get;private set;}
         [Min(0)] public float moveSpeed=1.2f;
@@ -32,14 +62,14 @@ namespace PuzzleApple.V5
         ObservableBehaviour cubeMotion;
         Vector3 moveDirection,roomMin,roomMax;
         public bool Moving=>Brightness>0&&entry&&entry.Entered&&entry.room.Opened&&entry.sentenceRuntime&&
-            entry.sentenceRuntime.HasEffect(Cognition.CognitionSignal.LightMove,PassageJourney.LightSpace.Chamber)&&
+            (MotionOutput?.HasMotion(SentenceMotion.Light)==true)&&
             (!entry.outdoor||!entry.outdoor.IsOutside&&!entry.outdoor.InChapter)&&
             (!entry.portableClosure||!entry.portableClosure.Isolated);
         public Vector3 RoomCentre=>(roomMin+roomMax)*.5f;
         Material material;
         Color onEmission,onColor;
         readonly RaycastHit[] collectionHits=new RaycastHit[32];
-        Image knownSymbol;
+        Image knownSymbol, knownPrefix;
         Coroutine knownFeedback;
         Color eyeColor;
         [Min(.05f)] public float clickDuration=.25f;
@@ -66,6 +96,10 @@ namespace PuzzleApple.V5
             knownSymbol=Instantiate(collectionSymbol,collectionSymbol.transform.parent);
             knownSymbol.name="Known word feedback";knownSymbol.raycastTarget=false;
             knownSymbol.material=hoverEye.material;knownSymbol.gameObject.SetActive(false);
+            knownPrefix=Instantiate(collectionSymbol,knownSymbol.transform);
+            knownPrefix.name="Known phrase prefix";knownPrefix.raycastTarget=false;
+            knownPrefix.rectTransform.anchorMin=knownPrefix.rectTransform.anchorMax=knownPrefix.rectTransform.pivot=new Vector2(.5f,.5f);
+            knownPrefix.rectTransform.localScale=Vector3.one;knownPrefix.gameObject.SetActive(false);
         }
         void InitializeMotion()
         {
@@ -133,26 +167,29 @@ namespace PuzzleApple.V5
         public bool Settling(bool on)=>Brightness!=(on?1:0);
         void ISwitchableLight.Hold()=>HoldCurrentState();
         bool IBrightenableLight.Lit=>Brightness>0;
-        public bool CanMove(Cognition.CognitionSignal motion)=>motion==Cognition.CognitionSignal.LightMove&&Brightness>0;
+        public bool CanMove(SentenceMotion motion)=>motion==SentenceMotion.Light&&Brightness>0;
         public bool LookingAtLight()
         {
             return LookedAtWord()=="light";
         }
-        string LookedAtWord()=>LookedAtWord(out _);
-        string LookedAtWord(out Renderer emitter)
+        string LookedAtWord()=>LookedAtWord(out _,out _);
+        string LookedAtWord(out Renderer emitter,out Collider target)
         {
-            emitter=null;
+            emitter=null;target=null;
             if(!entry.Entered||entry.Busy||entry.ConfirmingExit||Collecting||!entry.room.Opened||!entry.player.CanInteractWithWorld)return null;
             var view=entry.player.view;
-            if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.LookedAtWord(new Ray(view.position,view.forward),out emitter);
+            if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World.LookedAtWord(new Ray(view.position,view.forward),out emitter,out target);
             var ray = new Ray(view.position, view.forward);
+            if(entry.outdoor && entry.outdoor.InLesson)
+                return entry.outdoor.Lesson.WordAt(ray,collectionDistance,out emitter,out target);
             emitter = PickStar(ray, collectionDistance, out var hit);
             if(emitter)return "light";
-            if(!hit.collider)return null;
+            target=hit.collider;
+            if(!target)return null;
             if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.CurrentRoom.WordAt(hit.collider,out emitter);
             if(entry.journey){var word=entry.journey.WordAt(hit.collider,hit.distance);if(word!=null){if(word=="light")emitter=hit.collider.GetComponent<Renderer>();return word;}}
             if(hit.distance<=7 && entry.board.State.Knows("floor") && edges && edges.surfaces.Contains(hit.collider.GetComponent<Renderer>()) && hit.normal.y>.9f && hit.point.y<RoomCentre.y)return "floor";
-            if((!entry.journey||!entry.journey.BeyondChamber)&&TargetOn&&Brightness>=.999f&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
+            if((!entry.journey||!entry.journey.BeyondChamber)&&Brightness>0&&hit.collider.GetComponentInParent<ChamberLight>()==this){emitter=surface;return "light";}
             return null;
         }
 
@@ -176,12 +213,17 @@ namespace PuzzleApple.V5
             return entry.journey && entry.journey.InCorridor && entry.journey.ActiveStars
                 ? entry.journey.ActiveStars.Pick(ray,starReach) : null;
         }
-        void Update()
+        void ApplyEmission()
         {
-            if(TransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,TargetOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,fadeDuration));
             material.SetColor("_EmissionColor",onEmission*Mathf.SmoothStep(0,1,Brightness)*entry.sentenceRuntime.LampBoost(PassageJourney.LightSpace.Chamber));
             material.SetColor("_BaseColor",Color.Lerp(new Color(.015f,.015f,.015f),onColor,Brightness));
-            if(cubeMotion)cubeMotion.Available=Moving&&TargetOn&&Brightness>=.999f;
+        }
+
+        void Update()
+        {
+            if(TransitionEnabled)Brightness=RoomLighting.AdvanceLevel(Brightness,TargetOn?1:0,Time.unscaledDeltaTime/Mathf.Max(.01f,fadeDuration),LightOutput?.FinishFraction??0);
+            ApplyEmission();
+            if(cubeMotion)cubeMotion.Available=Moving&&Brightness>0;
             var mouse=Mouse.current;
             AdvancePointer(mouse!=null&&mouse.leftButton.wasPressedThisFrame,
                 mouse!=null&&mouse.leftButton.isPressed,mouse!=null&&mouse.leftButton.wasReleasedThisFrame,Time.unscaledDeltaTime);
@@ -226,13 +268,28 @@ namespace PuzzleApple.V5
         }
         public bool TryCollect()
         {
-            string word=LookedAtWord(out var emitter);if(word==null)return false;
+            string word=LookedAtWord(out var emitter,out var target);if(word==null)return false;
             if(knownFeedback!=null){StopCoroutine(knownFeedback);knownFeedback=null;knownSymbol.gameObject.SetActive(false);}
-            if(word=="door" && entry.journey && entry.journey.EndingDoor){
-                var view=entry.player.view;PickStar(new Ray(view.position,view.forward),collectionDistance,out var hit);
-                if(entry.journey.EndingDoor.Owns(hit.collider) && entry.journey.EndingDoor.TryCollectLesson())return true;
+            if(word=="mirror" && entry.outdoor && entry.outdoor.InLesson && entry.outdoor.Lesson.CollectMirror())return true;
+            bool litDoor=false;
+            if(word=="door" && target){
+                if(entry.outdoor && entry.outdoor.InLesson){
+                    litDoor=entry.outdoor.Lesson.DoorLit;
+                }else if(entry.outdoor && entry.outdoor.IsOutside){
+                    var world=entry.outdoor.World;
+                    litDoor=target.GetComponentInParent<Outdoor.ThresholdDoor>()==world.door && world.doors.appearance.SentenceLit;
+                }else if(entry.journey){
+                    var j=entry.journey;
+                    if(j.EndingDoor && j.EndingDoor.Owns(target)){
+                        if(j.EndingDoor.TryCollectLesson())return true;
+                        litDoor=j.EndingDoor.DoorGlow>0;
+                    }else{
+                        var motion=j.EntranceDoor && j.EntranceDoor.Owns(target)?j.EntranceDoor.MotionOutput:j.WhiteDoorMotionOutput;
+                        litDoor=motion?.EmitsLight==true;
+                    }
+                }
             }
-            if(entry.board.State.Knows(word)){ShowKnownVocabulary(word);return true;}
+            if(entry.board.State.Knows(word)){ShowKnownVocabulary(word,litDoor?"light":null);return true;}
             if(word=="light")
             {
                 var library=entry.board.GetComponentInChildren<WordLibrary>(true);
@@ -271,26 +328,34 @@ namespace PuzzleApple.V5
                 RenderTexture.ReleaseTemporary(frame);
             }
         }
-        public void ShowKnownVocabulary(string id)
+        public void ShowKnownVocabulary(string id,string prefix=null)
         {
             if(!entry.board.State.Knows(id))return;
             if(knownFeedback!=null)StopCoroutine(knownFeedback);
-            knownFeedback=StartCoroutine(ShowKnownWord(id));
+            knownFeedback=StartCoroutine(ShowKnownWord(id,prefix));
         }
-        IEnumerator ShowKnownWord(string id)
+        IEnumerator ShowKnownWord(string id,string prefix)
         {
-            KnownFeedbackWord=id;
+            KnownFeedbackWord=prefix==null?id:prefix+" "+id;
+            bool pair=prefix!=null;
+            knownPrefix.gameObject.SetActive(pair);
+            if(pair)knownPrefix.sprite=entry.board.Catalog.Word(prefix).Symbol;
             knownSymbol.sprite=entry.board.Catalog.Word(id).Symbol;
             var rect=knownSymbol.rectTransform;
             rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(.5f,.5f);rect.anchoredPosition=Vector2.zero;
             hoverEye.gameObject.SetActive(false);reticle.SetActive(false);knownSymbol.gameObject.SetActive(true);
+            float stride=pair?rect.rect.width:0;
+            knownPrefix.rectTransform.anchoredPosition=Vector2.left*stride;
             for(float t=0;t<knownSymbolDuration;t+=Time.unscaledDeltaTime)
             {
                 float progress=t/knownSymbolDuration;
                 rect.localScale=Vector3.one*Mathf.Lerp(knownSymbolScale.x,knownSymbolScale.y,Mathf.SmoothStep(0,1,progress));
+                rect.anchoredPosition=Vector2.right*(.5f*stride*rect.localScale.x);
                 float reveal=Mathf.SmoothStep(0,1,progress/.08f);
                 float fade=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.3f,1,progress));
-                knownSymbol.color=new Color(1,1,1,knownSymbolAlpha*reveal*fade);yield return null;
+                knownSymbol.color=new Color(1,1,1,knownSymbolAlpha*reveal*fade);
+                if(pair)knownPrefix.color=knownSymbol.color;
+                yield return null;
             }
             knownSymbol.gameObject.SetActive(false);knownFeedback=null;KnownFeedbackWord=null;
         }
@@ -322,7 +387,7 @@ namespace PuzzleApple.V5
                 var panel=entry.board.Panel;
                 panel.SetOpen(true);
                 while(panel.IsOpen&&!panel.FullyOpen)yield return null;
-                if(panel.FullyOpen&&entry.board.State.Find(acquired.Id)==acquired&&acquired.Recognized)
+                if(panel.FullyOpen&&entry.board.State.Find(acquired.Id)==acquired&&acquired.Effective)
                     entry.feedback.Play(acquired.Id,entry.sentenceRuntime.SustainsFeedback(acquired));
             }
         }

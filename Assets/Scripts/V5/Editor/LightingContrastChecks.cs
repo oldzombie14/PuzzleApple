@@ -59,7 +59,8 @@ namespace PuzzleApple.V5.Editor
                 Check(known&&known.gameObject.activeSelf&&known.material==contrast,"known feedback keeps same contrast");Contrast(known.material);
                 var j=e.journey;e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart+2)),j.Root.rotation);yield return new WaitForEndOfFrame();yield return new WaitForEndOfFrame();
                 yield return new WaitForSecondsRealtime(1.2f);
-                Check(j.InSecondRoom&&rig.chamberBloom.weight==0&&BloomAt(e.player.view)>1f,"second-room soft Bloom restored");
+                float roomBloom=BloomAt(e.player.view);
+                Check(j.InSecondRoom&&rig.chamberBloom.weight==0&&roomBloom>.02f&&roomBloom<=1.6f,"second-room soft Bloom restored within the highlight budget");
                 Result="PASS: neutral closed fill, HDR world image, independent soft chamber/second-room Bloom, balanced outer ambient, first/known live materials and GPU contrast on light/dark backgrounds";
             }
             finally{Application.runInBackground=background;}

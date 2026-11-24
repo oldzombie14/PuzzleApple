@@ -15,6 +15,11 @@ namespace PuzzleApple.V5
         public bool IsOutside=>outside;
         bool outside;
         public ChapterRoom Chapter {get;private set;}
+        public ChapterLesson Lesson {get;private set;}
+        public bool InLesson => Lesson && Lesson.gameObject.activeInHierarchy;
+        Scene lessonScene;
+        CameraClearFlags beforeLessonClear;
+        Color beforeLessonBackground;
         public bool InChapter=>Chapter && Chapter.Entry && Chapter.gameObject.activeInHierarchy;
         const string ChapterPath="Assets/Scenes/V5/ChapterI.unity";
         Scene chapterScene, gardenScene, vitruvianScene;
@@ -155,7 +160,7 @@ namespace PuzzleApple.V5
         }
         void LateUpdate()
         {
-            if(!windowCamera||!window||InChapter||IsOutside)return;
+            if(!windowCamera||!window||InChapter||InLesson||IsOutside)return;
             var j=entry.journey;
             if(!j.InSecondRoom||entry.portableClosure&&entry.portableClosure.Isolated)return;
             var feet=j.Root.InverseTransformPoint(entry.player.transform.position);
@@ -188,6 +193,7 @@ namespace PuzzleApple.V5
         }
         void Update()
         {
+            if(InLesson)return;
             if(IsOutside||InChapter)
             {
                 CheckFrames();
@@ -259,9 +265,8 @@ namespace PuzzleApple.V5
                 if(toChapter)
                 {
                     yield return null; // Present a fully covered frame before loading the galleries.
-                    yield return EnterChapter();
-                    if(!InChapter){World.Audio.Play(World.music);yield break;}
-                    player.view.rotation=Chapter.arrival.rotation*incoming;
+                    yield return EnterLesson();
+                    player.view.rotation=Lesson.transform.rotation*incoming;
                 }
                 else
                 {
@@ -300,6 +305,71 @@ namespace PuzzleApple.V5
             if(finish.HasValue)entry.player.view.rotation=finish.Value;
         }
 
+        IEnumerator EnterLesson()
+        {
+            if(!Lesson){
+                const string path="Assets/Scenes/V5/ChapterI_Lesson.unity";
+                yield return SceneManager.LoadSceneAsync(path,LoadSceneMode.Additive);
+                lessonScene=SceneManager.GetSceneByPath(path);
+                foreach(var root in lessonScene.GetRootGameObjects())
+                    if(root.TryGetComponent<ChapterLesson>(out var lesson)){Lesson=lesson;break;}
+            }
+            entry.board.State.ClearForChapterTransition();
+            outside=false;
+            preparedRoot.SetActive(false);
+            entry.room.GetComponent<FoldingInterior>().enabled=false;
+            SceneManager.SetActiveScene(lessonScene);
+            var camera=entry.player.view.GetComponent<Camera>();
+            beforeLessonClear=camera.clearFlags;beforeLessonBackground=camera.backgroundColor;
+            camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=Color.black;
+            Lesson.gameObject.SetActive(true);
+            Lesson.Enter(this);
+            entry.sentenceRuntime.ChangeSpace();
+        }
+
+        internal void FinishLesson(bool reachedGallery)
+        {
+            if(InLesson && !Transitioning && !entry.Busy)StartCoroutine(LessonCrossing(reachedGallery));
+        }
+
+        IEnumerator LessonCrossing(bool reachedGallery)
+        {
+            Transitioning=true;
+            var panel=entry.board.Panel;
+            var player=entry.player;
+            var curtain=entry.blackBackground;
+            entry.sentenceRuntime.presentation.Cancel();
+            bool move=player.MovementLocked,cinematic=player.CinematicLocked,blocked=panel.InputBlocked;
+            player.MovementLocked=player.CinematicLocked=panel.InputBlocked=true;
+            entry.board.CancelDrag();
+            panel.SetOpen(false);
+            var color=reachedGallery?Color.white:Color.black;
+            curtain.color=new Color(color.r,color.g,color.b,0);
+            curtain.transform.SetAsLastSibling();curtain.gameObject.SetActive(true);
+            try{
+                yield return FadeLesson(color,0,1);
+                if(reachedGallery){
+                    yield return EnterChapter();
+                    Lesson.gameObject.SetActive(false);
+                    var camera=player.view.GetComponent<Camera>();
+                    camera.clearFlags=beforeLessonClear;camera.backgroundColor=beforeLessonBackground;
+                    entry.sentenceRuntime.ChangeSpace();
+                }else Lesson.Respawn();
+                yield return FadeLesson(color,1,0);
+            }finally{
+                curtain.gameObject.SetActive(false);
+                player.MovementLocked=move;player.CinematicLocked=cinematic;panel.InputBlocked=blocked;
+                player.SuppressInteractionThisFrame();player.RestoreGameplayCursor();tracking=false;Transitioning=false;
+            }
+        }
+        IEnumerator FadeLesson(Color color,float start,float end)
+        {
+            for(float t=0;t<1;t+=Time.unscaledDeltaTime/.65f){
+                color.a=Mathf.SmoothStep(start,end,t);entry.blackBackground.color=color;yield return null;
+            }
+            color.a=end;entry.blackBackground.color=color;
+        }
+
         IEnumerator EnterChapter()
         {
             var player=entry.player;
@@ -333,7 +403,6 @@ namespace PuzzleApple.V5
                 Garden.Bind(entry);
             }
             entry.room.GetComponent<FoldingInterior>().enabled=false;
-            entry.board.State.ClearWorkspace();
             outside=false;
             SetChapterActive(true);
             preparedRoot.SetActive(false);
@@ -349,7 +418,7 @@ namespace PuzzleApple.V5
         }
         void LeaveChapter()
         {
-            entry.board.State.ClearWorkspace();
+            entry.board.State.ClearForChapterTransition();
             outside=true;
             if(Chapter.mirrors)Chapter.mirrors.ResetEntrance();
             SetChapterActive(false);
@@ -358,12 +427,11 @@ namespace PuzzleApple.V5
             preparedRoot.SetActive(true);
             entry.player.Teleport(chapterFrame.position-chapterFrame.forward*1.8f,Quaternion.LookRotation(-chapterFrame.forward));
             World.Audio.Play(World.music);
-            World.ApplyMotion(entry.sentenceRuntime.HasEffect,false);
             entry.sentenceRuntime.ChangeSpace();
         }
         void ReturnIndoors()
         {
-            entry.board.State.ClearWorkspace();
+            entry.board.State.ClearForChapterTransition();
             outside=false;
             preparedRoot.SetActive(false);
             SceneManager.SetActiveScene(entry.gameObject.scene);
@@ -419,7 +487,7 @@ namespace PuzzleApple.V5
         public void ArriveFromAscent()
         {
             TransitionCount++;
-            entry.board.State.ClearWorkspace();
+            entry.board.State.ClearForChapterTransition();
             ActivateOutdoor();
             var exit=World.exit;
             var point=exit.position+exit.forward*3;
@@ -459,7 +527,6 @@ namespace PuzzleApple.V5
             {
                 camera.clearFlags=CameraClearFlags.Skybox;camera.farClipPlane=1500;
                 World.Audio.Play(World.music);
-                World.ApplyMotion(entry.sentenceRuntime.HasEffect,false);
             }
             entry.sentenceRuntime.ChangeSpace();
             if(!GetComponent<InstanceRecovery>())gameObject.AddComponent<InstanceRecovery>().passage=this;
@@ -477,7 +544,7 @@ namespace PuzzleApple.V5
             entry.board.CancelDrag();panel.SetOpen(false);panel.InputBlocked=true;player.CinematicLocked=true;player.MovementLocked=true;
             try
             {
-                entry.board.State.ClearWorkspace();
+                entry.board.State.ClearForChapterTransition();
                 var eyePosition=ThroughPortal(player.view.position);
                 var rotation=OutletView(player.view);
                 var exit=preparedWorld.exit;
@@ -497,10 +564,11 @@ namespace PuzzleApple.V5
                 panel.InputBlocked=oldBlocked;player.SetPanelOpen(false);player.SuppressInteractionThisFrame();Transitioning=false;
             }
         }
-        public Outdoor.OpeningLightField DropField=>InChapter && CurrentRoom==Vitruvian?Vitruvian.puzzle.field:IsOutside?World.field:null;
+        public Outdoor.OpeningLightField DropField=>InLesson?Lesson.Field:InChapter && CurrentRoom==Vitruvian?Vitruvian.puzzle.field:IsOutside?World.field:null;
         public ShapePicker Picker {get;private set;}
         public WorldDropRegion DropRegion{
             get{
+                if(InLesson)return Lesson.InStarfield?null:Lesson.Region;
                 var space=entry.journey.PlayerSpace;
                 if(space==PassageJourney.LightSpace.Outdoor && World)return World.GetComponent<WorldDropRegion>();
                 if(space==PassageJourney.LightSpace.Vitruvian && Vitruvian)return Vitruvian.GetComponent<WorldDropRegion>();
@@ -519,8 +587,13 @@ namespace PuzzleApple.V5
             var camera=entry.player.view.GetComponent<Camera>();
             var ray=camera.ScreenPointToRay(screen);var frustum=GeometryUtility.CalculateFrustumPlanes(camera);
             if(InChapter && CurrentRoom==Vitruvian && word=="light" && Vitruvian.puzzle.DropOnBall(ray))return true;
+            if(word=="light" && !entry.LightUnderstood)return false;
             Picker.Show(board.Panel,screen,region.shapes,shape=>{
                 if(DropRegion!=region || !region.Accepts(word))return;
+                if(InLesson){
+                    if(!World.TryPlaceLamp(ray,frustum,shape,region,Lesson.Field,Lesson.Ground))Picker.Failed(screen);
+                    return;
+                }
                 if(InChapter && CurrentRoom==Vitruvian){
                     if(!World.TryPlaceLamp(ray,frustum,shape,region,Vitruvian.puzzle.field,Vitruvian.floor))Picker.Failed(screen);
                     return;
@@ -536,6 +609,7 @@ namespace PuzzleApple.V5
             ReleaseWindow();
             foreach(var pair in hidden)if(pair.Key)pair.Key.forceRenderingOff=pair.Value;
             foreach(var pair in disabled)if(pair.Key)pair.Key.enabled=pair.Value;
+            if(lessonScene.IsValid()&&lessonScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(lessonScene);
             if(vitruvianScene.IsValid()&&vitruvianScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(vitruvianScene);
             if(gardenScene.IsValid()&&gardenScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(gardenScene);
             if(chapterScene.IsValid()&&chapterScene.isLoaded&&Application.isPlaying)SceneManager.UnloadSceneAsync(chapterScene);

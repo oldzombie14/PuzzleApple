@@ -3,8 +3,11 @@ using UnityEngine.Rendering;
 
 namespace PuzzleApple.V5
 {
-    public sealed class AscentStars : MonoBehaviour,ISwitchableLight,IBrightenableLight
+    public sealed class AscentStars : MonoBehaviour,ISwitchableLight,IBrightenableLight, ISentenceOutputState<EmissionState>,
+        ISentenceOutputState<AscentStars.MotionState>
     {
+        internal SentenceStateOutput LightOutput;
+        public SentenceMotionOutput MotionOutput {get;internal set;}
         struct Star
         {
             public MeshRenderer renderer;
@@ -24,10 +27,35 @@ namespace PuzzleApple.V5
         public bool Lit=>brightness>0 && journey && journey.Ascent && journey.Ascent.WhiteAmount<.5f;
         public bool WouldChange(bool on)=>on?brightness<1:brightness>0;
         public bool Settling(bool on)=>target==(on?1:0)&&brightness!=target;
-        public void SetOn(bool on){target=on?1:0;}
-        public void Hold(){target=brightness;}
-        public bool CanMove(Cognition.CognitionSignal signal)=>signal==Cognition.CognitionSignal.LightMove && brightness>0;
-        void Update(){if(journey)brightness=Mathf.MoveTowards(brightness,target,Time.unscaledDeltaTime/Mathf.Max(.01f,journey.lightFadeDuration));}
+        [System.Serializable]
+        public struct MotionState { public float time; }
+        MotionState ISentenceOutputState<MotionState>.CaptureState() => new MotionState { time = motionTime };
+        public bool TryRestoreState(MotionState state)
+        {
+            if (!journey || !float.IsFinite(state.time) || state.time < 0) return false;
+            motionTime = state.time;
+            RefreshAppearance();
+            return true;
+        }
+        void RefreshAppearance()
+        {
+            if (visible) DrawAt(journey.entry.player.view, journey.Ascent.WhiteAmount, sceneryTime, true);
+        }
+        float sceneryTime;
+        bool driving;
+        public void SetOn(bool on){driving=true;target=on?1:0;}
+        public void Hold(){driving=false;target=brightness;}
+        public EmissionState CaptureState() => new EmissionState(brightness);
+        public bool TryRestoreState(EmissionState state)
+        {
+            if (!journey || !state.Valid) return false;
+            brightness = state.brightness;
+            if (!driving) target = brightness;
+            RefreshAppearance();
+            return true;
+        }
+        public bool CanMove(SentenceMotion signal)=>signal==SentenceMotion.Light && brightness>0;
+        void Update(){if(journey)brightness=SentenceStateOutput.Advance(brightness,target,Time.unscaledDeltaTime/Mathf.Max(.01f,journey.lightFadeDuration),LightOutput);}
 
         public void Build(MeshFilter diamond,int count,float stairWidth,float start,float top,float rise,PassageJourney owner)
         {
@@ -62,14 +90,19 @@ namespace PuzzleApple.V5
 
         public void Draw(Transform eye,float white,float time,bool show)
         {
+            sceneryTime = time;
+            if(brightness>0 && (MotionOutput?.ControlsLamps!=true||(MotionOutput?.HasMotion(SentenceMotion.Light)==true)))motionTime+=Time.deltaTime;
+            DrawAt(eye, white, time, show);
+        }
+        void DrawAt(Transform eye,float white,float time,bool show)
+        {
             var runtime=journey.entry.sentenceRuntime;
             const PassageJourney.LightSpace space=PassageJourney.LightSpace.Ascent;
-            if(brightness>0 && (!runtime.ControlsLamps(space)||runtime.HasEffect(Cognition.CognitionSignal.LightMove,space)))motionTime+=Time.deltaTime;
             if(white<.5f)time=motionTime;
             if(!show && !visible)return;
             visible=show;
             float contrast=Mathf.Abs(1-2*white);
-            collectible=show && brightness>.99f && white<.5f && contrast>.15f;
+            collectible=show && brightness>0 && white<.5f && contrast>.15f;
             var emission=white<.5f?Color.white*(glowStyle?glowStyle.emission:1f)*brightness*runtime.LampBoost(space):Color.black;
             ink.SetColor("_EmissionColor",emission);
             ink.SetColor("_BaseColor",new Color(0,0,0,Mathf.SmoothStep(0,1,contrast)));

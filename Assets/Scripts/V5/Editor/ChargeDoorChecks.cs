@@ -9,10 +9,10 @@ namespace PuzzleApple.V5.Editor
     {
         public static string Result {get;private set;}
         static void Check(bool ok,string message){if(ok)return;Result="FAIL: "+message;throw new Exception(Result);}
-        public static IEnumerator Wait(Func<bool> ready,string message,float seconds=35){
+        public static IEnumerator Wait(Func<bool> ready,string message,float seconds=35, Func<string> details=null){
             float end=Time.realtimeSinceStartup+seconds;
             while(!ready() && Time.realtimeSinceStartup<end)yield return null;
-            Check(ready(),message);
+            if (!ready()) Check(false, details == null ? message : message + " (" + details() + ")");
         }
         public static void Run(){
             var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
@@ -25,7 +25,7 @@ namespace PuzzleApple.V5.Editor
             door.SetOpen(false);yield return Wait(()=>door.Progress==0,"close unlocked room entrance");
         }
         public static IEnumerator UnlockFirstPassage(WorldEntry e){
-            var gate=UnityEngine.Object.FindFirstObjectByType<WallPassage>().GetComponentsInChildren<ProgressLock>().Single(g=>g.passageReveal);
+            var gate=UnityEngine.Object.FindFirstObjectByType<WallPassage>().GetComponentsInChildren<ProgressLock>().Single(g=>g.BoundarySource is WallPassage);
             if(gate.Unlocked)yield break;
             bool restoreOn=e.chamberLight.TargetOn;
             e.chamberLight.SetOn(false);yield return Wait(()=>gate.Unlocked,"unlock first-passage reveal before testing later rooms");
@@ -54,10 +54,12 @@ namespace PuzzleApple.V5.Editor
             var bridgeEdge=bridge.TransformPoint(new Vector3(0,.5f,-.5f));
             Check(Vector3.Distance(roomEdge,bridgeEdge)<.001f && bridge.GetComponent<Renderer>().sharedMaterial==j.floorSurface.Surface.sharedMaterial,"level floor meets without overlapping the threshold");
             s.TryAcquireSentence("ending.reject","positive door",out var denied);
-            yield return Wait(()=>s.Find(denied.Id)==null,"rejected command retires");
+            yield return Wait(()=>s.Find(denied.Id)==null,"entrance opening finishes and the door command retires");
             Check(j.DoorProgress==0 && j.EntranceDoor.Progress==1 && door.Lift==0,"only the local entrance opens, without recruiting the white door mid-command");
-            s.TryAcquireSentence("ending.on","positive light");yield return Wait(()=>j.Brightness==1,"lamps lit");
+            s.TryAcquireSentence("ending.on","positive light",out var lightOn);
+            yield return Wait(()=>j.Brightness==1 && s.Find(lightOn.Id)==null,"lamps lit and light command finished");
             s.TryAcquireSentence("ending.gather","light move door",out var gather);
+            Check(gather.ExecutionLocked,"gather starts after the light command");
             // Global scope also waits for tutorial spheres travelling across their room.
             yield return Wait(()=>s.Find(gather.Id)==null,"gather command retires",90);
             Check(j.Lamps.All(l=>l.Docked) && j.Lamps.Any(l=>!l.AtChargeDoor) && j.Lamps.Where(l=>l.AtChargeDoor).Sum(l=>l.ChargePower)>=j.ChargePowerRequired,"both doors receive lamps and the slab receives enough power");
@@ -86,7 +88,7 @@ namespace PuzzleApple.V5.Editor
             e.sentenceRuntime.presentation.enabledShots=false;
             board.Panel.SetOpen(true);yield return Wait(()=>board.Panel.FullyOpen,"visible feedback");
             s.TryAcquireSentence("reject.indoor.floor","floor move light",out var noFloorTarget);
-            yield return Wait(()=>s.Find(noFloorTarget.Id)==null,"dark indoor floor has no target and retires");
+            Check(!noFloorTarget.Spoken && !s.JudgementLocked,"dark indoor floor has no target and leaves judgement available");
             foreach(var text in new[]{"positive door","negative door"}){
                 bool alreadyOpen=text=="positive door";
                 j.SetDoor(alreadyOpen);j.EntranceDoor.SetOpen(alreadyOpen);
@@ -95,8 +97,7 @@ namespace PuzzleApple.V5.Editor
                 s.TryAcquireSentence("reject."+text,text,out var rejected);
                 yield return Wait(()=>e.feedback.WeakCount>weak,"empty door gives weak feedback "+text);
                 Check(e.feedback.StrongCount==strong && d.Lift==0 && j.DoorProgress==(alreadyOpen?1:0),"unpowered slab and already-set doors stay still");
-                if(text=="door move")s.ReturnToLibrary(rejected.Id,0,true);
-                else yield return Wait(()=>s.Find(rejected.Id)==null,"unpowered command retires");
+                Check(!rejected.Spoken && !s.JudgementLocked,"unpowered command stays a draft");
             }
             j.SetLights(true,PassageJourney.LightSpace.FarRoom);yield return Wait(()=>j.Brightness==1,"lamps lit");
             p.Teleport(j.Root.TransformPoint(new Vector3(0,.12f,j.RoomStart+2)),j.Root.rotation);
@@ -130,6 +131,13 @@ namespace PuzzleApple.V5.Editor
             state.TryAcquireSentence("ending.freeze","negative move",out var freeze);
             float held=d.Lift;yield return new WaitForSecondsRealtime(.26f);
             Check(d.Lift==held,"no move freezes door");
+            var travel = d.MotionOutput.StateSource<ChargeDoor.LiftState>();
+            var saved = JsonUtility.FromJson<ChargeDoor.LiftState>(JsonUtility.ToJson(travel.CaptureState()));
+            var lower = saved;
+            lower.lift = .18f;
+            Check(travel.TryRestoreState(lower) && d.Lift == .18f, "restore frozen lift position");
+            yield return null;
+            Check(d.Lift == .18f && travel.TryRestoreState(saved) && d.Lift == held, "restore frozen cycle without reclaiming the command");
             state.ReturnToLibrary(freeze.Id,0,true);
             state.TryAcquireSentence("ending.takeover","positive door",out var open);
             yield return Wait(()=>state.Find(open.Id)==null && d.Lift>.97f,"on completes during cycle");
@@ -149,7 +157,20 @@ namespace PuzzleApple.V5.Editor
             yield return Wait(()=>j.InCorridor,"first corridor");
             j.SetLights(true,PassageJourney.LightSpace.FirstPath);
             state.TryAcquireSentence("ending.stars","light move door",out var stars);
-            yield return Wait(()=>!j.Stars.NeedsGather && state.Find(stars.Id)==null,"first corridor stars dock and retire");
+            float start = Time.time;
+            string GatherDetails()
+            {
+                if (state.Find(stars.Id) == null) return "command retired, needsGather=" + j.Stars.NeedsGather;
+                var scope = e.sentenceRuntime.EffectScope(stars);
+                var pending = e.Entities.Query<SentenceMotionOutput>(scope)
+                    .Where(output => output.WouldChange(stars, scope) && output.Owns(SentenceMotion.LightToDoor,stars.Established))
+                    .Select(output => e.Entities.SpacesOf(output).ToString());
+                return "simulated=" + (Time.time - start) +
+                    ", needsGather=" + j.Stars.NeedsGather + ", applied=" + j.Stars.MotionOutput.HasMotion(SentenceMotion.LightToDoor) +
+                    ", group=" + (state.Find(stars.Id) != null) + ", pending=" + string.Join(", ", pending);
+            }
+            yield return Wait(() => !j.Stars.NeedsGather && state.Find(stars.Id) == null,
+                "first corridor stars dock and retire", details: GatherDetails);
             Result="PASS: charged cycle, command priority and resumption, split, freeze, closed-world idle, white-door star gathering";
         }
         static IEnumerator Exercise(WorldEntry e){
@@ -167,6 +188,11 @@ namespace PuzzleApple.V5.Editor
             p.MovementLocked=true;
             s.TryAcquireSentence("ending.drain","light move",out var drift);
             yield return Wait(()=>d.Falling,"departure drains bars and releases slab");
+            var falling = JsonUtility.FromJson<ChargeDoor.LiftState>(JsonUtility.ToJson(d.CaptureState()));
+            Check(d.TryRestoreState(falling) && d.Falling && d.Lift == falling.lift, "resume the same fall without restarting warning");
+            var unsafeDrop = falling;
+            unsafeDrop.lift = .01f;
+            Check(!d.TryRestoreState(unsafeDrop) && d.Lift == falling.lift, "restoring a lower slab cannot sweep through the player");
             yield return Wait(()=>d.Stunned,"fall impact");yield return Wait(()=>!d.Stunned && d.Lift==0,"room-side respawn");
             Check(d.transform.InverseTransformPoint(p.transform.position).z<d.LeafZ && s.Find(drift.Id)==drift,"correct side and continuous sentence survives");
             Result="PASS: rejects empty door, gathering and parking, total energy, controlled lift and closure, power loss, impacts and both respawn sides";

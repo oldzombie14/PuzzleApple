@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 71092575ab3612347a2485dfa76dee24, type: 3}
   m_Name: IntroMusic
-  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.MusicTrack
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Outdoor.MusicTrack
   clip: {fileID: 8300000, guid: e0e0c77680c7c9442812a80ebc3ca04a, type: 3}
   volume: 0.45
   fadeIn: 1

@@ -36,6 +36,7 @@ namespace PuzzleApple.V5.Editor
             var state = entry.board.State;
             state.TryAcquireSentence("tutorial.check.world", "positive world");
             yield return Until(() => entry.room.Opened && !entry.Busy);
+            yield return ChargeDoorChecks.UnlockFirstPassage(entry);
             var journey = entry.journey;
             var observer = entry.chamberLight.observer;
             var player = entry.player;
@@ -99,7 +100,7 @@ namespace PuzzleApple.V5.Editor
             Check(Mathf.Approximately(lampLight.intensity,fullSphere*journey.entry.sentenceRuntime.LampMultiplier),
                 "sphere light output follows its size");
             Check(journey.Tutorial.Fill.Fill>smallLampFill+.01f,"lighting the large sphere raises the room fill");
-            state.Detach(on.Id,on.Words.Last().Id);
+            yield return Until(()=>state.Find(on.Id)==null);
             player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.Tutorial.ExitZ+2)),journey.Root.rotation);
             yield return Until(() => journey.InReturnPath);
             before=sphere.position;
@@ -116,16 +117,15 @@ namespace PuzzleApple.V5.Editor
             var glow=sphere.GetComponentInChildren<Light>();
             state.TryAcquireSentence("tutorial.check.off","negative light",out var off);
             yield return Until(()=>glow.intensity<journey.LightStyle.LampIntensity(sphere.localScale.x)*.7f);
-            var token=state.Detach(off.Id,off.Words.Last().Id);
-            yield return new WaitForSeconds(.15f);
+            Check(state.Detach(off.Id,off.Words.Last().Id)==null,"fading light refuses splitting");
             Check(glow.intensity>0 && journey.WordAt(collider,1)=="light","half-lit sphere retains light identity");
-            state.JoinAndSpeak(token.Id,off.Id,false);
             yield return Until(()=>!journey.Tutorial.AnyLit);
             before=sphere.position;
             smallBefore=small.position;
             yield return new WaitForSeconds(.25f);
             Check(sphere.position==before && smallBefore==small.position,
                 "dark tutorial lamps stay still after the motion sentence is split");
+            yield return Until(()=>state.Find(off.Id)==null);
             journey.Tutorial.SetOn(true);
             yield return Until(()=>!journey.Tutorial.WouldChange(true));
             smallBefore=small.position;
@@ -133,15 +133,23 @@ namespace PuzzleApple.V5.Editor
             Check(sphere.position==before && smallBefore==small.position,
                 "relighting alone leaves the tutorial lamps still");
             yield return CheckBlockedApproach(entry);
+            // The barrier trial also reaches corridor stars. Relight them so its command can finish.
+            var relight=VitruvianChecks.Say(entry.board,"positive","light");
+            yield return ChargeDoorChecks.Wait(()=>state.Find(relight.Id)==null &&
+                !state.Groups.Any(g=>g.RuleId=="light.move.door"),"all approach targets settle before entering the next room",65);
             state.ClearWorkspace();
+            yield return ChargeDoorChecks.UnlockEntrance(entry);
             player.Teleport(journey.Root.TransformPoint(new Vector3(0,.08f,journey.RoomStart+3)),journey.Root.rotation);
             yield return Until(()=>journey.InSecondRoom);
+            // Only emitting cubes are light targets; dark cubes keep their independent drift.
+            journey.SetLights(true,PassageJourney.LightSpace.FarRoom);
+            yield return Until(()=>journey.Brightness==1);
             yield return new WaitForFixedUpdate();
             var cube=journey.Lamps[0].GetComponent<Rigidbody>();
             before=cube.position;
             yield return new WaitForSeconds(.3f);
-            Check(cube.isKinematic && cube.position==before,"entering the drifting room with move learned and the sentence dismantled holds the lamps");
-            Result = "PASS";
+            Check(cube.isKinematic && cube.position==before,"entering the drifting room with move learned and the sentence dismantled holds lit lamps");
+            Result = "PASS: observed star motion transfers to the sentence, gates expand control, tutorial dark/lit split and relight preserve state, directed approach respects obstacles, lit room lamps stay paused";
         }
         static IEnumerator CheckBlockedApproach(WorldEntry entry)
         {
@@ -181,11 +189,17 @@ namespace PuzzleApple.V5.Editor
                     side.transform.localScale = new Vector3(1,6,8);
                 }
                 Physics.SyncTransforms();
-                yield return new WaitForSeconds(2);
-                foreach (var obstacle in obstacles.GetComponentsInChildren<Collider>()) CheckClear(body,obstacle);
-                Vector3 held = sphere.position;
-                yield return new WaitForSeconds(.3f);
-                Check(Vector3.Distance(held,sphere.position)<.001f,"sphere stops at sealed barrier");
+                // Let the approach settle against the barrier before measuring the hold.
+                var walls=obstacles.GetComponentsInChildren<Collider>();
+                var held=sphere.position;
+                float still=0;
+                for(int step=0;step<500 && still<.3f;step++){
+                    yield return new WaitForFixedUpdate();
+                    foreach(var wall in walls)CheckClear(body,wall);
+                    if(Vector3.Distance(held,sphere.position)>.001f){held=sphere.position;still=0;}
+                    else still+=Time.fixedDeltaTime;
+                }
+                Check(still>=.3f && sphere.localPosition.z>=block.transform.localPosition.z,"sphere stops at sealed barrier");
             }
             finally { UnityEngine.Object.Destroy(obstacles); }
         }
@@ -196,8 +210,8 @@ namespace PuzzleApple.V5.Editor
                 obstacle,obstacle.transform.position,obstacle.transform.rotation,out _,out float depth);
             Check(!overlaps || depth<.00001f,"sphere penetrated obstacle");
         }
-        static IEnumerator Until(Func<bool> predicate)
-        {float end=Time.realtimeSinceStartup+20;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout");}
+        static IEnumerator Until(Func<bool> predicate,[System.Runtime.CompilerServices.CallerLineNumber]int line=0)
+        {float end=Time.realtimeSinceStartup+20;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout at "+line);}
         static IEnumerator Run(WorldEntry e)
         {
             var o=e.chamberLight.observer;bool background=Application.runInBackground;Application.runInBackground=true;

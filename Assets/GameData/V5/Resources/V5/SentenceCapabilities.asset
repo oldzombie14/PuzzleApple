@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1873f815882623047974742bc014a2ba, type: 3}
+  m_Name: SentenceCapabilities
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.SentenceCapabilityCatalog
+  potentialLight: {fileID: 11400000, guid: 573defb082c74864cb7c255faa60d6bf, type: 2}
+  light: {fileID: 11400000, guid: 204950c332c5e544eb89816110e86bd2, type: 2}
+  door: {fileID: 11400000, guid: f01f2fd4c83866e4c859d3c2281a8907, type: 2}
+  emission: {fileID: 11400000, guid: 69cb41947b2844244a475de0e329e538, type: 2}
+  hinge: {fileID: 11400000, guid: acaa2cbd81da2f147930088770dbcaf4, type: 2}
+  lift: {fileID: 11400000, guid: 203d3ebc792be8d4793c437001f94d72, type: 2}
+  position: {fileID: 11400000, guid: 6aa8c158b73178942b92b93d89b64f39, type: 2}
+  floor: {fileID: 11400000, guid: 118bc0d379bd4204be589a36f809ca5f, type: 2}
+  world: {fileID: 11400000, guid: d6058e570f314df098fedc09099322c6, type: 2}
+  motion: {fileID: 11400000, guid: 34f8a5d258f24a16a8a5af1547c865b6, type: 2}

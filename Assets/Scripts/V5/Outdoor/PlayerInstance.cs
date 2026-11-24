@@ -5,6 +5,15 @@ namespace PuzzleApple.V5.Outdoor
 {
     public sealed class PlayerInstance : MonoBehaviour
     {
+        public const int Limit = 4;
+        static readonly System.Collections.Generic.HashSet<PlayerInstance> placed = new System.Collections.Generic.HashSet<PlayerInstance>();
+        public static int Remaining => Limit - placed.Count;
+        public static event System.Action CountChanged;
+        void OnDestroy() => ReturnSlot();
+        void ReturnSlot()
+        {
+            if (placed.Remove(this)) CountChanged?.Invoke();
+        }
         public InstanceShape Shape {get;private set;}
         public WorldDropRegion Region {get;private set;}
         public bool Recovering {get;private set;}
@@ -12,10 +21,13 @@ namespace PuzzleApple.V5.Outdoor
         OpeningLightField field;
         public void Bind(OpeningLightField owner,OpeningLight light,InstanceShape shape,WorldDropRegion region){
             field=owner;lamp=light;Shape=shape;Region=region;
+            placed.Add(this);
+            CountChanged?.Invoke();
         }
         public void Recover(float delay){
             if(Recovering)return;
             Recovering=true;
+            ReturnSlot();
             field.Remove(lamp);
             GetComponent<LightMotion>().SetMoving(false);
             GetComponent<Collider>().enabled=false;

@@ -7,50 +7,35 @@ namespace PuzzleApple.V5
     public sealed class LightStateEffect
     {
         readonly WorldEntry entry;
-        readonly Dictionary<ISwitchableLight,CognitionState.Group> commanded=new Dictionary<ISwitchableLight,CognitionState.Group>();
-        readonly Dictionary<int,PassageJourney.LightSpace> commandProgress=new Dictionary<int,PassageJourney.LightSpace>();
+        readonly Dictionary<SentenceStateOutput,CognitionState.Group> commanded=new Dictionary<SentenceStateOutput,CognitionState.Group>();
         public LightStateEffect(WorldEntry owner){entry=owner;}
-        public static bool Commands(CognitionState.Group g,bool on)=>g!=null && g.Signals.Contains(on?CognitionSignal.LightOn:CognitionSignal.LightOff);
+        public static bool Commands(CognitionState.Group g,bool on)=>
+            g?.Intent?.Is(on?SentenceAction.On:SentenceAction.Off,SentenceCapabilityCatalog.Default.light)==true;
         public static bool Handles(CognitionState.Group g)=>Commands(g,true)||Commands(g,false);
-        public PassageJourney.LightSpace TargetScope(CognitionState.Group group){
-            var current=entry.sentenceRuntime.Scope(group);
-            return commandProgress.TryGetValue(group.Id,out var progress)?current&progress:current;
-        }
-        IEnumerable<ISwitchableLight> Targets(CognitionState.Group g)
+        IEnumerable<SentenceStateOutput> Targets(CognitionState.Group g)
         {
-            var scope=TargetScope(g);
-            var passage=entry.outdoor;
-            if((scope&PassageJourney.LightSpace.Outdoor)!=0)yield return passage.World;
-            if((scope&PassageJourney.LightSpace.Gallery)!=0)yield return passage.Chapter;
-            if((scope&PassageJourney.LightSpace.Vitruvian)!=0){yield return passage.Vitruvian;yield return passage.Vitruvian.puzzle;}
-            if((scope&PassageJourney.LightSpace.Garden)!=0)yield return passage.Garden;
-            if(entry.journey)foreach(var light in entry.journey.Lights(scope))yield return light;
+            var catalog = SentenceCapabilityCatalog.Default;
+            return entry.Entities.QueryOutputs(entry.sentenceRuntime.EffectScope(g), g.Intent.StateProperty, catalog.emission);
         }
         public bool WouldChange(CognitionState.Group g)=>Targets(g).Any(l=>l.WouldChange(Commands(g,true)));
-        public bool ShotAllowed(CognitionState.Group g)=>!Commands(g,true) || (entry.outdoor && entry.outdoor.IsOutside?entry.outdoor.World.stateSource.Brightness<.999f:WouldChange(g));
-        public bool TrySettling(CognitionState.Group g,out bool settling){
-            settling=Handles(g)&&Targets(g).Any(l=>l.Settling(Commands(g,true)));
-            return Handles(g);
-        }
+        public bool Settling(CognitionState.Group g,PassageJourney.LightSpace scope)=>
+            entry.Entities.QueryOutputs(scope,g.Intent.StateProperty,SentenceCapabilityCatalog.Default.emission)
+                .Any(output=>output.Settling(Commands(g,true)));
         public void Release(int id){
-            foreach(var target in commanded.Where(p=>p.Value.Id==id).Select(p=>p.Key).ToArray())commanded.Remove(target);
-            commandProgress.Remove(id);
-        }
-        public void Prepare(CognitionState.Group[] groups,CognitionState.Group[] added){
-            var lights=groups.Where(Handles).ToArray();
-            foreach(var id in commandProgress.Keys.Where(id=>!lights.Any(g=>g.Id==id)).ToArray())commandProgress.Remove(id);
-            foreach(var group in lights)
-                if(!commandProgress.ContainsKey(group.Id)||added.Contains(group))
-                    // Unlocking expands sustained effects, not a light command already in flight.
-                    commandProgress[group.Id]=entry.sentenceRuntime.Scope(group);
+            foreach(var target in commanded.Where(p=>p.Value.Id==id).Select(p=>p.Key).ToArray())
+            {
+                target.Release();
+                commanded.Remove(target);
+            }
         }
         public void Commit(CognitionState.Group[] groups,CognitionState.Group[] added){
-            var next=new Dictionary<ISwitchableLight,CognitionState.Group>();
+            var next=new Dictionary<SentenceStateOutput,CognitionState.Group>();
             foreach(var group in groups.Where(Handles))
                 foreach(var target in Targets(group))if(!next.ContainsKey(target))next.Add(target,group);
             foreach(var pair in commanded)if(!next.ContainsKey(pair.Key))pair.Key.Hold();
             foreach(var pair in next)
-                if(!commanded.TryGetValue(pair.Key,out var old) || old!=pair.Value || added.Contains(pair.Value))pair.Key.SetOn(Commands(pair.Value,true));
+                if(!commanded.TryGetValue(pair.Key,out var old) || old!=pair.Value || added.Contains(pair.Value))
+                    pair.Key.Command(Commands(pair.Value,true),entry.sentenceRuntime,pair.Value);
             commanded.Clear();foreach(var pair in next)commanded.Add(pair.Key,pair.Value);
         }
     }

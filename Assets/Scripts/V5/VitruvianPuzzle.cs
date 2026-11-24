@@ -6,7 +6,7 @@ using PuzzleApple.V5.Outdoor;
 namespace PuzzleApple.V5
 {
     [DefaultExecutionOrder(85)]
-    public sealed class VitruvianPuzzle : MonoBehaviour,ISwitchableLight
+    public sealed class VitruvianPuzzle : MonoBehaviour,ISwitchableLight, ISentenceOutputState<VitruvianPuzzle.LightState>
     {
         public ChapterRoom room;
         public OpeningLight source,ball;
@@ -27,11 +27,10 @@ namespace PuzzleApple.V5
         public bool SquareSolved {get;private set;}
         public bool CircleSolved {get;private set;}
         LightSentenceEffects createdLightMotion;
-        CognitionSignal previousMotion;
-        public bool CanMove(CognitionSignal signal)=>
-            signal==CognitionSignal.LightMove && ball.Brightness>0 ||
-            createdLightMotion && (signal==CognitionSignal.LightMove || signal==CognitionSignal.LightFloorMove ||
-                signal==CognitionSignal.LightLightMove || signal==CognitionSignal.LightDoorMove) && createdLightMotion.CanMove(signal);
+        public bool CanMove(SentenceMotion signal)=>
+            signal==SentenceMotion.Light && ball.Brightness>0 ||
+            createdLightMotion && (signal==SentenceMotion.Light || signal==SentenceMotion.LightToFloor ||
+                signal==SentenceMotion.LightToLight || signal==SentenceMotion.LightToDoor) && createdLightMotion.CanMove(signal);
         public float UpperOffset {get;private set;}
         public float LowerOffset {get;private set;}
         public float OrbitAngle {get;private set;}
@@ -57,12 +56,26 @@ namespace PuzzleApple.V5
         public bool WordAt(Collider c,out Renderer glow)
         {
             var light=c.GetComponentInParent<OpeningLight>();
-            glow=light && light.Brightness>.001f?light.surface:null;
+            glow=light && light.EmitsLight?light.surface:null;
             return glow;
         }
         public bool WouldChange(bool on)=>on?source.Brightness<1 || ball.Brightness<1:source.Brightness>0 || ball.Brightness>0;
         public bool Settling(bool on)=>WouldChange(on);
         public void SetOn(bool on){source.SetOn(on);ball.SetOn(on);}
+        [System.Serializable]
+        public struct LightState
+        {
+            public EmissionState source, ball;
+        }
+        public LightState CaptureState() => new LightState { source = source.CaptureState(), ball = ball.CaptureState() };
+        public bool TryRestoreState(LightState state)
+        {
+            if (!source || !ball || !source.CanRestoreBrightness || !ball.CanRestoreBrightness ||
+                !state.source.Valid || !state.ball.Valid) return false;
+            source.TryRestoreState(state.source);
+            ball.TryRestoreState(state.ball);
+            return true;
+        }
         public void Hold(){source.HoldCurrentState();ball.HoldCurrentState();}
 
         LineRenderer Line(string name,float width,bool loop=false)
@@ -93,9 +106,13 @@ namespace PuzzleApple.V5
                 line.SetPosition(i,centre+radius*WorldScale*(transform.right*Mathf.Cos(a)+transform.up*Mathf.Sin(a)));
             }
         }
-        void Start(){
+        internal LightSentenceEffects CreatedLightMotion(){
+            if(createdLightMotion)return createdLightMotion;
             createdLightMotion=field.gameObject.AddComponent<LightSentenceEffects>();
             createdLightMotion.field=field;createdLightMotion.ground=field.ground;createdLightMotion.stateSource=source;
+            return createdLightMotion;
+        }
+        void Start(){
             ink=new MaterialPropertyBlock();
             upperPhase=Mathf.Asin(Mathf.Clamp(initialOffset/Mathf.Max(.01f,amplitude),-1,1));
             lowerPhase=upperPhase+bottomPhaseOffset*Mathf.Deg2Rad;
@@ -143,6 +160,30 @@ namespace PuzzleApple.V5
             float a=degrees*Mathf.Deg2Rad;
             return pivot.position+transform.TransformVector(new Vector3(Mathf.Cos(a),Mathf.Sin(a),0)*Radius);
         }
+        [System.Serializable]
+        public struct OrbitState
+        {
+            public float angle, travelled, alpha;
+            public bool orbiting;
+            public LightSentenceEffects.MotionState created;
+        }
+        internal OrbitState CaptureOrbit() => new OrbitState {
+            angle = OrbitAngle, travelled = travelledDegrees, alpha = trailAlpha, orbiting = orbiting,
+            created = createdLightMotion.CaptureState()
+        };
+        internal bool TryRestoreOrbit(OrbitState state)
+        {
+            if (!float.IsFinite(state.angle) || !float.IsFinite(state.travelled) || state.travelled < 0 ||
+                !(state.alpha >= 0 && state.alpha <= 1) || !createdLightMotion ||
+                !createdLightMotion.TryRestoreState(state.created)) return false;
+            OrbitAngle = state.angle;
+            travelledDegrees = state.travelled;
+            trailAlpha = state.alpha;
+            orbiting = state.orbiting;
+            PoseOrbit();
+            return true;
+        }
+
         void PoseOrbit(){
             var end=OrbitPoint(OrbitAngle);ball.transform.position=end;
             rod.position=(pivot.position+end)*.5f;rod.up=(end-pivot.position).normalized;
@@ -153,14 +194,9 @@ namespace PuzzleApple.V5
             var runtime=room.Entry.sentenceRuntime;
             field.observer=room.Entry.player.transform;
             AdvanceMirrors(runtime.HasEffect(CognitionSignal.MirrorMove,room.Space) && !runtime.MotionFrozen);
-            bool move=runtime.HasEffect(CognitionSignal.LightMove,room.Space);
-            var motion=move?CognitionSignal.LightMove:
-                runtime.HasEffect(CognitionSignal.LightFloorMove,room.Space)?CognitionSignal.LightFloorMove:
-                runtime.HasEffect(CognitionSignal.LightLightMove,room.Space)?CognitionSignal.LightLightMove:
-                runtime.HasEffect(CognitionSignal.LightDoorMove,room.Space)?CognitionSignal.LightDoorMove:CognitionSignal.Empty;
-            if(previousMotion!=motion){previousMotion=motion;createdLightMotion.Apply(signal=>signal==motion);}
+            bool move=(room.MotionOutput?.HasMotion(SentenceMotion.Light)==true);
             float boost=runtime.LampBoost(room.Space);source.SetLampMultiplier(boost);
-            bool running=move && ball.TargetOn && ball.Brightness>.001f && !runtime.MotionFrozen;
+            bool running=move && ball.EmitsLight && !runtime.MotionFrozen;
             float fullGlowDegrees=360f*Mathf.Max(1,fullGlowTurns);
             if(running){
                 if(!orbiting)travelledDegrees=0;

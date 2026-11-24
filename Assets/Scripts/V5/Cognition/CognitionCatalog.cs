@@ -11,6 +11,8 @@ namespace PuzzleApple.V5.Cognition
         [SerializeField] WordDefinition[] words = new WordDefinition[0];
         [SerializeField] CognitionRule[] rules = new CognitionRule[0];
         [SerializeField] CognitionConflict[] conflicts = new CognitionConflict[0];
+        [SerializeField] SentenceGrammar grammar;
+        public SentenceGrammar Grammar => grammar;
         public IReadOnlyList<WordDefinition> Words => words;
         public IReadOnlyList<CognitionRule> Rules => rules;
         public IReadOnlyList<CognitionConflict> Conflicts => conflicts;
@@ -72,6 +74,7 @@ namespace PuzzleApple.V5.Cognition
                 int a = (int)conflict.First, b = (int)conflict.Second;
                 if (!pairs.Add(Math.Min(a,b) + ":" + Math.Max(a,b))) errors.Add(conflict.name + ": duplicate conflict pair.");
             }
+            if (errors.Count == 0 && grammar) errors.AddRange(grammar.Validate(this));
             return errors;
         }
         public void ValidateOrThrow()

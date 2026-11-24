@@ -27,6 +27,133 @@ namespace PuzzleApple.V5.Editor
             Result="Running";
             e.StartCoroutine(Route(e,mirrorFirst));
         }
+        public static void RunBuildRoute()
+        {
+            Result = "Running";
+            var entry = UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            entry.StartCoroutine(BuildRoute(entry));
+        }
+        public static void RunLightStates()
+        {
+            Result = "Running";
+            var entry = UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            entry.StartCoroutine(BuildRoute(entry, true));
+        }
+        static IEnumerator BuildRoute(WorldEntry entry, bool checkStates = false)
+        {
+            var passage = entry.outdoor;
+            var start = entry.gameObject.scene;
+            Check(start.buildIndex == 0 && start.path == "Assets/Scenes/V5/P5.unity", "P5 is the build entry");
+            entry.OpenWorld(-1);
+            yield return Until(() => entry.room.Opened && !entry.Busy, "open intro");
+            yield return WhiteAscentChecks.Leave(entry);
+            var outdoor = passage.World;
+            var worldMotion = outdoor.world.MotionOutput.StateSource<Outdoor.WorldSentenceEffects.MotionState>();
+            var groundState = checkStates ? Copy(worldMotion.CaptureState()) : default;
+            if (checkStates)
+            {
+                var world = passage.World;
+                var emission = world.stateSource.GetComponents<SentenceEntity>().SelectMany(entity => entity.Outputs)
+                    .Single(output => ReferenceEquals(output.Source, world));
+                var dimmer = emission.StateSource<Outdoor.OutdoorWorld.LightState>();
+                var original = dimmer.CaptureState();
+                emission.Command(false);
+                yield return Until(() => world.stateSource.Brightness < .8f && world.stateSource.Brightness > 0, "outdoor dimmer in flight");
+                emission.Hold();
+                var night = JsonUtility.FromJson<Outdoor.OutdoorWorld.LightState>(JsonUtility.ToJson(dimmer.CaptureState()));
+                Check(dimmer.TryRestoreState(original) && dimmer.TryRestoreState(night), "restore sky and lamps");
+                yield return null;
+                Check(world.stateSource.Brightness == night.lamps.brightness && world.environment.NightBlend == night.nightBlend,
+                    "held outdoor dimmer preserves both levels");
+                emission.Command(true);
+                yield return Until(() => !emission.Settling(true), "outdoor lighting resumes");
+                var door = world.door.GetComponents<SentenceEntity>().SelectMany(entity => entity.Outputs)
+                    .Single(output => ReferenceEquals(output.Source, world));
+                var frame = door.StateSource<EmissionState>();
+                var saved = frame.CaptureState();
+                door.Hold();
+                Check(frame.TryRestoreState(new EmissionState(.35f)) && door.Value == .35f && frame.TryRestoreState(saved),
+                    "threshold frame restores independently from outdoor lamps");
+            }
+            yield return Cross(entry, passage.World.chapterFrame);
+            yield return ChapterLessonChecks.Traverse(entry);
+            yield return Until(() => passage.InChapter && !passage.Transitioning, "cross into Chapter I");
+            foreach (var room in new[] { passage.Chapter, passage.Garden, passage.Vitruvian })
+            {
+                Check(room && room.gameObject.scene.isLoaded && room.gameObject.scene.buildIndex > 0 &&
+                    room.gameObject.scene.path.StartsWith("Assets/Scenes/V5/"), "V5 additive chapter room loaded");
+                var missingScripts = room.gameObject.scene.GetRootGameObjects()
+                    .SelectMany(root => root.GetComponentsInChildren<MonoBehaviour>(true)).Any(script => !script);
+                Check(!missingScripts, "all room scripts resolved in " + room.gameObject.scene.name);
+            }
+            if (checkStates)
+            {
+                var away = entry.player.transform.position;
+                var underground = Copy(groundState);
+                underground.groundY -= .35f;
+                underground.clouds.travel += Vector3.forward * 7;
+                underground.stars = Quaternion.Euler(0, 17, 0);
+                Check(worldMotion.TryRestoreState(underground) && entry.player.transform.position == away &&
+                    Mathf.Abs(outdoor.ground.transform.position.y - underground.groundY) < .001f &&
+                    worldMotion.CaptureState().clouds.travel == underground.clouds.travel &&
+                    Quaternion.Angle(worldMotion.CaptureState().stars, underground.stars) < .01f,
+                    "inactive outdoor ground, cloud and star pose restore without carrying the chapter player");
+                Check(worldMotion.TryRestoreState(groundState), "outdoor height restored before return");
+                foreach (var room in new[] { passage.Chapter, passage.Garden, passage.Vitruvian })
+                {
+                    var position = room.MotionOutput.StateSource<ChapterRoom.MotionState>();
+                    Outdoor.LightMotion created = null;
+                    if (room.puzzle)
+                    {
+                        var lamp = room.puzzle.field.Spawn(room.puzzle.ball.transform.position + Vector3.right * 2,
+                            0, InstanceShape.Sphere, room.GetComponent<WorldDropRegion>());
+                        created = lamp.GetComponent<Outdoor.LightMotion>();
+                    }
+                    var rest = Copy(position.CaptureState());
+                    var sample = Copy(rest);
+                    if (room.lamp) sample.lamp.position += Vector3.up * .35f;
+                    for (int i = 0; i < sample.paintingPhases.Length; i++) sample.paintingPhases[i] += .42f;
+                    if (room.puzzle)
+                    {
+                        sample.orbit.angle = Mathf.Repeat(rest.orbit.angle + 47, 360);
+                        int index = Array.FindIndex(sample.orbit.created.lamps, l => l.id == created.SpawnId);
+                        Check(index >= 0, "chapter output includes the generated lamp");
+                        sample.orbit.created.lamps[index].motion.pose.position += Vector3.up;
+                    }
+                    var previousCreated = created ? created.CaptureMotion().pose.position : default;
+                    var previousBall = room.puzzle ? room.puzzle.ball.transform.position : default;
+                    Check(position.TryRestoreState(sample) &&
+                        (!room.lamp || room.lamp.position == sample.lamp.position) &&
+                        (!room.puzzle || room.puzzle.ball.transform.position != previousBall &&
+                            created.CaptureMotion().pose.position == previousCreated + Vector3.up) &&
+                        position.CaptureState().paintingPhases.SequenceEqual(sample.paintingPhases) &&
+                        position.TryRestoreState(rest), "chapter motion round trip in " + room.name);
+                    room.HoldLight();
+                    var original = room.CaptureState();
+                    var levels = JsonUtility.FromJson<ChapterRoom.LightState>(JsonUtility.ToJson(original));
+                    levels.room.brightness = .45f;
+                    for (int i = 0; i < levels.fixtures.Length; i++) levels.fixtures[i].brightness = (i+1f)/(levels.fixtures.Length+1);
+                    Check(room.TryRestoreState(levels), "restore chapter fixtures " + room.name);
+                    yield return null;
+                    Check(JsonUtility.ToJson(room.CaptureState()) == JsonUtility.ToJson(levels) && room.TryRestoreState(original),
+                        "each held chapter fixture retains its brightness");
+                }
+                var puzzle = passage.Vitruvian.puzzle;
+                puzzle.Hold();
+                var originalPuzzle = puzzle.CaptureState();
+                var mixed = new VitruvianPuzzle.LightState { source = new EmissionState(.27f), ball = new EmissionState(.83f) };
+                Check(puzzle.TryRestoreState(mixed) && puzzle.source.Brightness == .27f && puzzle.ball.Brightness == .83f,
+                    "Vitruvian source and ball keep independent brightness");
+                mixed.ball.brightness = 2;
+                mixed.source.brightness = 0;
+                Check(!puzzle.TryRestoreState(mixed) && puzzle.source.Brightness == .27f && puzzle.TryRestoreState(originalPuzzle),
+                    "bad ball snapshot does not partially restore the source");
+            }
+            yield return WalkToMirror(entry, passage.Chapter);
+            yield return Until(() => passage.IsOutside && !passage.Transitioning, "return to outdoor");
+            Result = checkStates ? "PASS: outdoor light, frame and sky, cross-region ground restore, chapter lamps, orbit and created lamp" : "PASS: P5, outdoor prefab, three V5 chapter scenes and return crossing";
+        }
+        static T Copy<T>(T state) where T : struct => JsonUtility.FromJson<T>(JsonUtility.ToJson(state));
         internal static IEnumerator Cross(WorldEntry e,Transform frame)
         {
             e.player.Teleport(frame.TransformPoint(new Vector3(0,.24f,-.65f)),frame.rotation);
@@ -56,14 +183,15 @@ namespace PuzzleApple.V5.Editor
             yield return Cross(e,frame);
             yield return Until(()=>passage.IsOutside && passage.Transitioning && e.blackBackground.color.a>.06f && e.blackBackground.color.a<.98f,"outdoor picture fades before the switch");
             Check(voice.isPlaying && voice.volume<passage.World.music.volume,"outdoor music is fading at the frame");
-            yield return Until(()=>passage.InChapter && passage.Transitioning && e.blackBackground.color.a>.02f && e.blackBackground.color.a<.94f,"the gallery fades in after loading");
+            yield return Until(()=>passage.InLesson && passage.Transitioning && e.blackBackground.color.a>.02f && e.blackBackground.color.a<.94f,"the teaching chamber fades in after loading");
+            yield return ChapterLessonChecks.Traverse(e);
             yield return Until(()=>passage.InChapter&&!passage.Transitioning,"picture frame arrival");
             var chapter=passage.Chapter;
-            Check(!chapter.box.Opened&&!state.Knows("mirror"),"starts closed");
+            Check(!chapter.box.Opened&&state.Knows("mirror"),"arrives closed with the mirror vocabulary");
             var rim=chapter.mirrors.originals[0].Find("Frame left").GetComponent<Renderer>().sharedMaterial;
             Check(rim.GetColor("_BaseColor").r>.95f && rim.GetColor("_EmissionColor").r>.5f,"the arrival rim is visible inside the dark box");
             state.TryAcquireWord("chapter.drop.light",e.board.Catalog.Word("light"));
-            CheckDropRegion(e);
+            yield return CheckDropRegion(e);
             bool outdoorLight=passage.World.stateSource.TargetOn;
             state.TryAcquireSentence("chapter.check.off","negative light");
             yield return Until(()=>chapter.bulb.intensity<.001f&&!state.Groups.Any(g=>g.RuleId=="light.off"),"off retires");
@@ -82,6 +210,7 @@ namespace PuzzleApple.V5.Editor
                 yield return WalkToMirror(e,chapter);
                 yield return Until(()=>passage.IsOutside,"mirror returns from closed box");
                 yield return Cross(e,frame);
+                yield return ChapterLessonChecks.Traverse(e);
                 yield return Until(()=>passage.InChapter&&!passage.Transitioning,"return to closed box");
             }
             state.TryAcquireSentence("chapter.check.move","light move");
@@ -107,6 +236,7 @@ namespace PuzzleApple.V5.Editor
             yield return WalkToMirror(e,chapter);
             yield return Until(()=>passage.IsOutside,"return to outdoor frame");
             yield return Cross(e,frame);
+            yield return ChapterLessonChecks.Traverse(e);
             yield return Until(()=>passage.InChapter&&!passage.Transitioning,"revisit chapter");
             Check(chapter.box.Opened&&chapter.bulb.intensity<.001f,"revisit preserves chapter");
             if(!mirrorFirst)yield return CollectMirror(e,chapter);
@@ -162,7 +292,7 @@ namespace PuzzleApple.V5.Editor
             Check(passage.CurrentRoom==chapter,"gallery steps stop below the frame");
             for(int i=0;i<185;i++)walk.Invoke(p,new object[]{Vector2.up,true,1f/120,i==0});
             Check(passage.CurrentRoom==garden,"jump over the frame into the garden");
-            CheckDropRegion(e);
+            yield return CheckDropRegion(e);
             var start=garden.lamp.position;
             yield return Until(()=>Mathf.Abs(garden.lamp.position.y-start.y)>.04f,"garden cube floats");
             state.TryAcquireSentence("garden.cube.off","negative light");
@@ -180,12 +310,18 @@ namespace PuzzleApple.V5.Editor
             state.TryAcquireSentence("garden.gallery.on","positive light");
             yield return Until(()=>chapter.paintingSpot.intensity>0,"painting light switches on");
         }
-        static void CheckDropRegion(WorldEntry e)
+        static IEnumerator CheckDropRegion(WorldEntry e)
         {
             var pass=e.outdoor;var region=pass.DropRegion;var panel=e.board.Panel;
             Check(region && !region.allowInstantiation,"chapter placement disabled by default");
+            yield return Until(()=>!e.Busy && !e.chamberLight.Collecting && !e.sentenceRuntime.presentation.Playing,
+                "finish presentation before dragging in "+region.gameObject.scene.name);
             panel.SetOpen(true);
+            yield return Until(()=>panel.FullyOpen,"drop panel finished opening");
             Vector2 point=new Vector2(.84f*Screen.width,.53f*Screen.height);
+            Check(!panel.InputBlocked,"panel input available in "+region.gameObject.scene.name);
+            Check(!RectTransformUtility.RectangleContainsScreenPoint(panel.ContentRoot,point),"drop point lies in the world");
+            Check(e.board.State.Knows("light"),"light is available for placement");
             Check(!pass.TryWorldDrop(e.board,"light",point),"disabled region ignores drop");
             try{
                 region.allowInstantiation=true;
@@ -194,7 +330,7 @@ namespace PuzzleApple.V5.Editor
                 Check(!pass.Picker.Open,"chapter choice handled");
             }finally{region.allowInstantiation=false;panel.SetOpen(false);}
         }
-        static IEnumerator WalkToMirror(WorldEntry e,ChapterRoom chapter)
+        internal static IEnumerator WalkToMirror(WorldEntry e,ChapterRoom chapter)
         {
             var towardMirror=Vector3.right;
             var approach=chapter.mirror.bounds.center-towardMirror*1.4f;

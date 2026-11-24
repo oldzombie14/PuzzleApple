@@ -15,3 +15,6 @@ MonoBehaviour:
   id: floor
   displayText: floor
   symbol: {fileID: 21300000, guid: 5fc530826ef94a1684ffd07a870f414e, type: 3}
+  classes: 2
+  property: {fileID: 11400000, guid: 118bc0d379bd4204be589a36f809ca5f, type: 2}
+  stateProperty: {fileID: 0}

@@ -14,11 +14,62 @@ namespace PuzzleApple.V5.Editor
         static IEnumerator Wait(Func<bool> done,string label){float end=Time.realtimeSinceStartup+40;while(!done()&&Time.realtimeSinceStartup<end)yield return null;Check(done(),label);}
         public static void Run(){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(Exercise(e));}
         public static void RunFirstPassage(){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(FirstPassage(e));}
+        public static void RunCommandRegions(){
+            Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(CommandRegions(e));
+        }
+        static IEnumerator CommandRegions(WorldEntry e){
+            e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
+            var j=e.journey;var b=e.board;var rt=e.sentenceRuntime;
+            rt.presentation.enabledShots=false;
+            yield return ChargeDoorChecks.UnlockFirstPassage(e);
+            var original=j.SentenceScope();
+            Check(original==(Space.Chamber|Space.FirstPath),"white door starts beyond the first revealed path");
+            j.Stars.SetOn(false);yield return Wait(()=>!j.Stars.Settling(false),"darken the stars");
+            var drift=VitruvianChecks.Say(b,"light","move");
+            var gather=VitruvianChecks.Say(b,"light","move","door");
+            Check(!gather.Spoken && !b.State.JudgementLocked,"dark or occupied stars reserve no command region");
+            var open=VitruvianChecks.Say(b,"positive","door");
+            yield return Wait(()=>j.DoorProgress==1 && b.State.Find(open.Id)==null,"open only the previously reachable door");
+            Check(j.EntranceDoor.Progress==0 && (j.SentenceScope()&Space.SphereRoom)!=0,"new region reachable without opening its entrance");
+            Check(rt.HasEffect(CognitionSignal.LightMove,Space.SphereRoom),"existing sustained drift expands through the gate");
+            b.State.ReturnToLibrary(drift.Id,0,true);
+            j.SetDoor(false);yield return Wait(()=>j.DoorProgress==0,"close gate before retry");
+            j.Stars.SetOn(true);
+            yield return Wait(()=>b.State.CanPrompt(gather),"relighting restores the prompt");
+            Check(!gather.Spoken && b.State.Speak(gather.Id),"retry in chamber and path");
+            j.SetDoor(true);
+            yield return Wait(()=>j.DoorProgress==1,"gate reopens during gathering");
+            Check(rt.EffectScope(gather)==original && !j.Tutorial.MotionOutput.HasMotion(SentenceMotion.LightToDoor),"running command stays inside the region at successful judgement");
+            yield return Wait(()=>b.State.Find(gather.Id)==null && !j.Stars.NeedsGather,"stars reach the door");
+            Result="PASS: failed attempts reserve nothing, successful retry snapshots region, later gates expand sustained effects only";
+        }
+        public static void RunJoiningLamps(){
+            Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(JoiningLamps(e));
+        }
+        static IEnumerator JoiningLamps(WorldEntry e){
+            e.sentenceRuntime.presentation.enabledShots=false;
+            e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
+            yield return Wait(()=>e.outdoor.Prepared,"outdoors ready");
+            e.outdoor.ArriveFromAscent();yield return null;
+            var world=e.outdoor.World;var field=world.field;var b=e.board;
+            var start=world.ground.bounds.center+new Vector3(12,0,18);start.y=world.ground.bounds.max.y+7;
+            var first=field.Spawn(start,.22f).GetComponent<Rigidbody>();
+            var down=VitruvianChecks.Say(b,"light","move","floor");
+            yield return Wait(()=>first.position.y<start.y-.3f,"first lit lamp descends");
+            var second=field.Spawn(start+Vector3.right*4,.22f).GetComponent<Rigidbody>();
+            yield return Wait(()=>second.position.y<start.y-.3f,"new lamp joins the running descent");
+            yield return Wait(()=>b.State.Find(down.Id)==null,"both lamps finish and command retires");
+            Check(first.position.y<start.y-6 && second.position.y<start.y-6,"both lamps reached the ground");
+            var late=field.Spawn(start+Vector3.right*8,.22f).GetComponent<Rigidbody>();
+            yield return new WaitForSeconds(.35f);
+            Check(Mathf.Abs(late.position.y-start.y)<.01f,"lamp created after retirement stays at spawn height");
+            Result="PASS: newly spawned lamp joins an active descent, later spawn does not restart it";
+        }
         static IEnumerator FirstPassage(WorldEntry e){
             e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
             var j=e.journey;var b=e.board;var state=b.State;var rt=e.sentenceRuntime;
             var passage=UnityEngine.Object.FindFirstObjectByType<WallPassage>();
-            var gate=passage.GetComponentsInChildren<ProgressLock>().Single(g=>g.passageReveal==passage);
+            var gate=passage.GetComponentsInChildren<ProgressLock>().Single(g=>g.BoundarySource==passage);
             rt.presentation.enabledShots=false;e.player.MovementLocked=true;b.Panel.SetOpen(true);
             yield return Wait(()=>b.Panel.FullyOpen,"open panel");
             Check(!gate.Unlocked && j.SentenceScope()==Space.Chamber,"first path starts behind its reveal lock");
@@ -26,10 +77,8 @@ namespace PuzzleApple.V5.Editor
             var off=VitruvianChecks.Say(b,"negative","light");
             yield return Wait(()=>e.chamberLight.Brightness<.7f,"partial chamber fade");
             Check(!gate.Unlocked && j.Stars.Brightness==1 && !rt.HasEffect(CognitionSignal.LightOff,Space.FirstPath),"opening off command cannot reach corridor stars");
-            state.ReturnToLibrary(off.Id,0,true);float held=e.chamberLight.Brightness;
-            yield return new WaitForSecondsRealtime(.2f);
-            Check(e.chamberLight.Brightness==held && !gate.Unlocked,"interrupted reveal does not unlock");
-            off=VitruvianChecks.Say(b,"negative","light");
+            state.ReturnToLibrary(off.Id,0,true);
+            Check(off.ExecutionLocked && state.Find(off.Id)==off,"partial reveal refuses removal of its light command");
             yield return Wait(()=>gate.Unlocked,"first complete reveal unlocks passage");
             yield return null;yield return null;
             Check(j.SentenceScope()==(Space.Chamber|Space.FirstPath) && rt.HasEffect(CognitionSignal.LightMove,Space.FirstPath),"reveal expands an existing sustained sentence");
@@ -44,7 +93,7 @@ namespace PuzzleApple.V5.Editor
             var laterOff=VitruvianChecks.Say(b,"negative","light");
             yield return Wait(()=>state.Find(laterOff.Id)==null && j.Stars.Brightness==0,"a new light command controls the unlocked corridor");
             state.ClearWorkspace();
-            Result="PASS: first passage reveal lock, interrupted reveal, opening off command preserves stars, sustained expansion, no relock, later light commands";
+            Result="PASS: first passage reveal lock, uninterrupted reveal, opening off command preserves stars, sustained expansion, no relock, later light commands";
         }
         static IEnumerator Exercise(WorldEntry e){
             e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
@@ -53,7 +102,7 @@ namespace PuzzleApple.V5.Editor
             const Space first=Space.Chamber;
             Check(j.SentenceScope()==first,"initial range is only the chamber");
             var white=j.Door.GetComponentInChildren<ProgressLock>();var entrance=j.EntranceDoor.GetComponentInChildren<ProgressLock>();var charge=j.EndingDoor.GetComponent<ProgressLock>();
-            var reveal=UnityEngine.Object.FindFirstObjectByType<WallPassage>().GetComponentsInChildren<ProgressLock>().Single(g=>g.passageReveal);
+            var reveal=UnityEngine.Object.FindFirstObjectByType<WallPassage>().GetComponentsInChildren<ProgressLock>().Single(g=>g.BoundarySource is WallPassage);
             Check(reveal && white && entrance && charge && !reveal.Unlocked && !white.Unlocked && !entrance.Unlocked && !charge.Unlocked,"four authored progress locks start closed");
             var motion=VitruvianChecks.Say(b,"light","move");yield return null;yield return null;
             foreach(float yaw in new[]{0f,90f,180f}){
@@ -82,8 +131,7 @@ namespace PuzzleApple.V5.Editor
             var boost=VitruvianChecks.Say(b,"light","light");
             var gather=VitruvianChecks.Say(b,"light","move","door");
             Check(rt.EffectScope(gather)==rt.Scope(gather),"one-shot motion includes all unlocked spaces");
-            var target=typeof(SentencePresentation).GetMethod("LocalTarget",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
-            var aim=target.Invoke(rt.presentation,new object[]{new SentencePresentation.Shot("light.move.door",SentencePresentation.Focus.Door),gather});
+            var aim=rt.presentation.FocusTarget(gather);
             Check(aim==null,"gather holds the camera without narrowing effect scope");
             yield return Wait(()=>state.Find(gather.Id)==null && j.EndingDoor.Charged,"charge from the selected room");
             var open=VitruvianChecks.Say(b,"positive","door");

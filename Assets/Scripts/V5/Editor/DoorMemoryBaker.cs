@@ -9,7 +9,6 @@ namespace PuzzleApple.V5.Editor
     {
         public const string OutputPath="Assets/Textures/V5/DoorMemory.png";
 
-        [MenuItem("PuzzleApple/V5/Bake Door Memory")]
         public static void Bake()
         {
             var entry=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();

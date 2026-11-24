@@ -5,11 +5,18 @@ using PuzzleApple.V5.Cognition;
 namespace PuzzleApple.V5
 {
     // The far-room entrance mirrors the authored white leaf, including its room-side finish.
-    public sealed class PassageEntranceDoor : MonoBehaviour,ISwitchableDoor
+    public sealed class PassageEntranceDoor : MonoBehaviour,ISwitchableDoor,IProgressBoundary,
+        ISentenceOutputState<HingeState>
     {
         public PassageJourney journey;
         public Transform Leaf {get;private set;}
-        public float Progress {get;private set;}
+        internal SentenceStateOutput DoorOutput;
+        public SentenceMotionOutput MotionOutput {get;internal set;}
+        HingeState hinge = new HingeState {cycleOpening = true};
+        public float Progress => hinge.progress;
+        public float BoundaryProgress => Progress;
+        public bool AllowsConnection => Progress > 0;
+        public event System.Action BoundaryChanged;
         public bool Open {get;private set;}
         public bool Driving {get;private set;}
         public PassageJourney.LightSpace ControlSpaces=>ProgressLock.DoorBoundary(this);
@@ -21,7 +28,7 @@ namespace PuzzleApple.V5
         CharacterController player;
         Material coverMaterial;
         MaterialPropertyBlock frontInk,backInk,coverInk;
-        bool ignoringPlayer,cycleOpening=true;
+        bool ignoringPlayer;
         float Width=>Leaf.localScale.x;
         float Height=>Leaf.localScale.y;
         public static PassageEntranceDoor Build(PassageJourney owner,Transform whiteHinge,Renderer wall){
@@ -50,7 +57,7 @@ namespace PuzzleApple.V5
             foreach(Transform t in owner.Root)if((t.name=="Passage upright"||t.name=="Passage crossbar") && t.localPosition.z>owner.RoomStart && t.localPosition.z<owner.RoomStart+.2f)rear.Add(t.GetComponent<Renderer>());
             door.backEdges=rear.ToArray();
             var template=Resources.Load<ProgressLock>("V5/RoomEntranceProgressLock");
-            if(template){var gate=Instantiate(template,hinge,false);gate.entranceDoor=door;}
+            if(template){var gate=Instantiate(template,hinge,false);gate.BindBoundary(door);}
             door.Appearance();return door;
         }
         public bool Owns(Collider target)=>target && target.transform.IsChildOf(transform);
@@ -58,6 +65,27 @@ namespace PuzzleApple.V5
         public void SetOpen(bool open){Open=open;Driving=true;}
         public void Hold(){Driving=false;}
         public void Release(){Driving=false;}
+        public HingeState CaptureState() => hinge;
+        public bool TryRestoreState(HingeState state)
+        {
+            if (!journey || !Leaf || !player || !(state.progress >= 0 && state.progress <= 1)) return false;
+            if (state.progress < Progress && BlocksClosing(state.progress)) return false;
+            hinge.cycleOpening = state.cycleOpening;
+            ApplyProgress(state.progress);
+            Physics.SyncTransforms();
+            if (ignoringPlayer && !OverlapsPlayer()) IgnorePlayer(false);
+            Appearance();
+            return true;
+        }
+
+        void ApplyProgress(float next)
+        {
+            if (Progress == next) return;
+            if (next > Progress && !ignoringPlayer) IgnorePlayer(true);
+            hinge.progress = next;
+            transform.localRotation = Quaternion.Euler(0, -Angle(next), 0);
+            BoundaryChanged?.Invoke();
+        }
         float Angle(float value)=>journey.openAngle*Mathf.SmoothStep(0,1,value);
         void IgnorePlayer(bool ignore){foreach(var part in parts)if(part)Physics.IgnoreCollision(part,player,ignore);ignoringPlayer=ignore;}
         bool OverlapsPlayer(){
@@ -77,13 +105,11 @@ namespace PuzzleApple.V5
         void Update(){
             if(!journey || !Leaf)return;
             if(CanCycle){
-                var runtime=journey.entry.sentenceRuntime;var space=ControlSpaces;
-                bool cycling=!Driving && runtime.HasEffect(CognitionSignal.DoorMove,space) && !runtime.HasEffect(CognitionSignal.DoorOn,space) && !runtime.HasEffect(CognitionSignal.DoorOff,space);
-                if(cycling){if(Progress==0)cycleOpening=true;if(Progress==1)cycleOpening=false;Open=cycleOpening;}
-                float target=Open?1:0,next=Driving||cycling?Mathf.MoveTowards(Progress,target,Time.deltaTime/Mathf.Max(.01f,journey.doorDuration)):Progress;
+                bool cycling = !Driving && MotionOutput?.HasMotion(SentenceMotion.Door) == true;
+                if (cycling) Open = hinge.CycleTarget();
+                float target=Open?1:0,next=Driving||cycling?SentenceStateOutput.Advance(Progress,target,Time.deltaTime/Mathf.Max(.01f,journey.doorDuration),DoorOutput):Progress;
                 bool opening=next>Progress;
-                if(opening&&!ignoringPlayer)IgnorePlayer(true);
-                if(opening || next<Progress&&!BlocksClosing(next)){Progress=next;transform.localRotation=Quaternion.Euler(0,-Angle(Progress),0);}
+                if(opening || next<Progress&&!BlocksClosing(next))ApplyProgress(next);
                 if(Progress==target)Driving=false;
                 if(!opening&&ignoringPlayer&&!OverlapsPlayer())IgnorePlayer(false);
             }

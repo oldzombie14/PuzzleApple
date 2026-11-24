@@ -27,7 +27,6 @@ namespace PuzzleApple.V5.Editor
         public RenderTexture Processed => processed;
         public bool TrialEnabled { get => trialEnabled; set { trialEnabled=value; if(!value)Restore(); Repaint(); } }
 
-        [MenuItem("PuzzleApple/V5/Color Map Trial")]
         public static void Open() => GetWindow<ColorMapTrialWindow>("通道黑白试验");
         void OnEnable()
         {

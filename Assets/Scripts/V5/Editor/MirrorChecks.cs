@@ -64,6 +64,7 @@ namespace PuzzleApple.V5.Editor
             yield return Wait(()=>pass.IsOutside && !pass.InChapter,"moving copy returns to open field");
             Check(state.Groups.Count==0,"crossing clears mirror sentences");
             yield return ChapterChecks.Cross(e,pass.World.chapterFrame);
+            yield return ChapterLessonChecks.Traverse(e);
             yield return Wait(()=>pass.InChapter && !pass.Transitioning,"revisit");
             Check(Vector3.Distance(original.position,start)<.001f && !mirrors.CopiesActive,"revisit resets original and clone");
             Result="PASS: reflected position, full mirror vocabulary, moving portal, freeze and revisit";

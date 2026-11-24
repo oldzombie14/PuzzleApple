@@ -15,9 +15,24 @@ namespace PuzzleApple.V5.Outdoor
         public float revealDuration=.65f,moveSpeed=1.2f;
         public int maxPointLights=6;
         public float pointLightDistance=14;
+        public RoomLightStyle indoorStyle;
         public IEnumerable<OpeningLight> ActiveLamps=>lamps;
         public int ActiveCount=>lamps.Count;
+        public bool AnyEmitting=>lamps.Exists(lamp=>lamp && lamp.isActiveAndEnabled && lamp.EmitsLight);
         readonly List<OpeningLight> lamps=new List<OpeningLight>();
+        WorldEntry owner;
+        System.Func<PassageJourney.LightSpace> sentenceSpaces;
+        SentenceStateOutput sentenceOutput;
+        public void BindSentenceOutput(WorldEntry entry, System.Func<PassageJourney.LightSpace> spaces, SentenceStateOutput output)
+        {
+            owner = entry; sentenceSpaces = spaces; sentenceOutput = output;
+            foreach (var lamp in lamps) if (lamp) RegisterSentenceSubject(lamp);
+        }
+        void RegisterSentenceSubject(OpeningLight lamp)
+        {
+            if (owner)
+                SentenceSceneBindings.BindLightSubject(owner.Entities, lamp, sentenceSpaces, () => lamp.Brightness * lamp.RevealAmount, sentenceOutput);
+        }
         Material revealMaterial;
         Mesh diamond;
         public Material RevealMaterial=>revealMaterial;
@@ -52,7 +67,7 @@ namespace PuzzleApple.V5.Outdoor
         }
         public OpeningLight Spawn(Vector3 position,float transferredScale=0,InstanceShape shape=InstanceShape.Cube,WorldDropRegion creator=null)
         {
-            if(!stateSource||!stateSource.AppearanceMaterial)return null;
+            if(!stateSource||!stateSource.AppearanceMaterial || creator && (!owner || !owner.LightUnderstood || PlayerInstance.Remaining<=0))return null;
             if(!revealMaterial)
             {
                 revealMaterial=new Material(stateSource.AppearanceMaterial);
@@ -71,13 +86,17 @@ namespace PuzzleApple.V5.Outdoor
             var lamp=go.AddComponent<OpeningLight>();lamp.surface=renderer;lamp.appearanceSource=stateSource;
             var glow=new GameObject("Local glow",typeof(Light));glow.transform.SetParent(go.transform,false);
             lamp.glow=glow.GetComponent<Light>();lamp.glow.type=LightType.Point;lamp.glow.range=2.5f;lamp.glow.intensity=.7f;lamp.glow.shadows=LightShadows.None;
+            if(indoorStyle){
+                lamp.localOutput=indoorStyle.LampIntensity(scale);
+                lamp.glow.range=indoorStyle.LampRange(lamp.localOutput);
+            }
             var motion=go.AddComponent<LightMotion>();motion.speed=moveSpeed;
             if(transferredScale<=0)lamp.BeginReveal(revealMaterial,Time.time,revealDuration);
             go.SetActive(true);motion.SetMoving(moving);
             if(moving){var d=motion.Direction;d.y=Mathf.Max(.25f,Mathf.Abs(d.y));motion.RestoreDirection(d);}
             if(observer)Physics.IgnoreCollision(go.GetComponent<Collider>(),observer.GetComponentInParent<CharacterController>(),true);
             if(creator)go.AddComponent<PlayerInstance>().Bind(this,lamp,shape,creator);
-            lamps.Add(lamp);return lamp;
+            lamps.Add(lamp);RegisterSentenceSubject(lamp);return lamp;
         }
         void LateUpdate()
         {

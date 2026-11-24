@@ -844,7 +844,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: df1b0cf146b49ce449eba81ef334b549, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.NightEnvironment
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Outdoor.NightEnvironment
   lamp: {fileID: 3464102138297247676}
   sun: {fileID: 2884560304828798732}
   clouds: {fileID: 8135763795380202396}
@@ -892,7 +892,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b7fc7237b76721d4892654e85ac846bd, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V4.CloudLightCookie
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Outdoor.CloudLightCookie
   sun: {fileID: 2884560304828798732}
   sky: {fileID: 2100000, guid: fd6d2b4c7b70b3240bdd41579e743ea7, type: 2}
   cloudPlane: {fileID: 5099670704548020688}
@@ -1464,4 +1464,3 @@ MonoBehaviour:
   words:
   - light
   shapes: 000000000100000002000000
-  maxInstances: 24

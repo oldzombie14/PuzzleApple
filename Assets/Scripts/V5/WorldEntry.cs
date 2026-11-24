@@ -10,6 +10,7 @@ namespace PuzzleApple.V5
 {
     public sealed class WorldEntry : MonoBehaviour
     {
+        public SentenceEntityRegistry Entities { get; } = new SentenceEntityRegistry();
         public FirstPersonController player;
         public CognitionBoard board;
         public FoldingRoom room;
@@ -25,6 +26,15 @@ namespace PuzzleApple.V5
         [Min(0)] public float blackFadeDuration = .8f;
         [Min(0)] public float closedPauseDuration = .65f, dialogFadeDuration = .5f;
         public bool Entered { get; private set; }
+        public bool LightUnderstood { get; private set; }
+        public event System.Action LightUnderstandingGained;
+        internal void UnderstandLight()
+        {
+            if(LightUnderstood)return;
+            LightUnderstood=true;
+            board.State.TryAcquireWord("intro.altar.light",board.Catalog.Word("light"));
+            LightUnderstandingGained?.Invoke();
+        }
         public bool Busy { get; private set; }
         public bool ConfirmingExit => dialog.activeSelf;
         public bool Exiting { get; private set; }
@@ -62,9 +72,16 @@ namespace PuzzleApple.V5
             if(!outdoor)outdoor=gameObject.AddComponent<OutdoorPassage>();
             outdoor.entry=this;
             board.State.Changed+=OnSentences;
+            board.State.CommandBlocked+=OnCommandBlocked;
             EnterWorld();
         }
-        void OnDestroy(){if(board && board.State!=null)board.State.Changed-=OnSentences;}
+        void OnDestroy()
+        {
+            if(!board || board.State==null)return;
+            board.State.Changed-=OnSentences;
+            board.State.CommandBlocked-=OnCommandBlocked;
+        }
+        void OnCommandBlocked(int groupId)=>feedback.Play(groupId,false);
         void OnSentences(CognitionChange change)=>sentenceRuntime.Refresh(change);
         void Update()
         {
@@ -113,17 +130,19 @@ namespace PuzzleApple.V5
             if(Entered) StartCoroutine(CloseWorld(-1));
             else ShowDialog();
         }
+        internal bool CanStartWorldCommand(bool open) =>
+            Entered && !Busy && !ConfirmingExit && !Exiting && (!open || !CurrentOpeningBox.Opened);
         public void OpenWorld(int groupId)
         {
             if(!Entered || Busy || ConfirmingExit) return;
-            if(CurrentOpeningBox.Opened) { if(groupId>=0){feedback.Play(groupId,false);sentenceRuntime.FinishCommand(groupId);} return; }
+            if(CurrentOpeningBox.Opened) { if(groupId>=0){feedback.Play(groupId,false);} return; }
             worldGroup=groupId;worldRule="world.on";worldRoutine=StartCoroutine(Open(groupId));
         }
         FoldingRoom CurrentOpeningBox=>outdoor&&outdoor.InChapter&&room.Opened?outdoor.Chapter.box:room;
         IEnumerator Open(int groupId)
         {
             Busy=true; board.Panel.InputBlocked=true;
-            if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
+            if(groupId>=0) {feedback.Play(groupId,true);yield return new WaitForSecondsRealtime(feedback.duration);}
             board.Panel.SetOpen(false);
             if(groupId>=0)yield return LevelWorldView(groupId);
             if(portableClosure)portableClosure.Restore();
@@ -156,7 +175,7 @@ namespace PuzzleApple.V5
             Busy=true; player.MovementLocked=true;
             board.CancelDrag(); board.Panel.InputBlocked=true;
             // Showing exit confirmation is a visible effect even when no fold is needed.
-            if(groupId>=0) {feedback.Play(groupId,true);sentenceRuntime.FinishCommand(groupId);yield return new WaitForSecondsRealtime(feedback.duration);}
+            if(groupId>=0) {feedback.Play(groupId,true);yield return new WaitForSecondsRealtime(feedback.duration);}
             wasPanelOpen=board.Panel.IsOpen; board.Panel.SetOpen(false);
             if(groupId>=0)yield return LevelWorldView(groupId);
             var gallery=outdoor&&outdoor.InChapter?outdoor.Chapter.box:null;

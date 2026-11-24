@@ -1,22 +1,49 @@
 using System.Collections;
-using PuzzleApple.V5.Cognition;
 using UnityEngine;
 
 namespace PuzzleApple.V5
 {
     [DefaultExecutionOrder(-100)]
     [RequireComponent(typeof(BoxCollider),typeof(Rigidbody))]
-    public sealed class PassagePlatform : MonoBehaviour
+    public sealed class PassagePlatform : MonoBehaviour, ISentenceOutputState<PassagePlatform.RailState>
     {
         public BoxCollider Deck {get;private set;}
+        public SentenceMotionOutput MotionOutput {get;internal set;}
         PassageJourney journey;
         Rigidbody body;
-        float nearZ, travelLength, phase;
+        [System.Serializable]
+        public struct RailState
+        {
+            // Metres around one complete out-and-back trip, including the return leg.
+            public float phase;
+        }
+
+        float nearZ, travelLength;
+        RailState travel;
+        public RailState CaptureState() => travel;
+
+        public bool TryRestoreState(RailState state)
+        {
+            if (!journey || !Deck || travelLength <= 0 || float.IsNaN(state.phase) ||
+                state.phase < 0 || state.phase >= 2 * travelLength) return false;
+            ApplyRailState(state);
+            return true;
+        }
+
+        void ApplyRailState(RailState state)
+        {
+            float z = nearZ + Mathf.PingPong(state.phase, travelLength);
+            var destination = journey.Root.TransformPoint(new Vector3(0, -.15f, z));
+            journey.entry.player.CarryOn(Deck, destination - transform.position);
+            travel = state;
+            transform.position = destination;
+            Physics.SyncTransforms();
+        }
         bool visitedFarRoom, fallingFromTrack;
         Coroutine respawn;
         ReticleBackground output;
         public bool Respawning => respawn != null;
-        public Vector3 TravelDirection=>phase<travelLength?journey.Root.forward:-journey.Root.forward;
+        public Vector3 TravelDirection=>travel.phase<travelLength?journey.Root.forward:-journey.Root.forward;
 
         public void Bind(PassageJourney owner,float start,float end)
         {
@@ -24,7 +51,7 @@ namespace PuzzleApple.V5
             output=owner.entry.chamberLight.GetComponent<ReticleBackground>();
             nearZ=start;
             travelLength=end-start;
-            phase=Mathf.Clamp(owner.Root.InverseTransformPoint(transform.position).z-start,0,travelLength);
+            travel.phase=Mathf.Clamp(owner.Root.InverseTransformPoint(transform.position).z-start,0,travelLength);
             Deck=GetComponent<BoxCollider>();
             body=GetComponent<Rigidbody>();
             body.isKinematic=true;
@@ -37,16 +64,10 @@ namespace PuzzleApple.V5
             var entry=journey.entry;
             if(entry.portableClosure&&entry.portableClosure.Isolated)return;
             var player=entry.player;
-            if(travelLength>0 && Time.deltaTime>0 && entry.sentenceRuntime.HasEffect(CognitionSignal.WorldMove,PassageJourney.LightSpace.ReturnPath))
+            if(travelLength>0 && Time.deltaTime>0 && MotionOutput!=null && MotionOutput.HasMotion(SentenceMotion.Floor))
             {
-                phase=Mathf.Repeat(phase+journey.platformSpeed*Time.deltaTime,2*travelLength);
-                float z=nearZ+Mathf.PingPong(phase,travelLength);
-                var destination=journey.Root.TransformPoint(new Vector3(0,-.15f,z));
-                var displacement=destination-transform.position;
-                player.CarryOn(Deck,displacement);
-                // Publish the rendered pose and collision pose before the rider advances this frame.
-                transform.position=destination;
-                Physics.SyncTransforms();
+                float nextPhase = Mathf.Repeat(travel.phase + journey.platformSpeed * Time.deltaTime, 2 * travelLength);
+                ApplyRailState(new RailState { phase = nextPhase });
             }
 
             var feet=journey.Root.InverseTransformPoint(player.transform.position);

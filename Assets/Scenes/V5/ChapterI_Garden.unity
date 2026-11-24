@@ -521,7 +521,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 34d455be8bfe51242a9de012a1f5a941, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.MembraneDoor
-  inside: 128
+  interiorSpaces:
+  - {fileID: 11400000, guid: 450dd89cf36027f42909753a0047e426, type: 2}
   interior: {fileID: 871217124}
   room: {fileID: 1416191279}
 --- !u!1 &871217122
@@ -1976,7 +1977,6 @@ MonoBehaviour:
   words:
   - light
   shapes: 000000000100000002000000
-  maxInstances: 24
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

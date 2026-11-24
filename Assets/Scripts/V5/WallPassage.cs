@@ -3,7 +3,7 @@ using UnityEngine.Events;
 
 namespace PuzzleApple.V5
 {
-    public sealed class WallPassage : MonoBehaviour
+    public sealed class WallPassage : MonoBehaviour, IProgressBoundary
     {
         public ChamberLight lamp;
         public PassageJourney journey;
@@ -25,10 +25,18 @@ namespace PuzzleApple.V5
         Material coverInk;
         GameObject stairs;
         Material stairInk;
-        Light stairLight;
+        Light[] stairLights;
+        const uint StairLightLayer = 1u << 1;
         ProgressLock revealLock;
         public bool Revealed=>revealLock && revealLock.Unlocked;
         public float LightReveal=>1-Mathf.SmoothStep(0,1,lamp.Brightness);
+        public float BoundaryProgress => LightReveal;
+        public bool AllowsConnection => true;
+        public event System.Action BoundaryChanged
+        {
+            add { lamp.BrightnessChanged += value; }
+            remove { if (lamp) lamp.BrightnessChanged -= value; }
+        }
         public float Reveal=>Revealed || journey&&journey.ViewBeyondChamber?1:LightReveal;
         Material returnGlow;
         void Start()
@@ -41,7 +49,7 @@ namespace PuzzleApple.V5
             var outward=new Vector3(wall.position.x,0,wall.position.z).normalized;
             var root=new GameObject("Random passage - runtime").transform;root.SetParent(transform,false);
             var lockTemplate=Resources.Load<ProgressLock>("V5/PassageRevealProgressLock");
-            if(journey && lockTemplate){revealLock=Instantiate(lockTemplate,root,false);revealLock.passageReveal=this;}
+            if(journey && lockTemplate){revealLock=Instantiate(lockTemplate,root,false);revealLock.BindBoundary(this);}
             root.SetPositionAndRotation(new Vector3(wall.position.x,wall.position.y-tall*.5f,wall.position.z),Quaternion.LookRotation(outward));
             float centre=0;
             float left=centre-width*.5f,right=centre+width*.5f;
@@ -109,16 +117,24 @@ namespace PuzzleApple.V5
             stairInk.SetFloat("_ZWrite", 0);
             stairInk.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
 
-            // Light spilling in from the threshold reaches the upper treads first.
-            stairLight = new GameObject("Light from corridor", typeof(Light)).GetComponent<Light>();
-            stairLight.transform.SetParent(stairs.transform, false);
-            stairLight.transform.localPosition = new Vector3(0, .92f, -wallThickness * .5f - .16f);
-            stairLight.transform.localRotation = Quaternion.Euler(90, 0, 0);
-            stairLight.type = LightType.Spot;
-            stairLight.range = 2.9f;
-            stairLight.spotAngle = 112f;
-            stairLight.innerSpotAngle = 110f;
-            stairLight.shadows = LightShadows.Hard;
+            // Spread the original light output across the mouth, keeping room bounce unchanged.
+            // Rendering layers confine this local spill to the stairs, without floor/wall halos.
+            stairLights = new Light[3];
+            for (int i = 0; i < stairLights.Length; i++)
+            {
+                var light = new GameObject(i == 1 ? "Light from corridor" : "Threshold side light " + i, typeof(Light)).GetComponent<Light>();
+                light.transform.SetParent(stairs.transform, false);
+                light.transform.localPosition = new Vector3((i - 1) * width / 3, 1.2f, -wallThickness * .5f - .16f);
+                light.transform.localRotation = Quaternion.Euler(90, 0, 0);
+                light.type = LightType.Spot;
+                light.range = 3.6f;
+                light.spotAngle = 112f;
+                light.innerSpotAngle = 110f;
+                light.shadows = LightShadows.Hard;
+                var data = light.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>();
+                data.renderingLayers = StairLightLayer;
+                stairLights[i] = light;
+            }
 
             const float tread = .32f;
             int count = Mathf.CeilToInt(sillHeight / .2f);
@@ -126,8 +142,9 @@ namespace PuzzleApple.V5
             {
                 float top = sillHeight * (i + 1) / count;
                 float z = -wallThickness * .5f - (count - i - .5f) * tread;
-                Block(stairs.transform, "Tread " + (i + 1),
+                var step = Block(stairs.transform, "Tread " + (i + 1),
                     new Vector3(0, -sillHeight + top * .5f, z), new Vector3(width, top, tread), stairInk);
+                step.renderingLayerMask |= StairLightLayer;
             }
             UpdateStairs();
         }
@@ -138,7 +155,8 @@ namespace PuzzleApple.V5
             float dissolve = Revealed?0:1-LightReveal;
             stairInk.SetFloat("_Dissolve", dissolve);
             float corridorLight = journey && journey.Stars ? journey.Stars.Brightness : 1;
-            stairLight.intensity = 2.2f * (1 - dissolve) * corridorLight;
+            foreach (var light in stairLights)
+                light.intensity = 2.2f / stairLights.Length * (1 - dissolve) * corridorLight;
             if (stairs.activeSelf != (dissolve < 1)) stairs.SetActive(dissolve < 1);
         }
 

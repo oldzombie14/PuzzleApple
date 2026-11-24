@@ -145,9 +145,11 @@ namespace PuzzleApple.V5
                     float alpha=(strong?.62f:.25f)*Mathf.Sin(Mathf.PI*Mathf.Pow(u,.55f));
                     lines[i].startColor=lines[i].endColor=new Color(.89f,.94f,1,alpha);
                     // Briefly hold the expanded frame before it resumes spreading and fades.
-                    float expansion=u<.35f?Mathf.SmoothStep(0,.55f,u/.35f):u<.55f?.55f:Mathf.SmoothStep(.55f,1,(u-.55f)/.45f);
-                    float x=(content.width*.5f+Mathf.Lerp(4,45,expansion))*scale;
-                    float y=(content.height*.5f+Mathf.Lerp(2,35,expansion))*scale;
+                    const float held = CognitionBoard.HeldRippleExpansion;
+                    float expansion=u<.35f?Mathf.SmoothStep(0,held,u/.35f):u<.55f?held:Mathf.SmoothStep(held,1,(u-.55f)/.45f);
+                    var bounds=CognitionBoard.RippleBounds(content,expansion);
+                    float x=bounds.width*.5f*scale;
+                    float y=bounds.height*.5f*scale;
                     lines[i].SetPosition(0,new Vector3(-x,-y,0));
                     lines[i].SetPosition(1,new Vector3(-x,y,0));
                     lines[i].SetPosition(2,new Vector3(x,y,0));

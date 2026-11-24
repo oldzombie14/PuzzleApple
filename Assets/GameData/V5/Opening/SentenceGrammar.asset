@@ -1,0 +1,186 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 24cdb9f1ff01ce343927dec233cb4a65, type: 3}
+  m_Name: SentenceGrammar
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.Cognition.SentenceGrammar
+  templates:
+  - id: state.on
+    slots:
+    - classes: 1
+      words:
+      - {fileID: 11400000, guid: e4ec2b73428d4e8db3a72aef270d2568, type: 2}
+    - classes: 2
+      words:
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+      - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+      - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+    intent:
+      action: 1
+      subject: 1
+      target: -1
+      kind: 1
+      scope: 2
+  - id: state.off
+    slots:
+    - classes: 1
+      words:
+      - {fileID: 11400000, guid: 3200fb36f1e44738ab1c7ee1767519fc, type: 2}
+    - classes: 2
+      words:
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+      - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+      - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+    intent:
+      action: 2
+      subject: 1
+      target: -1
+      kind: 1
+      scope: 2
+  - id: move.free
+    slots:
+    - classes: 2
+      words:
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+      - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+      - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+    - classes: 4
+      words:
+      - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+    intent:
+      action: 3
+      subject: 0
+      target: -1
+      kind: 0
+      scope: 1
+  - id: move.directed
+    slots:
+    - classes: 2
+      words:
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+      - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+      - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+    - classes: 4
+      words:
+      - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+    - classes: 2
+      words:
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+      - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+      - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+    intent:
+      action: 3
+      subject: 0
+      target: 2
+      kind: 1
+      scope: 2
+  - id: illuminate
+    slots:
+    - classes: 4
+      words:
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+    - classes: 2
+      words:
+      - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+      - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+      - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+      - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+    intent:
+      action: 4
+      subject: 1
+      target: -1
+      kind: 0
+      scope: 0
+  exceptions:
+  - id: world.on
+    words:
+    - {fileID: 11400000, guid: e4ec2b73428d4e8db3a72aef270d2568, type: 2}
+    - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+    reject: 0
+    intent:
+      action: 1
+      subject: 1
+      target: -1
+      kind: 2
+      scope: 3
+  - id: world.off
+    words:
+    - {fileID: 11400000, guid: 3200fb36f1e44738ab1c7ee1767519fc, type: 2}
+    - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+    reject: 0
+    intent:
+      action: 2
+      subject: 1
+      target: -1
+      kind: 2
+      scope: 3
+  - id: move.on
+    words:
+    - {fileID: 11400000, guid: e4ec2b73428d4e8db3a72aef270d2568, type: 2}
+    - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+    reject: 0
+    intent:
+      action: 1
+      subject: 1
+      target: -1
+      kind: 0
+      scope: 0
+  - id: move.freeze
+    words:
+    - {fileID: 11400000, guid: 3200fb36f1e44738ab1c7ee1767519fc, type: 2}
+    - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+    reject: 0
+    intent:
+      action: 5
+      subject: 1
+      target: -1
+      kind: 0
+      scope: 3
+  - id: illuminate.world
+    words:
+    - {fileID: 11400000, guid: 8f1781d399cc95145888f778418ccc36, type: 2}
+    - {fileID: 11400000, guid: 5db29a0ff1bd4668a68c42ba108caf3d, type: 2}
+    reject: 0
+    intent:
+      action: 4
+      subject: 1
+      target: -1
+      kind: 0
+      scope: 3
+  - id: unsupported.door.to.door
+    words:
+    - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+    - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+    - {fileID: 11400000, guid: bbe5272c8f539fc4e9550f56fb04fd57, type: 2}
+    reject: 1
+    intent:
+      action: 0
+      subject: -1
+      target: -1
+      kind: 0
+      scope: 0
+  - id: unsupported.floor.to.floor
+    words:
+    - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+    - {fileID: 11400000, guid: c09d8a99790e6bf45a1aebf21f100c0c, type: 2}
+    - {fileID: 11400000, guid: 310a5920a59b1ce4c8eaec45063fc3c3, type: 2}
+    reject: 1
+    intent:
+      action: 0
+      subject: -1
+      target: -1
+      kind: 0
+      scope: 0
+  legacyRules:
+  - {fileID: 11400000, guid: 3d4717c2fdf1ed5428b89642f4ee06b1, type: 2}
+  - {fileID: 11400000, guid: 6628115597847c64d89558bf0c8c6676, type: 2}
+  - {fileID: 11400000, guid: 2efa1ac244374d35b8e98ab442d50161, type: 2}
+  - {fileID: 11400000, guid: e042ddfb7d55492ab37582209b5349ce, type: 2}

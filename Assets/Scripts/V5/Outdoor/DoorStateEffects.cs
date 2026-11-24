@@ -4,7 +4,7 @@ using UnityEngine;
 namespace PuzzleApple.V5.Outdoor
 {
     [DefaultExecutionOrder(-20)]
-    public sealed class DoorStateEffects : MonoBehaviour
+    public sealed class DoorStateEffects : MonoBehaviour, ISentenceOutputState<EmissionState>
     {
         public bool IsOn { get; private set; } = true;
         public bool IsOff => !IsOn;
@@ -20,6 +20,7 @@ namespace PuzzleApple.V5.Outdoor
         readonly List<Surface> surfaces = new List<Surface>();
         bool initialized;
         float illuminated;
+        public bool SentenceLit=>illuminated>0;
         public void SetIlluminated(float value)
         {
             if(illuminated==value)return;
@@ -55,14 +56,23 @@ namespace PuzzleApple.V5.Outdoor
             IsOn=on&&!off;
             if(initialized) ApplyAppearance();
         }
+        public EmissionState CaptureState() => new EmissionState(Brightness);
+        public bool TryRestoreState(EmissionState state)
+        {
+            if (!initialized || !state.Valid) return false;
+            Brightness = state.brightness;
+            ApplyAppearance();
+            return true;
+        }
         public void HoldCurrentState()
         {
             transitionEnabled=false;
         }
+        internal SentenceStateOutput DoorOutput;
         void Update()
         {
             if(!transitionEnabled)return;
-            Brightness=fadeDuration>0?Mathf.MoveTowards(Brightness,IsOn?1:0,Time.unscaledDeltaTime/fadeDuration):(IsOn?1:0);
+            Brightness=fadeDuration>0?SentenceStateOutput.Advance(Brightness,IsOn?1:0,Time.unscaledDeltaTime/fadeDuration,DoorOutput):(IsOn?1:0);
             ApplyAppearance();
         }
         void ApplyAppearance()

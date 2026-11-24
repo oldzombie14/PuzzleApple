@@ -34,6 +34,56 @@ namespace PuzzleApple.V5.Outdoor
         Color overrideColor;
         float overrideDensity;
 
+        [System.Serializable]
+        public struct MotionState
+        {
+            public Vector3 travel, direction, target;
+            public float speed;
+            public Vector4[] pendingHeadings;
+            public bool Valid
+            {
+                get
+                {
+                    if (!DriftPose.Finite(travel) || !DriftPose.Finite(direction) || !DriftPose.Finite(target) ||
+                        !float.IsFinite(speed) || speed < 0 || pendingHeadings == null) return false;
+                    foreach (var heading in pendingHeadings)
+                    {
+                        if (!DriftPose.Finite(heading) || !float.IsFinite(heading.w) || heading.w < 0) return false;
+                    }
+                    return true;
+                }
+            }
+        }
+
+        float pausedAt;
+        bool restoredWhileInactive;
+        public MotionState CaptureMotion()
+        {
+            var pending = headings.ToArray();
+            float now = isActiveAndEnabled ? Time.time : pausedAt;
+            for (int i = 0; i < pending.Length; i++) pending[i].w = Mathf.Max(0, pending[i].w - now);
+            return new MotionState { travel = windTravel, direction = driftDirection, target = targetDirection,
+                speed = smoothedSpeed, pendingHeadings = pending };
+        }
+        internal void RestoreMotion(MotionState state)
+        {
+            restoredWhileInactive = !isActiveAndEnabled;
+            windTravel = state.travel;
+            driftDirection = state.direction;
+            targetDirection = state.target;
+            smoothedSpeed = state.speed;
+            headings.Clear();
+            float now = isActiveAndEnabled ? Time.time : pausedAt;
+            foreach (var sample in state.pendingHeadings)
+            {
+                var heading = sample;
+                heading.w += now;
+                headings.Enqueue(heading);
+            }
+            if (player) previousPlayerPosition = player.position;
+            if (isActiveAndEnabled) UpdateProjection();
+        }
+
         public void SetFogOverride(bool active, Color color, float density)
         {
             fogOverride = active; overrideColor = color; overrideDensity = density;
@@ -42,10 +92,22 @@ namespace PuzzleApple.V5.Outdoor
 
         void OnEnable()
         {
-            driftDirection = targetDirection = new Vector3(wind.x, 0, wind.y).normalized;
+            if (!restoredWhileInactive) driftDirection = targetDirection = new Vector3(wind.x, 0, wind.y).normalized;
+            else
+            {
+                int count = headings.Count;
+                for (int i = 0; i < count; i++)
+                {
+                    var heading = headings.Dequeue();
+                    heading.w += Time.time - pausedAt;
+                    headings.Enqueue(heading);
+                }
+            }
+            restoredWhileInactive = false;
             if (player) previousPlayerPosition = player.position;
             UpdateProjection();
         }
+        void OnDisable() => pausedAt = Time.time;
         void Update()
         {
             if (Application.isPlaying)

@@ -14,7 +14,7 @@ namespace PuzzleApple.V5
         float phase, initialIntensity;
         Color emission;
         MaterialPropertyBlock ink;
-        public bool Lit => spot && spot.intensity>.001f;
+        public bool Lit => spot && spot.intensity>0;
 
         void Awake()
         {
@@ -23,11 +23,16 @@ namespace PuzzleApple.V5
             emission=lens.sharedMaterial.GetColor("_EmissionColor");
             ink=new MaterialPropertyBlock();
         }
+        internal float Phase => phase;
+        internal void RestorePhase(float value)
+        {
+            phase = value;
+            if (swing) transform.localRotation = resting * Quaternion.Euler(amplitude * Mathf.Sin(phase), 0, 0);
+        }
         public void Tick(bool moving)
         {
             if(swing && moving && Lit){
-                phase+=Mathf.PI*Time.deltaTime/halfPeriod;
-                transform.localRotation=resting*Quaternion.Euler(amplitude*Mathf.Sin(phase),0,0);
+                RestorePhase(phase + Mathf.PI * Time.deltaTime / halfPeriod);
             }
             lens.GetPropertyBlock(ink);
             ink.SetColor("_EmissionColor",emission*Mathf.Clamp01(spot.intensity/Mathf.Max(.001f,initialIntensity)));

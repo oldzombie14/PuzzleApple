@@ -21,7 +21,10 @@ namespace PuzzleApple.V5.Editor
             {
                 var l=e.chamberLight;var p=e.player;
                 Check(AssetDatabase.GetAssetPath(l.hoverEye.sprite)=="Assets/Sprites/V5/Viewer.png","actual eye binding");
-                Check(System.IO.File.ReadAllBytes("Assets/Sprites/V5/Viewer.png").SequenceEqual(System.IO.File.ReadAllBytes("Assets/UI/V4/Icons/viewer.png")),"V4 eye pixels preserved");
+                using (var hash = System.Security.Cryptography.SHA256.Create())
+                using (var eye = System.IO.File.OpenRead(AssetDatabase.GetAssetPath(l.hoverEye.sprite)))
+                    Check(BitConverter.ToString(hash.ComputeHash(eye)).Replace("-", "") ==
+                        "A05DB7A364C3B470257061EF17DA73997D5CEFB2AB770EC085E01C4BDC9A3A15", "eye artwork matches approved asset");
                 Check(l.hoverEye.rectTransform.sizeDelta==new Vector2(140,140)&&l.hoverEye.rectTransform.anchoredPosition==Vector2.zero,"eye layout");
                 var strokes=l.reticle.GetComponentsInChildren<Image>(true);
                 Check(strokes.Length==2&&strokes.All(s=>s.rectTransform.sizeDelta==new Vector2(20,3)),"native X strokes");
@@ -49,7 +52,7 @@ namespace PuzzleApple.V5.Editor
                 Check(l.TryCollect(),"repeat click restarts known feedback");
                 yield return Until(()=>!l.ShowingKnown&&l.hoverEye.gameObject.activeSelf);
                 Check(l.hoverEye.gameObject.activeSelf&&!l.reticle.activeSelf,"known feedback restores eye");
-                Result="PASS: V4 asset pixels, layout, world texture binding, menu/X/eye/dark/panel/new/known/repeated collection";
+                Result="PASS: eye artwork, layout, world texture binding, menu/X/eye/dark/panel/new/known/repeated collection";
             }
             finally{Application.runInBackground=background;}
         }

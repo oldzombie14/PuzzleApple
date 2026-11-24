@@ -31,16 +31,29 @@ namespace PuzzleApple.V5.Editor
                 var board = entry.board; var state = board.State; var panel = board.Panel;
                 panel.SetOpen(true); yield return new WaitForSecondsRealtime(.3f);
                 Check(history.toggle.onClick.GetPersistentEventCount() == 0, "clear binding removed");
+                var closedPosition = history.drawer.anchoredPosition;
+                var drawerWidth = history.drawer.rect.width;
+                Check(history.drawer.parent.GetComponent<UnityEngine.UI.RectMask2D>() && drawerWidth > 0,
+                    "drawer slides through a fixed opening");
+                Check(history.drawer.localScale == Vector3.one && !history.visibility.blocksRaycasts,
+                    "closed drawer keeps its scale and releases pointer input");
                 history.toggle.onClick.Invoke(); yield return new WaitForSecondsRealtime(.15f);
+                Check(history.drawer.anchoredPosition == closedPosition + Vector2.right * drawerWidth
+                    && history.drawer.localScale == Vector3.one, "drawer slides right by its full width");
                 Check(history.IsOpen && board.Surface.gameObject.activeInHierarchy, "history coexists with workspace");
+                entry.sentenceRuntime.presentation.enabledShots=false;
                 state.TryAcquireSentence("history.check.valid", "positive light");
                 state.TryAcquireSentence("history.check.conflict", "negative light");
                 state.TryAcquireSentence("history.check.invalid", "world light");
                 Check(state.History.Any(h => h.Effective) && state.History.Any(h => !h.Effective), "both evaluations recorded");
                 var first = state.Groups.First(g => g.RuleId == "light.on");
                 state.ReturnToLibrary(first.Id, first.Words[0].Id, true);
-                Check(state.Groups.First(g => g.RuleId == "light.off").Effective, "conflict takeover");
-                Check(state.History.Any(h => h.Effective && h.Words[0].Id == "negative")!=state.RequirePeriod, "only automatic mode records an unspoken takeover");
+                var reverse = state.Groups.First(g => g.RuleId == "light.off");
+                yield return ChargeDoorChecks.Wait(()=>state.Find(first.Id)==null,"original command finishes");
+                Check(!reverse.Spoken && !state.History.Any(h => h.Effective && h.Words[0].Id=="negative"), "rejected command has no successful history");
+                state.Speak(reverse.Id);
+                Check(state.History[0].Effective && state.History[0].Words[0].Id=="negative","fresh reverse command enters successful history");
+                yield return ChargeDoorChecks.Wait(()=>state.Find(reverse.Id)==null,"reverse command finishes");
                 int count = state.History.Count; state.ClearWorkspace();
                 Check(state.History.Count == count, "history survives removal");
                 var library = UnityEngine.Object.FindFirstObjectByType<WordLibrary>();
@@ -71,7 +84,7 @@ namespace PuzzleApple.V5.Editor
                 Check(!history.IsVisible && panelRect.anchoredPosition.x < before.x, "both panels finish closing");
                 panel.Toggle(); yield return new WaitForSecondsRealtime(.3f);
                 Check(panel.IsOpen && !history.IsOpen && state.History.Count > 0, "reopen preserves history and resets drawer");
-                Result = "PASS: evaluation history, conflict takeover, removal retention, live drag callbacks, strike-through, native scrolling, sequential close and reopen";
+                Result = "PASS: evaluation history, manual reversal, removal retention, live drag callbacks, strike-through, native scrolling, sequential close and reopen";
             }
             finally { Application.runInBackground = background; }
         }

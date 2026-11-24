@@ -8,20 +8,18 @@ namespace PuzzleApple.V5.Outdoor
         public ThresholdDoor door;
         public DoorStateEffects appearance;
         public Collider ground;
-        CognitionSignal motion;
-        bool stateDriven;
-        public void Apply(System.Func<CognitionSignal,bool> hasEffect,bool split=false)
+        bool moving;
+        public SentenceMotionOutput MotionOutput {get;internal set;}
+        public void SetState(bool on){if(appearance)appearance.SetState(on,!on);}
+        public void HoldState(){if(appearance)appearance.HoldCurrentState();}
+        public void ApplyMotion(System.Func<SentenceMotion,bool> hasMotion)
         {
-            bool on=hasEffect(CognitionSignal.DoorOn), off=hasEffect(CognitionSignal.DoorOff);
-            if(appearance && (on || off)) { appearance.SetState(on,off); stateDriven=true; }
-            else if(appearance && stateDriven) { appearance.HoldCurrentState(); stateDriven=false; }
-            motion=hasEffect(CognitionSignal.DoorMove)?CognitionSignal.DoorMove:CognitionSignal.Empty;
+            moving = hasMotion(SentenceMotion.Door);
             RefreshMotion();
         }
-        public void ReleaseStateCommand()=>stateDriven=false;
         public void RefreshMotion()
         {
-            if(door && door.Revealed) door.SetMotion(motion==CognitionSignal.DoorMove,false);
+            if(door && door.Revealed) door.SetMotion(moving,false);
         }
         void FixedUpdate()
         {

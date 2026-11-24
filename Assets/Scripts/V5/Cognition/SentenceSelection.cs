@@ -6,7 +6,6 @@ namespace PuzzleApple.V5.Cognition
 {
     public sealed class SentenceSelection : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
-        const float FramePadding = 9f;
         CognitionBoard board;
         RectTransform frame;
         Vector2 start;
@@ -60,11 +59,23 @@ namespace PuzzleApple.V5.Cognition
             if (Selected != group) Clear();
         }
 
+        internal bool RemoveSelectedAt(PointerEventData e)
+        {
+            if (e.button != PointerEventData.InputButton.Right || board.Panel.InputBlocked ||
+                Selected < 0 || !frame.gameObject.activeSelf ||
+                !RectTransformUtility.RectangleContainsScreenPoint(frame,e.position,e.pressEventCamera)) return false;
+            board.RemoveToken(Selected,-1,true);
+            e.Use();
+            return true;
+        }
+
         public void OnPointerDown(PointerEventData e)
         {
-            if (e.button != PointerEventData.InputButton.Left || board.Panel.InputBlocked) return;
+            if (board.Panel.InputBlocked) return;
             start = board.ScreenToBoard(e.position);
-            moveSelection = Selected >= 0 && Bounds(Selected).Contains(start);
+            if (RemoveSelectedAt(e)) return;
+            if (e.button != PointerEventData.InputButton.Left) return;
+            moveSelection = Selected >= 0 && SelectionBounds().Contains(start);
             if (!moveSelection) Clear();
         }
 
@@ -101,12 +112,12 @@ namespace PuzzleApple.V5.Cognition
             Refresh();
         }
 
-        Rect Bounds(int id, bool fitToInkHeight = false)
+        Rect Bounds(int id, bool includePadding = false)
         {
             var root = board.GroupRect(id);
-            var ink = board.GroupContentBounds(id, fitToInkHeight);
-            Vector2 min = board.Surface.InverseTransformPoint(root.TransformPoint(ink.min));
-            Vector2 max = board.Surface.InverseTransformPoint(root.TransformPoint(ink.max));
+            var bounds = includePadding ? board.SelectionFrameBounds(id) : board.GroupContentBounds(id);
+            Vector2 min = board.Surface.InverseTransformPoint(root.TransformPoint(bounds.min));
+            Vector2 max = board.Surface.InverseTransformPoint(root.TransformPoint(bounds.max));
             return Rect.MinMaxRect(min.x, -max.y, max.x, -min.y);
         }
 
@@ -126,13 +137,11 @@ namespace PuzzleApple.V5.Cognition
         void Refresh()
         {
             if (Selected >= 0 && board.GroupRect(Selected) && !board.IsDragging)
-            {
-                Rect ink = Bounds(Selected, true);
-                Draw(Rect.MinMaxRect(ink.xMin - FramePadding, ink.yMin - FramePadding,
-                    ink.xMax + FramePadding, ink.yMax + FramePadding));
-            }
+                Draw(SelectionBounds());
             else frame.gameObject.SetActive(false);
         }
+
+        Rect SelectionBounds() => Bounds(Selected,true);
 
         void Draw(Rect rect)
         {

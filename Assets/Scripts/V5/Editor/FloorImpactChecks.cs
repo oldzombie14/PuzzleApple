@@ -24,6 +24,7 @@ namespace PuzzleApple.V5.Editor
         {
             e.OpenWorld(-1);
             yield return Until(()=>e.room.Opened&&!e.Busy);
+            yield return ChargeDoorChecks.UnlockFirstPassage(e);
             var j=e.journey;
             var platform=j.Platform;
             var p=e.player;
@@ -75,8 +76,11 @@ namespace PuzzleApple.V5.Editor
             Check(Vector3.Distance(localRider,platform.transform.InverseTransformPoint(p.transform.position))<.05f,"grounded rider follows platform");
             var detached=state.Detach(floor.Id,floor.Words.Last().Id);
             float paused=platform.transform.localPosition.z;
+            var source = platform.MotionOutput.StateSource<PassagePlatform.RailState>();
+            Check(source != null, "registered rail output exposes its state");
+            var outward = source.CaptureState();
             yield return new WaitForSeconds(.25f);
-            Check(platform.transform.localPosition.z==paused,"split holds exact position");
+            Check(platform.transform.localPosition.z==paused && source.CaptureState().phase == outward.phase,"split holds exact rail position and phase");
             p.transform.rotation=root.rotation;
             Walk(p,Vector2.right,false);
             Check(root.InverseTransformPoint(p.transform.position).y<-.3f,"walk sideways off the deck into the abyss");
@@ -87,13 +91,29 @@ namespace PuzzleApple.V5.Editor
             yield return Until(()=>platform.transform.localPosition.z>paused+.2f);
             yield return Until(()=>Vector3.Dot(platform.TravelDirection,root.forward)<0);
             Check(p.StandingOn(platform.Deck),"rider reaches far dock through reversal");
+            var returning = source.CaptureState();
+            var returnPosition = platform.transform.position;
             p.transform.rotation=root.rotation;
             Walk(p,Vector2.up,true);
             yield return Until(()=>j.InSecondRoom);
             yield return new WaitForEndOfFrame();
             yield return FallFrom(j,j.RoomStart-3,true);
             yield return FallFrom(j,j.Tutorial.ExitZ+3,false);
-            Result="PASS: floor click, jump aboard and ashore, ride, reverse, split and resume, three abyss returns, rendered offset "+maxJitter;
+            state.ClearWorkspace();
+            yield return null;
+            yield return null;
+            Check(source.TryRestoreState(outward) && Mathf.Abs(platform.transform.localPosition.z-paused)<.001f &&
+                Vector3.Dot(platform.TravelDirection, root.forward) > .99f, "restore paused outbound rail state");
+            var saved = JsonUtility.ToJson(returning);
+            Check(source.TryRestoreState(JsonUtility.FromJson<PassagePlatform.RailState>(saved)) &&
+                Vector3.Distance(platform.transform.position,returnPosition)<.001f &&
+                Vector3.Distance(platform.Deck.bounds.center,returnPosition)<.001f &&
+                Vector3.Dot(platform.TravelDirection,root.forward)<-.99f, "serialized return leg restores pose and heading");
+            Check(!source.TryRestoreState(new PassagePlatform.RailState { phase = float.NaN }) &&
+                source.CaptureState().phase == returning.phase, "invalid rail state leaves the restored pose intact");
+            yield return null;
+            Check(source.CaptureState().phase == returning.phase, "restoring a pose does not start a sentence");
+            Result="PASS: floor click, rider alignment, boarding, reversal, split/resume, abyss returns and rail state round trip";
         }
         static void Walk(FirstPersonController player,Vector2 input,bool jump)
         {
@@ -139,6 +159,7 @@ namespace PuzzleApple.V5.Editor
                 var state=e.board.State;
                 e.board.Panel.SetOpen(true);
                 yield return Until(()=>e.board.Panel.FullyOpen);
+                body.position=j.Root.TransformPoint(new Vector3(-4,5,j.RoomStart+8));Physics.SyncTransforms();
                 state.TryAcquireSentence("check.drift","light move");
                 yield return Until(()=>e.sentenceRuntime.HasEffect(CognitionSignal.LightMove));
                 var group=state.Groups.First(g=>g.RuleId=="light.move");
@@ -148,18 +169,11 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>e.feedback.WeakCount>weak);
                 var before=body.position;
                 yield return new WaitForSeconds(.25f);
-                Check(group.Recognized&&!j.floorMotion.Active&&e.feedback.StrongCount==strong&&Vector3.Distance(body.position,before)<.015f,"dark directed sentence waits in place");
+                Check(group.Recognized&&!j.floorMotion.Active&&e.feedback.StrongCount==strong&&Vector3.Distance(body.position,before)>.01f && group.ExecutionLocked,"dark cube drifts independently while the directed command waits");
                 j.SetLights(true);
                 yield return Until(()=>j.floorMotion.Active);
                 yield return new WaitForFixedUpdate();
-                var detached=state.Detach(group.Id,group.Words.Last().Id);
-                if(state.RequirePeriod){Check(!group.Effective,"the edited prefix is silent");state.Speak(group.Id);}
-                yield return Until(()=>j.LampsMoving);
-                body.position=j.Root.TransformPoint(new Vector3(-4,4,j.RoomStart+8));
-                strong=e.feedback.StrongCount;
-                state.JoinAndSpeak(detached.Id,group.Id,false);
-                yield return Until(()=>j.floorMotion.Active);
-                Check(e.feedback.StrongCount==strong+1&&e.feedback.GetComponentsInChildren<ParticleSystem>().Any(ps=>ps.isPlaying),"extending lit drift to floor plays a starred ripple");
+                Check(state.Detach(group.Id,group.Words.Last().Id)==null && !state.Unsay(group.Id),"directed descent rejects splitting and period removal");
                 before=body.position;yield return new WaitForSeconds(.2f);
                 Check(body.position.y<before.y-.2f,"lit lamp descends");
                 if(!lightFirst)
@@ -168,16 +182,7 @@ namespace PuzzleApple.V5.Editor
                     yield return new WaitForFixedUpdate();
                     before=body.position;yield return new WaitForSeconds(.2f);
                     Check(!j.floorMotion.Active&&Vector3.Distance(body.position,before)<.015f,"extinguishing pauses directed movement");
-                }
-                if(!lightFirst)
-                {
-                    var floorWord=state.Detach(group.Id,group.Words.Last().Id);
-                    var moveWord=state.Detach(group.Id,group.Words.Last().Id);
-                    before=body.position;
-                    yield return new WaitForSeconds(.25f);
-                    Check(!e.sentenceRuntime.HasEffect(CognitionSignal.LightMove)&&body.isKinematic&&Vector3.Distance(body.position,before)<.015f,"fully dismantled directed sentence holds position");
-                    state.JoinAndSpeak(moveWord.Id,group.Id,false);
-                    state.JoinAndSpeak(floorWord.Id,group.Id,false);
+                    Check(state.Detach(group.Id,group.Words.Last().Id)==null && group.ExecutionLocked,"dark pause preserves command lock");
                 }
                 e.board.Panel.SetOpen(false);
                 j.SetLights(true);

@@ -19,6 +19,47 @@ namespace PuzzleApple.V5
         public bool Docked=>docked;
         public float ChargePower => journey.LightStyle.LampIntensity(transform.localScale.x);
         public bool AtChargeDoor { get; private set; }
+        [System.Serializable]
+        public struct State
+        {
+            public int slot, neighbourSlot;
+            public bool hasNeighbour;
+            public DriftPose pose;
+            public bool falling, docked, chargeDoor, hasDoorTarget, targetsEntrance;
+            public Vector3 velocity, dockPosition, doorTarget;
+            public float dockTime;
+            public bool Valid => slot >= 0 && (!hasNeighbour || neighbourSlot >= 0 && neighbourSlot != slot) && pose.Valid && DriftPose.Finite(velocity) &&
+                DriftPose.Finite(dockPosition) && DriftPose.Finite(doorTarget) &&
+                float.IsFinite(dockTime) && dockTime >= 0;
+        }
+
+        internal State CaptureMotion()
+        {
+            var state = new State {
+                slot = SlotIndex, pose = new DriftPose {position = body.position, direction = direction, parked = parked},
+                falling = fallingThrough, velocity = fallingThrough ? body.linearVelocity : Vector3.zero,
+                docked = docked, chargeDoor = AtChargeDoor, dockPosition = dockPosition, dockTime = dockTime
+            };
+            if (gathering) gathering.CaptureTargets(this, ref state);
+            return state;
+        }
+        internal void RestoreMotion(State state)
+        {
+            if (!body.isKinematic) body.linearVelocity = Vector3.zero;
+            DriftPose.Place(body, state.pose.position);
+            direction = state.pose.direction;
+            parked = state.pose.parked;
+            docked = state.docked;
+            AtChargeDoor = state.chargeDoor;
+            dockPosition = state.dockPosition;
+            dockTime = state.dockTime;
+            fallingThrough = state.falling && journey.floorSurface && journey.floorSurface.HoleProgress > 0;
+            body.useGravity = fallingThrough;
+            body.isKinematic = !fallingThrough;
+            if (fallingThrough) body.linearVelocity = state.velocity;
+            if (gathering) gathering.RestoreTargets(this, state);
+        }
+
         public int SlotIndex {get;set;}
         public void DockAtDoor(bool atChargeDoor=true){
             if(docked)return;
@@ -39,7 +80,7 @@ namespace PuzzleApple.V5
         }
         void Start()
         {
-            direction=Random.onUnitSphere;
+            if (direction == Vector3.zero) direction = Random.onUnitSphere;
             gathering=journey.GetComponent<RoomLightGathering>();
             if(!gathering){gathering=journey.gameObject.AddComponent<RoomLightGathering>();gathering.journey=journey;}
             Physics.IgnoreCollision(GetComponent<SphereCollider>(),journey.entry.player.GetComponent<CharacterController>());
@@ -67,12 +108,10 @@ namespace PuzzleApple.V5
                     return;
                 }
             }
-            var runtime=journey.entry.sentenceRuntime;
-            const PassageJourney.LightSpace space=PassageJourney.LightSpace.FarRoom;
             if(journey.LampsLit){
-                if(runtime.HasEffect(Cognition.CognitionSignal.LightFloorMove,space)||runtime.HasEffect(Cognition.CognitionSignal.LightDoorMove,space)||runtime.HasEffect(Cognition.CognitionSignal.LightLightMove,space))parked=true;
-                if(runtime.HasEffect(Cognition.CognitionSignal.LightMove,space))parked=false;
-                if(docked && (runtime.HasEffect(Cognition.CognitionSignal.LightMove,space) || runtime.HasEffect(Cognition.CognitionSignal.LightFloorMove,space) || runtime.HasEffect(Cognition.CognitionSignal.LightLightMove,space)))docked=false;
+                if((journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.LightToFloor)==true)||(journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.LightToDoor)==true)||(journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.LightToLight)==true))parked=true;
+                if((journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.Light)==true))parked=false;
+                if(docked && ((journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.Light)==true) || (journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.LightToFloor)==true) || (journey.FarRoomMotionOutput?.HasMotion(SentenceMotion.LightToLight)==true)))docked=false;
             }
             if(docked){Hover();return;}
             if(journey.EndingDoor && journey.EndingDoor.Paused){if(!body.isKinematic){body.linearVelocity=Vector3.zero;body.isKinematic=true;}return;}

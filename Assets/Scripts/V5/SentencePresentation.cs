@@ -1,35 +1,22 @@
 using System;
 using System.Collections;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace PuzzleApple.V5
 {
-    // V4's presentation contract, with targets resolved from this room rather than
-    // Intro's sun, horizon and ThresholdDoor. One profile per complete sentence.
+    // Shared presentation timeline. Mechanisms supply focus through the camera director.
     public sealed class SentencePresentation : MonoBehaviour
     {
-        public enum Focus { Light, LightGroup, Floor, Door, Sky }
-        [Serializable] public sealed class Shot
+        [Serializable] public sealed class Timing
         {
-            public string rule;
-            public Focus focus;
-            public bool follow;
-            [Min(0)] public float enter=.65f,hold=1.4f,exit=.65f;
+            [Min(0)] public float enter=1.3f,hold=1.4f,exit=.65f;
             [Range(0,.2f)] public float letterbox=.09f;
-            [Min(.1f)] public float followSpeed=12;
-            public Vector3 offset;
-            public Shot(){}
-            public Shot(string id,Focus target,bool track=false){rule=id;focus=target;follow=track;}
         }
         public SentenceRuntime runtime;
         public SentencePresentationSettings settings;
         public bool enabledShots=true;
-        public Shot[] shots={new Shot("light.on",Focus.Light),new Shot("light.off",Focus.Light),
-            new Shot("door.on",Focus.Door),new Shot("door.off",Focus.Door),
-            new Shot("light.move",Focus.LightGroup),new Shot("light.move.floor",Focus.LightGroup,true)};
         public bool Playing {get;private set;}
         public bool CanInterrupt {get;private set;}
         public int PlayCount {get;private set;}
@@ -37,20 +24,12 @@ namespace PuzzleApple.V5
         int revision;
         bool previousBlocked,previousLock;
         RectTransform top,bottom;
-        Shot current;
-        Cognition.CognitionState.Group focusGroup;
+        Timing current;
         CanvasGroup caption;
         float shotRoll;
         WorldEntry Entry=>runtime.entry;
-        Shot[] Profiles=>settings?settings.shots:shots;
-        readonly Shot[] migrated={new Shot("light.move.light",Focus.LightGroup,true),new Shot("light.move.door",Focus.Door),
-            new Shot("door.move",Focus.Door,true),new Shot("door.move.floor",Focus.Door),new Shot("door.move.light",Focus.Door,true),
-            new Shot("floor.move",Focus.Sky),new Shot("floor.move.light",Focus.Floor),new Shot("floor.move.door",Focus.Floor)};
-        Shot Profile(string rule)=>Array.Find(Profiles,s=>s!=null&&s.rule==rule)??Array.Find(migrated,s=>s.rule==rule);
-        bool tutorialMoveShown;
-        public bool HasShot(Cognition.CognitionState.Group group)=>enabledShots&&Profile(group.RuleId)!=null&&
-            (group.RuleId!="light.move" || !Entry.journey || !Entry.journey.InTutorial || !tutorialMoveShown ||
-             Entry.journey.Tutorial.SphereWillChange(group));
+        readonly Timing defaultTiming=new Timing();
+        public bool HasShot(Cognition.CognitionState.Group group)=>enabledShots&&group!=null;
         void Update()
         {
             if(Playing&&CanInterrupt&&Keyboard.current!=null&&Keyboard.current.tabKey.wasPressedThisFrame)InterruptForEditing();
@@ -74,8 +53,7 @@ namespace PuzzleApple.V5
         }
         public IEnumerator Play(string rule,Action apply,Cognition.CognitionState.Group sentence=null,Cognition.CognitionState.Group affected=null)
         {
-            current=Profile(rule);focusGroup=affected??sentence;
-            if(current==null){apply();yield break;}
+            current=settings&&settings.timing!=null?settings.timing:defaultTiming;
             int token=++revision;
             Playing=true;CanInterrupt=false;PlayCount++;LastRule=rule;
             previousBlocked=Entry.board.Panel.InputBlocked;previousLock=Entry.player.CinematicLocked;
@@ -88,11 +66,10 @@ namespace PuzzleApple.V5
             caption=SentenceCaption.Show(transform,sentence);
             var view=Entry.player.view;
             shotRoll=view.eulerAngles.z;
-            var journey=Entry.journey;
             Quaternion start=view.rotation;
-            Vector3? point=LocalTarget(current,focusGroup);
+            Vector3? point=FocusTarget(affected??sentence);
             bool holdView=!point.HasValue;
-            Quaternion goal=holdView?start:Nudge(start,point.Value+current.offset);
+            Quaternion goal=holdView?start:Nudge(start,point.Value);
             for(float t=0;t<current.enter&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 float u=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,current.enter));
@@ -103,7 +80,6 @@ namespace PuzzleApple.V5
             if(!holdView)view.rotation=goal;
             Bars(1);
             apply();CanInterrupt=true;
-            if(rule=="light.move"&&journey&&journey.InTutorial)tutorialMoveShown=true;
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 FadeCaption(t);
@@ -122,45 +98,12 @@ namespace PuzzleApple.V5
         {
             if(caption)caption.alpha=1-Mathf.SmoothStep(0,1,elapsed/Mathf.Max(.001f,current.hold+current.exit));
         }
-        Vector3? LocalTarget(Shot shot,Cognition.CognitionState.Group group)
+        public Vector3? FocusTarget(Cognition.CognitionState.Group group)
         {
-            if (group==null || shot.rule=="light.move.door" || shot.rule=="door.off") return null;
-            var j=Entry.journey;
-            var here=j.PlayerSpace;
-            if ((runtime.EffectScope(group)&here)==0) return null;
-            if (here==PassageJourney.LightSpace.Outdoor)
-            {
-                if (shot.focus==Focus.Door && (shot.rule!="door.on" || ((ISwitchableDoor)Entry.outdoor.World).WouldChange(true)))
-                    return Entry.outdoor.World.Focus(shot.focus);
-                return null;
-            }
-            if (shot.focus==Focus.Door)
-            {
-                bool opening=shot.rule=="door.on";
-                switch(here)
-                {
-                    case PassageJourney.LightSpace.FarRoom:
-                    case PassageJourney.LightSpace.Ascent:
-                        if (opening?j.EndingDoor.WouldChange(true):j.EndingDoor.CanCycle) return j.EndingDoor.Leaf.position;
-                        break;
-                    case PassageJourney.LightSpace.FirstPath:
-                    case PassageJourney.LightSpace.SphereRoom:
-                        if (opening?j.WhiteDoor.WouldChange(true):j.CanCycleDoor) return j.Door.position;
-                        break;
-                    case PassageJourney.LightSpace.ReturnPath:
-                        if (opening?j.EntranceDoor.WouldChange(true):j.EntranceDoor.CanCycle) return j.EntranceDoor.Leaf.position;
-                        break;
-                }
-                return null;
-            }
-            if (here==PassageJourney.LightSpace.ReturnPath && shot.rule=="floor.move" && j.Platform)
-                return j.Platform.Deck.bounds.center;
-            if (here==PassageJourney.LightSpace.SphereRoom && j.Tutorial.SphereWillChange(group))
-                return j.Tutorial.Sphere.position;
-            if (here==PassageJourney.LightSpace.Chamber &&
-                (LightStateEffect.Handles(group)?Entry.chamberLight.WouldChange(LightStateEffect.Commands(group,true)):Entry.chamberLight.CanMove(group.Signal)))
-                return Entry.chamberLight.surface.bounds.center;
-            return null;
+            if(group==null)return null;
+            var spaces=SentenceSpaceCatalog.Default;
+            return SentenceCameraDirector.Resolve(Entry.Entities,group,spaces.FromLegacy(Entry.journey.PlayerSpace),
+                spaces.FromLegacy(runtime.EffectScope(group)));
         }
 
         Quaternion Nudge(Quaternion start,Vector3 point)

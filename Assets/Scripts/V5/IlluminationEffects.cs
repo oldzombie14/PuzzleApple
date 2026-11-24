@@ -9,10 +9,7 @@ namespace PuzzleApple.V5
     // Illumination sentences: light world (exposure), light door (door glow + bloom), light floor
     // (floor glow) and light light (lamp boost). Fades the four levels from the applied effects and
     // presents the post-processing and global glow; lamps, doors and floors read the levels
-    // (LampMultiplier, FloorIllumination, _P5DoorGlow/_P5FloorGlow) themselves. For feedback and
-    // shots, world/door/floor always show; light light needs a lit IBrightenableLight in the
-    // player's space (Chapter I room, outdoor world, tutorial spheres, corridor stars, far-room
-    // lamps, chamber lamp).
+    // (LampMultiplier, FloorIllumination, _P5DoorGlow/_P5FloorGlow) themselves. For light-light feedback, query emission throughout the sentence's effective region.
     public sealed class IlluminationEffects : MonoBehaviour
     {
         Volume volume;
@@ -26,7 +23,7 @@ namespace PuzzleApple.V5
         public float WorldExposure=>exposure.postExposure.value;
         public float FloorIllumination=>Mathf.SmoothStep(0,1,levels.z);
         public float LampMultiplier => 1 + Mathf.SmoothStep(0,1,levels.w);
-        readonly Vector4[] localLevels=new Vector4[10];
+        readonly Vector4[] localLevels=new Vector4[11];
         static int Index(PassageJourney.LightSpace space){
             int index=0;
             for(int mask=(int)space;mask>1;mask>>=1)index++;
@@ -45,6 +42,10 @@ namespace PuzzleApple.V5
             volume.priority=100;
             profile=ScriptableObject.CreateInstance<VolumeProfile>();
             volume.sharedProfile=profile;
+            // Shared V5 highlight response, including when no illumination sentence is active.
+            // Keep HDR lamp emission, but bound the energy spread into neighbouring geometry.
+            profile.Add<Tonemapping>().mode.Override(TonemappingMode.Neutral);
+            profile.Add<Bloom>().clamp.Override(4);
             exposure=profile.Add<ColorAdjustments>();
             exposure.postExposure.Override(0);
             vignette=profile.Add<Vignette>();
@@ -59,48 +60,39 @@ namespace PuzzleApple.V5
             bloomVolume.sharedProfile=bloomProfile;
             var bloom=bloomProfile.Add<Bloom>();
             bloom.threshold.Override(1.2f);
-            bloom.intensity.Override(.65f);
-            bloom.scatter.Override(.65f);
+            bloom.intensity.Override(.5f);
+            bloom.scatter.Override(.6f);
             bloomVolume.weight=0;
         }
 
-        static bool Illuminates(CognitionSignal s)=>s==CognitionSignal.IlluminateWorld||s==CognitionSignal.IlluminateDoor
-            ||s==CognitionSignal.IlluminateFloor||s==CognitionSignal.IlluminateLight;
-        public static bool Handles(CognitionState.Group g)=>g!=null&&g.Signals.Any(Illuminates);
+        public static bool Handles(CognitionState.Group g)=>g?.Intent?.Action==SentenceAction.Illuminate;
 
         public void Bind(SentenceRuntime runtime){source=runtime;}
 
-        // Visible change for feedback where the player stands.
-        public bool WouldChange(CognitionState.Group g)
+        PassageJourney.LightSpace emittingDoors,emittingFloors;
+
+        public bool Emits(SentenceProperty property,PassageJourney.LightSpace scope)
         {
-            if(g.Signals.Any(s=>s!=CognitionSignal.IlluminateLight&&Illuminates(s)))return true;
-            var target=Brightened;
-            return target!=null&&target.Lit;
+            var c=SentenceCapabilityCatalog.Default;
+            return (scope & (property==c.door?emittingDoors:property==c.floor?emittingFloors:0))!=0;
         }
 
-        IBrightenableLight Brightened
+        public bool WouldChange(CognitionState.Group g)
         {
-            get
-            {
-                var entry=source.entry;
-                if(entry.outdoor&&entry.outdoor.InChapter)return entry.outdoor.CurrentRoom;
-                if(entry.outdoor&&entry.outdoor.IsOutside)return entry.outdoor.World;
-                var j=entry.journey;
-                if(j && j.PlayerSpace==PassageJourney.LightSpace.Ascent)return j.Ascent.Stars;
-                if(j&&j.InTutorial)return j.Tutorial;
-                if(j&&j.InCorridor)return j.CorridorGlow;
-                if(j&&j.InSecondRoom)return j.FarRoomGlow;
-                return entry.chamberLight;
-            }
+            var c=SentenceCapabilityCatalog.Default;
+            if(g.Intent.SubjectProperty!=c.light)return true;
+            var scope=source.EffectScope(g);
+            return Emits(c.floor,scope)||source.entry.Entities.QueryEntities(scope,c.light).Any();
         }
 
         public void Apply(SentenceRuntime runtime)
         {
             source=runtime;
-            targets=new Vector4(runtime.HasEffect(CognitionSignal.IlluminateWorld)?1:0,
-                runtime.HasEffect(CognitionSignal.IlluminateDoor)?1:0,
-                runtime.HasEffect(CognitionSignal.IlluminateFloor)?1:0,
-                runtime.HasEffect(CognitionSignal.IlluminateLight)?1:0);
+            var c=SentenceCapabilityCatalog.Default;
+            targets=new Vector4(runtime.HasIntent(SentenceAction.Illuminate,c.world)?1:0,
+                runtime.HasIntent(SentenceAction.Illuminate,c.door)?1:0,
+                runtime.HasIntent(SentenceAction.Illuminate,c.floor)?1:0,
+                runtime.HasIntent(SentenceAction.Illuminate,c.light)?1:0);
             RenderLevels();
         }
 
@@ -114,7 +106,7 @@ namespace PuzzleApple.V5
                 Shader.SetGlobalFloat("_P5AscentStart",j.RoomStart+j.roomSize.z);
             }
             var passage=source.entry.outdoor;
-            Shader.SetGlobalFloat("_P5ChapterMode",passage && passage.InChapter?2:passage && passage.IsOutside?1:0);
+            Shader.SetGlobalFloat("_P5ChapterMode",passage && passage.InLesson?3:passage && passage.InChapter?2:passage && passage.IsOutside?1:0);
             if(passage && passage.InChapter){
                 var room=passage.Vitruvian.roomFill;
                 Shader.SetGlobalVector("_P5VitruvianCentre",room.transform.TransformPoint(room.interior.center));
@@ -122,15 +114,20 @@ namespace PuzzleApple.V5
                 var gate=passage.Chapter.gardenThreshold;
                 Shader.SetGlobalVector("_P5GardenPlane",new Vector4(gate.forward.x,gate.forward.y,gate.forward.z,-Vector3.Dot(gate.forward,gate.position)));
             }
+            PassageJourney.LightSpace doors=0,floors=0;
             for(int i=0;i<localLevels.Length;i++){
                 var space=(PassageJourney.LightSpace)(1<<i);
                 var v=localLevels[i];
                 float stepSize=Time.unscaledDeltaTime/FadeSeconds;
-                v.y=Mathf.MoveTowards(v.y,source.HasEffect(CognitionSignal.IlluminateDoor,space)?1:0,stepSize);
-                v.z=Mathf.MoveTowards(v.z,source.HasEffect(CognitionSignal.IlluminateFloor,space)?1:0,stepSize);
-                v.w=Mathf.MoveTowards(v.w,source.HasEffect(CognitionSignal.IlluminateLight,space)?1:0,stepSize);
+                var c=SentenceCapabilityCatalog.Default;
+                v.y=Mathf.MoveTowards(v.y,source.HasIntent(SentenceAction.Illuminate,c.door,space)?1:0,stepSize);
+                v.z=Mathf.MoveTowards(v.z,source.HasIntent(SentenceAction.Illuminate,c.floor,space)?1:0,stepSize);
+                v.w=Mathf.MoveTowards(v.w,source.HasIntent(SentenceAction.Illuminate,c.light,space)?1:0,stepSize);
                 localLevels[i]=v;
+                if(v.y>0)doors|=space;
+                if(v.z>0)floors|=space;
             }
+            emittingDoors=doors;emittingFloors=floors;
             Shader.SetGlobalVectorArray("_P5SpaceSentenceGlow",localLevels);
             if(levels.Equals(targets))return;
             float step=Time.unscaledDeltaTime/FadeSeconds;
@@ -147,17 +144,18 @@ namespace PuzzleApple.V5
             bool outside=passage&&passage.IsOutside;
             vignette.active=!outside;
             exposure.active=levels.x>0;
-            exposure.postExposure.value=2.4f*Mathf.SmoothStep(0,1,levels.x);
+            exposure.postExposure.value=1.6f*Mathf.SmoothStep(0,1,levels.x);
             float door=Mathf.SmoothStep(0,1,levels.y);
             float floor=FloorIllumination;
             bloomVolume.weight=outside?0:door;
-            float doorGlow=door*DoorGlowStrength;
+            float surfaceBoost=1+.25f*(LampMultiplier-1);
+            float doorGlow=door*DoorGlowStrength*surfaceBoost;
             Shader.SetGlobalFloat("_P5DoorGlow",doorGlow*2.5f);
-            Shader.SetGlobalFloat("_P5FloorGlow",floor*.85f);
+            Shader.SetGlobalFloat("_P5FloorGlow",floor*.55f);
             if(outside)
             {
                 passage.World.doors.appearance.SetIlluminated(doorGlow);
-                passage.World.SetFloorIlluminated(floor);
+                passage.World.SetFloorIlluminated(floor*surfaceBoost);
                 passage.World.stateSource.SetLampMultiplier(LampMultiplier);
             }
         }

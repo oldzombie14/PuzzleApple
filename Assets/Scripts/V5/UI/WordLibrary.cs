@@ -58,6 +58,7 @@ namespace PuzzleApple.V5
         {
             memoryPrint=snapshot.material;
             worldEntry=FindFirstObjectByType<WorldEntry>();
+            worldEntry.LightUnderstandingGained+=ShowLightCapacity;
             movePrint=CreateMovePrint(moveMemory);
             sphereMovePrint=CreateMovePrint(sphereMoveMemory);
             note.lineType=InputField.LineType.SingleLine;
@@ -123,7 +124,13 @@ namespace PuzzleApple.V5
                 tile.GetComponent<LibraryDrag>().Initialize(this,word);
                 tile.GetComponent<WordNoteTarget>().WordId=word.Id;
                 entries.Add(word.Id,button);
+                if(word.Id=="light" && worldEntry.LightUnderstood)ShowLightCapacity();
             }
+        }
+        void ShowLightCapacity()
+        {
+            if(entries.TryGetValue("light",out var tile) && !tile.GetComponent<LightCapacityDots>())
+                tile.gameObject.AddComponent<LightCapacityDots>();
         }
         public void ForgetMemories(IEnumerable<string> ids)
         {
@@ -212,6 +219,7 @@ namespace PuzzleApple.V5
         {
             if(!worldEntry)return 1;
             var outdoor=worldEntry.outdoor;
+            if(outdoor&&outdoor.InLesson)return outdoor.Lesson.StarBrightness;
             if(outdoor&&outdoor.InChapter)return outdoor.CurrentRoom.Brightness;
             if(outdoor&&outdoor.IsOutside)return outdoor.World.stateSource.Brightness;
             var journey=worldEntry.journey;
@@ -338,7 +346,7 @@ namespace PuzzleApple.V5
             else
             {
                 var entry=FindFirstObjectByType<WorldEntry>();var group=board.State.Find(draggedGroup);
-                if(entry&&entry.outdoor&&group!=null)entry.outdoor.TryWorldDrop(board,group.Words[0].Meaning,screen);
+                if(entry&&entry.outdoor&&group?.Independent==true)entry.outdoor.TryWorldDrop(board,group.Words[0].Meaning,screen);
                 CancelLibraryDrag();
             }
             draggedGroup=-1;
@@ -352,6 +360,7 @@ namespace PuzzleApple.V5
         }
         void OnDestroy()
         {
+            if(worldEntry)worldEntry.LightUnderstandingGained-=ShowLightCapacity;
             if(movePrint)Destroy(movePrint);
             if(sphereMovePrint)Destroy(sphereMovePrint);
             foreach(var photo in capturedPhotos)if(photo)Destroy(photo);

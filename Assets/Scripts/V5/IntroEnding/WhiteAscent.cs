@@ -128,7 +128,7 @@ namespace PuzzleApple.V5
             var upperLight=new GameObject("White stair daylight");upperLight.transform.SetParent(transform,false);
             daylight=upperLight.AddComponent<Volume>();daylight.isGlobal=true;daylight.priority=110;daylight.weight=0;
             daylightProfile=ScriptableObject.CreateInstance<VolumeProfile>();daylight.sharedProfile=daylightProfile;
-            stairBloom=daylightProfile.Add<Bloom>();stairBloom.intensity.Override(2.1f);stairBloom.scatter.Override(.65f);stairBloom.threshold.Override(1.1f);
+            stairBloom=daylightProfile.Add<Bloom>();stairBloom.intensity.Override(.8f);stairBloom.scatter.Override(.6f);stairBloom.threshold.Override(1.1f);
             stairGain=daylightProfile.Add<LiftGammaGain>();stairGain.gain.Override(new Vector4(1,1,1,0));
             volume=gameObject.AddComponent<Volume>();volume.isGlobal=true;volume.priority=120;profile=ScriptableObject.CreateInstance<VolumeProfile>();volume.sharedProfile=profile;
             exposure=profile.Add<ColorAdjustments>();exposure.postExposure.Override(0);
@@ -141,6 +141,7 @@ namespace PuzzleApple.V5
         }
         public bool Ignite(){
             if(!LookingAtSymbol())return false;
+            journey.entry.UnderstandLight();
             StartCoroutine(Depart(true));return true;
         }
         void SafetyWall(Vector3 position,Vector3 size){

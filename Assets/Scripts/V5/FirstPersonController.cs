@@ -31,6 +31,16 @@ namespace PuzzleApple.V5
             if(isActiveAndEnabled && StandingOn(deck))
                 carrierTravel+=travel;
         }
+        CollisionFlags MoveWithCarrier(Vector3 motion)
+        {
+            // Combining the grounding step with upward travel can cancel the lift for
+            // several frames, until the rising collider pushes the capsule out of its skin.
+            if(carrierTravel.y!=0){
+                motor.Move(carrierTravel);
+                return motor.Move(motion);
+            }
+            return motor.Move(motion+carrierTravel);
+        }
         Vector3 normalView,launchVelocity;
         public float VerticalVelocity=>vertical;
         public void Launch(Vector3 velocity){launchVelocity=Vector3.ProjectOnPlane(velocity,Vector3.up);vertical=velocity.y;}
@@ -83,7 +93,7 @@ namespace PuzzleApple.V5
         void Update()
         {
             if(CinematicLocked){
-                if(carrierTravel.sqrMagnitude>0)motor.Move(carrierTravel-Vector3.up*motor.skinWidth);
+                if(carrierTravel.sqrMagnitude>0)MoveWithCarrier(-Vector3.up*motor.skinWidth);
                 carrierTravel=Vector3.zero;
                 return;
             }
@@ -109,7 +119,7 @@ namespace PuzzleApple.V5
             WalkMultiplier=Mathf.MoveTowards(WalkMultiplier,targetSpeed,deltaTime/Mathf.Max(.01f,transition));
             // Lock includes gravity; orientation remains independent.
             if(deltaTime>0 && MovementLocked){vertical=0;launchVelocity=Vector3.zero;
-                if(carrierTravel.sqrMagnitude>0)motor.Move(carrierTravel-Vector3.up*motor.skinWidth);
+                if(carrierTravel.sqrMagnitude>0)MoveWithCarrier(-Vector3.up*motor.skinWidth);
             }
             else if(deltaTime>0)
             {
@@ -123,7 +133,8 @@ namespace PuzzleApple.V5
                 if(motor.isGrounded&&vertical<0)vertical=-2;
                 if(controls&&jumpPressed&&motor.isGrounded&&vertical<=0&&jumpHeight>0)
                     vertical=Mathf.Sqrt(40*jumpHeight);
-                vertical-=20*deltaTime;
+                bool starFall = pass && pass.InLesson && pass.Lesson.InStarfield && vertical <= 0;
+                vertical = starFall ? Mathf.Max(-3f, vertical - 3.5f * deltaTime) : vertical - 20 * deltaTime;
                 // Keep the short, visible opening traversable for about a second.
                 if(vertical<0&&journey&&journey.enabled&&journey.InSecondRoom&&journey.floorSurface.HoleOpen)
                 {
@@ -139,7 +150,7 @@ namespace PuzzleApple.V5
                 // A shorter gravity step must not change the capsule's skin penetration each frame.
                 if(carrierTravel.sqrMagnitude>0 && motor.isGrounded && vertical<=0)
                     motion.y=-motor.skinWidth;
-                var collisions=motor.Move(motion+carrierTravel);
+                var collisions=MoveWithCarrier(motion);
                 if((collisions&CollisionFlags.Above)!=0&&vertical>0)vertical=0;
             }
             carrierTravel=Vector3.zero;

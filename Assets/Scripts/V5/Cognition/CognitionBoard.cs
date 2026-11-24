@@ -16,17 +16,14 @@ namespace PuzzleApple.V5.Cognition
         [Header("UI templates")]
         [SerializeField] CenteredSymbolImage wordPrefab;
         [SerializeField] RectTransform groupPrefab;
-        [SerializeField] Image sentenceHandlePrefab;
         [SerializeField] CognitionChalkStroke strokePrefab;
         [SerializeField, Min(10)] float snapDistance = 38;
         [SerializeField, Min(12)] float wordGap = 18;
         [SerializeField, Range(0, 20)] float wordFloatAmplitude = 8;
-        [SerializeField, Min(.01f)] float handleFadeDuration = .16f;
         [Header("Experimental punctuation")]
         public bool requirePeriod;
         public PeriodStyle punctuation=new PeriodStyle();
         PeriodTray periods;
-        internal bool LearnedPeriod {get;set;}
         public bool PreviewMirrorCopy {get;private set;}
         public bool PreviewMirrorMove {get;private set;}
         public CognitionState State { get; private set; }
@@ -38,8 +35,24 @@ namespace PuzzleApple.V5.Cognition
         internal SentenceSelection Selection { get; private set; }
         public bool IsDragging => drag != null || periods && periods.Dragging;
         public RectTransform GroupRect(int id) => views.TryGetValue(id, out var view) ? view.Root : null;
+        internal void FadeCompletedSentence(int id,float duration)
+        {
+            if(!Panel.IsOpen || !views.Remove(id,out var view))return;
+            if(Selection.Selected==id)Selection.Clear();
+            view.Fade.blocksRaycasts=false;
+            if(periods)periods.DetachForFade(id,view.Root);
+            StartCoroutine(FadeCompletedView(view,duration));
+        }
+        System.Collections.IEnumerator FadeCompletedView(View view,float duration)
+        {
+            for(float t=0;t<duration && Panel.IsOpen;t+=Time.unscaledDeltaTime){
+                view.Fade.alpha=1-Mathf.SmoothStep(0,1,t/duration);
+                yield return null;
+            }
+            Destroy(view.Root.gameObject);
+        }
         internal float PeriodVisibility(int id)=>views.TryGetValue(id,out var v)?Mathf.Clamp01(v.Fade.alpha/(v.Conflicted?ConflictAlpha:1)):0;
-        public void PauseSentence(int id){CancelDrag();State.Unsay(id);}
+        public void PauseSentence(int id){if(State.Find(id)?.ExecutionLocked==true)return;CancelDrag();State.Unsay(id);}
         public void SetSentenceOpacity(int id,float opacity)
         {
             if (!views.TryGetValue(id,out var view)) return;
@@ -65,8 +78,17 @@ namespace PuzzleApple.V5.Cognition
             }
             return bounds;
         }
+        internal const float HeldRippleExpansion = .55f;
+        internal Rect SelectionFrameBounds(int id) => RippleBounds(GroupContentBounds(id), HeldRippleExpansion);
+        public static Rect RippleBounds(Rect bounds, float expansion = 0)
+        {
+            var padding = Vector2.Lerp(new Vector2(4, 2), new Vector2(45, 35), expansion);
+            return Rect.MinMaxRect(bounds.xMin-padding.x, bounds.yMin-padding.y,
+                bounds.xMax+padding.x, bounds.yMax+padding.y);
+        }
         public void RemoveToken(int groupId,int wordId,bool whole=false)
         {
+            if (State.Find(groupId)?.ExecutionLocked == true) return;
             CancelDrag();
             if (views.TryGetValue(groupId, out var view))
                 foreach (var word in view.Words)
@@ -190,9 +212,6 @@ namespace PuzzleApple.V5.Cognition
             public float TextStart, TextEnd;
             public float InkStart, InkEnd;
             public float InkBottom, InkTop;
-            public RectTransform LeadingHandle;
-            public CanvasGroup HandleFade;
-            public bool AwaitHoverExit = true;
             public bool FloatIndependently = true;
         }
         sealed class Drag
@@ -201,14 +220,11 @@ namespace PuzzleApple.V5.Cognition
             public bool Whole, WasIndependent;
             public Vector2 Point, GrabOffset;
             public RectTransform Ghost;
-            public Transform GhostHandle;
         }
         readonly Dictionary<int, View> views = new Dictionary<int, View>();
         Drag drag;
         int snapTargetId = -1;
         [SerializeField] CognitionSnapDot snapHint;
-        [SerializeField] Image previewBullet;
-        float SentenceIndent => sentenceHandlePrefab.rectTransform.rect.width;
         float wordSize => wordPrefab.rectTransform.rect.width;
         float WordHeight => wordPrefab.rectTransform.rect.height;
         internal const float ConflictAlpha = .16f;
@@ -227,7 +243,6 @@ namespace PuzzleApple.V5.Cognition
         void Start()
         {
             snapHint.gameObject.SetActive(false);
-            previewBullet.gameObject.SetActive(false);
             if(State.RequirePeriod){periods=gameObject.AddComponent<PeriodTray>();periods.Initialize(this,dragLayer,ChalkColor);}
             Selection = SentenceSelection.Create(this);
             State.Changed += Refresh;
@@ -256,7 +271,7 @@ namespace PuzzleApple.V5.Cognition
         {
             var tokens = words.ToArray();
             if (tokens.Length > 12) return false;
-            float width = SentenceIndent + tokens.Sum(w => SymbolUI.Width(w.Definition, wordSize))
+            float width = tokens.Sum(w => SymbolUI.Width(w.Definition, wordSize))
                 + Mathf.Max(0, tokens.Length - 1) * wordGap;
             return width <= (Surface ? Surface.rect.width : 590) * 1.65f;
         }
@@ -325,7 +340,7 @@ namespace PuzzleApple.V5.Cognition
             v.Fade = v.Root.GetComponent<CanvasGroup>();
             v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1;
             v.Mask = (RectTransform)v.Root.Find("Chalk reveal");
-            float textStart = group.Independent ? 0 : SentenceIndent;
+            float textStart = 0;
             float x = textStart;
             foreach (var word in group.Words)
             {
@@ -354,15 +369,6 @@ namespace PuzzleApple.V5.Cognition
             v.TextCenterX = (v.InkStart + v.InkEnd) * .5f;
             v.InkBottom = v.Words.Min(word => SymbolUI.InkRect(word).yMin) * v.FontScale;
             v.InkTop = v.Words.Max(word => SymbolUI.InkRect(word).yMax) * v.FontScale;
-            if (!group.Independent)
-            {
-                var hit = Instantiate(sentenceHandlePrefab,v.Mask);hit.name="Sentence handle";
-                v.LeadingHandle = hit.rectTransform;
-                v.HandleFade = hit.gameObject.AddComponent<CanvasGroup>();
-                v.HandleFade.alpha = 0;
-                CognitionUI.Place(hit.rectTransform,0,0,SentenceIndent,WordHeight);
-                hit.GetComponent<CognitionDragHandle>().Initialize(this,group.Id,-1,true);
-            }
             for (int i = 0; i < v.Offsets.Count; i++) { v.Offsets[i] *= v.FontScale; v.Widths[i] *= v.FontScale; }
             // Preserve additional scratches; each has a slightly different slope and placement.
             for (int i = 0; i < scratches; i++)
@@ -415,31 +421,6 @@ namespace PuzzleApple.V5.Cognition
                 v.Mask.sizeDelta = new Vector2(v.Width / v.FontScale, WordHeight);
             }
             if (drag != null) UpdateDragPreview();
-            UpdateHandleVisibility();
-        }
-        void UpdateHandleVisibility()
-        {
-            foreach (var v in views.Values)
-            {
-                if (!v.HandleFade) continue;
-                // Root spans the left handle, the gap, and all words. Never disable its raycast
-                // area when fading: crossing from the words to the handle must remain continuous.
-                bool hovered = panel.IsOpen && !panel.InputBlocked && Surface.gameObject.activeInHierarchy
-                    && Mouse.current != null
-                    && RectTransformUtility.RectangleContainsScreenPoint(v.Root, Mouse.current.position.ReadValue());
-                bool movingSentence = drag != null && drag.Whole && snapTargetId < 0 && drag.GroupId == v.Group.Id;
-                if (drag != null && !movingSentence)
-                {
-                    v.AwaitHoverExit = true;
-                    v.HandleFade.alpha = 0;
-                    continue;
-                }
-                // A drop beneath the pointer is not a new hover to move the sentence.
-                if (!hovered) v.AwaitHoverExit = false;
-                v.HandleFade.alpha = Mathf.MoveTowards(v.HandleFade.alpha,
-                    movingSentence || (hovered && !v.AwaitHoverExit) ? 1 : 0,
-                    Time.unscaledDeltaTime / handleFadeDuration);
-            }
         }
         void Place(View v)
         {
@@ -480,6 +461,7 @@ namespace PuzzleApple.V5.Cognition
         public void BeginDrag(int groupId, int wordId, bool whole, Vector2 screen,bool fromLibrary=false)
         {
             if (!panel.IsOpen || panel.InputBlocked || IsDragging || !views.TryGetValue(groupId, out var v)) return;
+            if (v.Group.ExecutionLocked && !whole) return;
             centerFirstWord = false;
             int index = whole ? 0 : v.Group.Words.ToList().FindIndex(w => w.Id == wordId);
             if (index < 0) return;
@@ -506,9 +488,7 @@ namespace PuzzleApple.V5.Cognition
                 ghost.sizeDelta = new Vector2(v.Widths[index] / v.FontScale, WordHeight);
             }
             drag = new Drag { GroupId = groupId, WordId = wordId, Whole = whole, WasIndependent = v.Group.Independent,
-                Point = point, GrabOffset = fromLibrary ? new Vector2(v.TextCenterX,v.TextCenterY) : point - origin, Ghost = ghost,
-                GhostHandle = whole ? ghost.Find("Chalk reveal/Sentence handle") : null };
-            if (drag.GhostHandle) drag.GhostHandle.GetComponent<CanvasGroup>().alpha = 1;
+                Point = point, GrabOffset = fromLibrary ? new Vector2(v.TextCenterX,v.TextCenterY) : point - origin, Ghost = ghost };
             if (whole || v.Group.Independent) v.Fade.alpha = fromLibrary ? 0 : .2f * (v.Conflicted ? ConflictAlpha : 1);
             else v.Words[index].color = new Color(ChalkColor.r,ChalkColor.g,ChalkColor.b,ChalkColor.a*.2f);
             MoveDrag(screen);
@@ -539,10 +519,6 @@ namespace PuzzleApple.V5.Cognition
                 PreviewMirrorCopy=first=="mirror" && last=="mirror";
                 PreviewMirrorMove=first=="mirror" && last=="move";
             }
-            foreach (var v in views.Values) if (v.LeadingHandle)
-                v.LeadingHandle.gameObject.SetActive(target == null && drag.Whole && v.Group.Id == drag.GroupId);
-            if (drag.GhostHandle) drag.GhostHandle.gameObject.SetActive(target == null);
-            previewBullet.gameObject.SetActive(false);
             snapHint.gameObject.SetActive(target != null);
             if (target != null)
             {
@@ -557,8 +533,6 @@ namespace PuzzleApple.V5.Cognition
                     : targetX + target.TextEnd + gap - (drag.Whole ? source.TextStart * scaleRatio : 0);
                 // Align visible letter centers, not padded text rectangles (I and move differ markedly).
                 pos.y = targetY + target.TextCenterY - source.TextCenterY * scaleRatio;
-                if (prepend && target.LeadingHandle) target.LeadingHandle.gameObject.SetActive(false);
-                if (!prepend && drag.GhostHandle) drag.GhostHandle.gameObject.SetActive(false);
                 float dotSize = 6 * target.FontScale;
                 float leftInk = prepend ? pos.x + source.InkEnd * scaleRatio : targetX + target.InkEnd;
                 float rightInk = prepend ? targetX + target.InkStart : pos.x + source.InkStart * scaleRatio;
@@ -570,10 +544,12 @@ namespace PuzzleApple.V5.Cognition
         }
         View SnapTarget(Drag d, out bool prepend)
         {
-            prepend = false; View best = null; float nearest = float.MaxValue;
+            prepend = false;
+            if (views[d.GroupId].Group.ExecutionLocked) return null;
+            View best = null; float nearest = float.MaxValue;
             foreach (var candidate in views.Values)
             {
-                if (candidate.Group.Id == d.GroupId) continue;
+                if (candidate.Group.Id == d.GroupId || candidate.Group.ExecutionLocked) continue;
                 float centerY = candidate.Position.y + candidate.Height * .5f;
                 if (Mathf.Abs(d.Point.y - centerY) > candidate.Height * .65f) continue;
                 // Whole groups snap by their edges; individual words use the pointer position.
@@ -601,6 +577,7 @@ namespace PuzzleApple.V5.Cognition
             if (drag == null) return;
             MoveDrag(screen);
             var d = drag; var source = views[d.GroupId];
+            if (source.Group.ExecutionLocked && !d.Whole) { CancelDrag(); return; }
             var token=source.Group.Words.FirstOrDefault(w=>w.Id==d.WordId);
             if((!d.Whole||source.Group.Independent)&&token!=null)
             {
@@ -666,9 +643,7 @@ namespace PuzzleApple.V5.Cognition
             drag.Ghost.gameObject.SetActive(false);
             Destroy(drag.Ghost.gameObject); drag = null;
             snapTargetId = -1;
-            foreach (var view in views.Values) if (view.LeadingHandle) view.LeadingHandle.gameObject.SetActive(true);
             if (snapHint) snapHint.gameObject.SetActive(false);
-            if (previewBullet) previewBullet.gameObject.SetActive(false);
         }
     }
 }

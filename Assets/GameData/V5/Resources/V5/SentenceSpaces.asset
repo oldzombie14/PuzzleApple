@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0cb3380dedb747479583935c3b1fee0, type: 3}
+  m_Name: SentenceSpaces
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.SentenceSpaceCatalog
+  mappings:
+  - legacy: 1
+    space: {fileID: 11400000, guid: fcd5c5593b3873341836837e9a1da014, type: 2}
+  - legacy: 2
+    space: {fileID: 11400000, guid: c52d942ea54638040aeec958198c29b7, type: 2}
+  - legacy: 4
+    space: {fileID: 11400000, guid: 9fae9056ba0dc9645bb2076f43364c96, type: 2}
+  - legacy: 8
+    space: {fileID: 11400000, guid: 01f66dca456a6ab4e83a93d36b531a5e, type: 2}
+  - legacy: 16
+    space: {fileID: 11400000, guid: 50e947a7c03295e4ebe6f0c1b2474261, type: 2}
+  - legacy: 512
+    space: {fileID: 11400000, guid: 2059fa903ed8b7548bbbf0f13b3ad042, type: 2}
+  - legacy: 32
+    space: {fileID: 11400000, guid: ff7a646cc07c44b42b97929b7d48d604, type: 2}
+  - legacy: 64
+    space: {fileID: 11400000, guid: e2b33b0b6fa536a44a4dcf578b9f920b, type: 2}
+  - legacy: 128
+    space: {fileID: 11400000, guid: 450dd89cf36027f42909753a0047e426, type: 2}
+  - legacy: 256
+    space: {fileID: 11400000, guid: c9306e1ca5dea0040bbef162d829f1dd, type: 2}
+  - legacy: 1024
+    space: {fileID: 11400000, guid: c787fa6d257840d28d16c2fbd2d8327c, type: 2}

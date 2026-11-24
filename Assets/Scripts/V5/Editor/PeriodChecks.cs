@@ -28,7 +28,7 @@ namespace PuzzleApple.V5.Editor
             if(checkHit){
                 data.position+=Vector2.right*25*board.Surface.lossyScale.x;
                 var hits=new System.Collections.Generic.List<RaycastResult>();EventSystem.current.RaycastAll(data,hits);
-                Check(hits.Count>0 && hits[0].gameObject==handle.gameObject,"period hit area reaches near the dot");
+                Check(hits.Count>0 && hits[0].gameObject==handle.gameObject,"period hit area reaches near the dot: "+string.Join(", ",hits.Select(hit=>hit.gameObject.name)));
             }
             ExecuteEvents.Execute(handle.gameObject,data,ExecuteEvents.pointerDownHandler);
             ExecuteEvents.Execute(handle.gameObject,data,ExecuteEvents.pointerUpHandler);
@@ -47,10 +47,29 @@ namespace PuzzleApple.V5.Editor
         static void Check(bool pass,string message){if(!pass){Result="FAIL: "+message;throw new Exception(Result);}}
         static void RemoveByRightClick(CognitionBoard board,CognitionState.Group group,bool whole=false,int index=0){
             var ids=group.Words.Select(w=>w.Id).ToArray();
-            var handle=board.GroupRect(group.Id).GetComponentsInChildren<CognitionDragHandle>().First(h=>whole?h.WordId<0:h.WordId==ids[index]);
+            GameObject target;Vector2 position;
+            if(whole){
+                var selection=board.Surface.GetComponent<SentenceSelection>();
+                var root=board.GroupRect(group.Id);var bounds=board.GroupContentBounds(group.Id);
+                var start=(Vector2)root.TransformPoint(bounds.min)-Vector2.one*8;
+                var end=(Vector2)root.TransformPoint(bounds.max)+Vector2.one*8;
+                var box=new PointerEventData(EventSystem.current){position=start,pressPosition=start,button=PointerEventData.InputButton.Left};
+                selection.OnPointerDown(box);selection.OnBeginDrag(box);box.position=end;selection.OnDrag(box);selection.OnEndDrag(box);
+                Check(selection.Selected==group.Id,"select whole sentence before removing it");
+                var frame=(RectTransform)board.Surface.Find("Sentence selection");
+                position=frame.TransformPoint(new Vector2(frame.rect.xMin+1,frame.rect.center.y));target=board.Surface.gameObject;
+            }else{
+                var handle=board.GroupRect(group.Id).GetComponentsInChildren<CognitionDragHandle>().First(h=>h.WordId==ids[index]);
+                target=handle.gameObject;position=handle.transform.position;
+            }
             int before=board.Surface.GetComponentsInChildren<UnityEngine.UI.Image>().Count(i=>i.name=="Dissolving word");
-            var data=new PointerEventData(EventSystem.current){button=PointerEventData.InputButton.Right,position=handle.transform.position};
-            ExecuteEvents.Execute(handle.gameObject,data,ExecuteEvents.pointerDownHandler);
+            var data=new PointerEventData(EventSystem.current){button=PointerEventData.InputButton.Right,position=position};
+            ExecuteEvents.Execute(target,data,ExecuteEvents.pointerDownHandler);
+            if(group.ExecutionLocked){
+                Check(ids.All(id=>board.State.Owning(id)==group),"right-click preserves a locked sentence");
+                Check(board.Surface.GetComponentsInChildren<UnityEngine.UI.Image>().Count(i=>i.name=="Dissolving word")==before,"locked words do not dissolve");
+                return;
+            }
             var removed=whole?ids:new[]{ids[index]};
             Check(removed.All(id=>board.State.Owning(id)==null),"right-click removes the selected word or whole sentence immediately");
             Check(ids.Except(removed).All(id=>board.State.Owning(id)!=null),"right-click keeps unselected words");
@@ -71,7 +90,11 @@ namespace PuzzleApple.V5.Editor
             var token=Glyph(board,g.Id);var pointer=Pointer(token);
             Check(!g.Effective && state.History.Count==0 && !e.room.Animating,"draft has no effect or history");
             Check(board.GroupRect(g.Id).GetComponent<CanvasGroup>().alpha<.2f,"draft words remain dim");
-            Check(GameObject.Find("Period first-click ripple"),"first recognized draft shows ripple");
+            var second=Draft(board,"light","move");
+            board.PlaceAcquiredSentence(second.Id);
+            yield return new WaitForEndOfFrame();
+            bool Prompt(int id)=>Glyph(board,id).GetComponentsInChildren<PeriodGlyph>().Any(p=>p.ring);
+            Check(Prompt(g.Id) && Prompt(second.Id),"both recognized drafts show independent prompts");
             float low=1,high=0;
             for(float t=0;t<board.punctuation.breathSeconds;t+=Time.unscaledDeltaTime){
                 low=Mathf.Min(low,token.canvasRenderer.GetAlpha());high=Mathf.Max(high,token.canvasRenderer.GetAlpha());yield return null;
@@ -84,24 +107,35 @@ namespace PuzzleApple.V5.Editor
             ExecuteEvents.Execute(token.gameObject,pointer,ExecuteEvents.pointerUpHandler);Check(!g.Spoken,"release outside is not a click");
             Drag(board,g.Id,Vector2.zero);Check(!board.IsDragging && !g.Spoken,"draft cannot drag or speak by dragging");
             Click(board,g.Id,false,true);yield return null;
-            Check(g.Spoken && g.Effective && state.History.Count==1 && !GameObject.Find("Period first-click ripple"),"click speaks and permanently dismisses guide");
+            Check(g.Spoken && g.Effective && state.History.Count==1 && !state.CanPrompt(second),"executing world command suspends other prompts");
             var row=board.GroupRect(g.Id);
             var period=row.InverseTransformPoint(board.PeriodEnd(g.Id));
             float inkScale=row.GetComponentInChildren<CenteredSymbolImage>().rectTransform.lossyScale.x/row.lossyScale.x;
             Check(Mathf.Abs(board.GroupContentBounds(g.Id).xMax-period.x-board.punctuation.diameter*.5f*inkScale)<.01f,"ripple padding begins at the circular ink edge");
             while(board.Panel.InputBlocked)yield return null;
             board.Panel.SetOpen(true);while(!board.Panel.FullyOpen)yield return null;
-            Drag(board,g.Id,board.GroupRect(g.Id).TransformPoint(board.GroupRect(g.Id).rect.center));
-            Check(g.Spoken,"releasing inside the sentence does not pause");
-            Drag(board,g.Id,Vector2.zero,true);float progress=e.room.Progress;
-            Check(!g.Spoken && !g.Effective && g.Words.Count==2,"drag outside pauses immediately");
-            Check(!Glyph(board,g.Id).gameObject.activeSelf,"draft period waits for dragged dot to fade");
-            yield return new WaitForSecondsRealtime(.3f);
-            Check(Glyph(board,g.Id).gameObject.activeSelf && Mathf.Abs(e.room.Progress-progress)<.001f,"draft returns with world progress preserved");
-            Click(board,g.Id);yield return null;
-            while(board.Panel.InputBlocked)yield return null;board.Panel.SetOpen(true);while(!board.Panel.FullyOpen)yield return null;
-            RemoveByRightClick(board,g,false,1);
-            Check(!g.Spoken && g.Words.Count==1,"right-click spoken word dissolves it and stops the sentence");
+            Drag(board,g.Id,Vector2.zero,true);Click(board,g.Id,true);
+            RemoveByRightClick(board,g,false,1);RemoveByRightClick(board,g,true);
+            var word=g.Words.Last();
+            board.BeginDrag(g.Id,word.Id,false,board.GroupRect(g.Id).position);
+            Check(!board.IsDragging && g.Spoken && g.ExecutionLocked && g.Words.Count==2 && Glyph(board,g.Id).gameObject.activeSelf,
+                "active world command ignores period, single-word and selection edits");
+            int attempts=state.HistoryVersion;
+            Click(board,second.Id);
+            state.TryAcquireSentence("during.world.open","light floor",out var example);
+            Check(!example.Spoken && !second.Spoken && state.HistoryVersion==attempts,"collect example and ignore other periods during execution");
+            state.Detach(second.Id,second.Words.Last().Id);
+            Check(second.Independent,"other words can still be detached");
+            while(state.Find(g.Id)!=null)yield return null;
+            Check(state.CanPrompt(example) && !example.Spoken,"collected example waits for its own click");
+            Check(e.room.Opened,"world command finishes and returns to library");
+            board.Panel.SetOpen(true);while(!board.Panel.FullyOpen)yield return null;
+            foreach (var subject in new[]{"light","world","door"}){
+                var noop=Draft(board,"positive",subject);
+                Click(board,noop.Id);
+                Check(!noop.Spoken && !state.JudgementLocked,"no change to "+subject+" leaves judgement available");
+                state.ReturnToLibrary(noop.Id,0,true);
+            }
             var draft=Draft(board,"light","move","floor");RemoveByRightClick(board,draft,false,1);
             Check(draft.Words.Count==1 && state.Groups.Any(x=>x.Independent&&x.Words[0].Meaning=="floor"),"removing draft middle word preserves separate left and right runs");
             RemoveByRightClick(board,Draft(board,"mirror","move"),true);
@@ -117,8 +151,16 @@ namespace PuzzleApple.V5.Editor
             state.ClearWorkspace();
             var prefix=Draft(board,"light","move");Check(!prefix.Effective,"two-word prefix stays silent");
             state.Join(Draft(board,"floor").Id,prefix.Id,false);Check(prefix.RuleId=="light.move.floor"&&!prefix.Spoken,"three-word draft stays silent");
-            var a=Draft(board,"positive","light");var b=Draft(board,"negative","light");Click(board,b.Id);Click(board,a.Id);
-            Check(b.Effective && a.Conflicted,"first spoken wins");Click(board,b.Id,true);Check(a.Effective && !b.Spoken && b.Words.Count==2,"right-click period releases conflict and preserves words");
+            var a=Draft(board,"positive","light");var b=Draft(board,"negative","light");Click(board,b.Id);int weak=e.feedback.WeakCount;Click(board,a.Id);
+            Check(b.ExecutionLocked && !a.Spoken && !a.Effective && a.RejectedAttempts==0 && e.feedback.WeakCount==weak,
+                "locked click performs no judgement or feedback");
+            Click(board,b.Id,true);Check(b.Spoken,"right-click keeps command period");
+            while(state.Find(b.Id)!=null)yield return null;
+            Check(!a.Spoken && !a.Effective,"reverse command needs another click after completion");
+            Click(board,a.Id);Check(a.ExecutionLocked,"fresh period starts the opposite action");
+            while(state.Find(a.Id)!=null)yield return null;
+            b=Draft(board,"light","move");Click(board,b.Id);Click(board,b.Id,true);
+            Check(!b.Spoken && b.Words.Count==2,"right-click period pauses sustained motion");
             var dissolvingDot=board.Surface.GetComponentsInChildren<PeriodGlyph>().Single(p=>p.name=="Dissolving period");
             Check(!dissolvingDot.raycastTarget && dissolvingDot.material.shader.name=="PuzzleApple/V5/SymbolDissolve","period uses non-interactive dissolve material");
             Check(!Glyph(board,b.Id).gameObject.activeSelf,"period stays hidden during dissolve");
@@ -126,7 +168,7 @@ namespace PuzzleApple.V5.Editor
             Check(dissolvingDot && dissolvingDot.material.GetFloat("_Progress")>0 && dissolvingDot.material.GetFloat("_Progress")<1,"period dissolution progresses over time");
             yield return new WaitForSecondsRealtime(.4f);
             Check(!dissolvingDot && Glyph(board,b.Id).gameObject.activeSelf,"dissolved period cleans up and returns as draft");
-            var part=state.Detach(a.Id,a.Words.Last().Id);Check(!a.Spoken,"split pauses");
+            a=b;Click(board,a.Id);var part=state.Detach(a.Id,a.Words.Last().Id);Check(!a.Spoken,"split pauses");
             Check(!board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(p=>p.group==a.Id),"split to one word removes period");
             state.Join(part.Id,a.Id,false);Check(!a.Spoken,"rejoin stays draft");
             var invalid=Draft(board,"world","world");yield return null;int count=state.HistoryVersion;
@@ -145,7 +187,7 @@ namespace PuzzleApple.V5.Editor
             RemoveByRightClick(board,Draft(board,"light"));
             RemoveByRightClick(board,Draft(board,"mirror","move"),true);
             state.ClearWorkspace();board.SetPeriodMode(true);Draft(board,"mirror","move");yield return new WaitForSecondsRealtime(1);
-            Check(!GameObject.Find("Period first-click ripple")&&!GameObject.Find("Period guide")&&!GameObject.Find("Period supply"),"guide stays dismissed after toggle");
+            Check(GameObject.Find("Period prompt"),"eligible prompts resume after mode toggle");
             var folder=UnityEditor.SessionState.GetString("C2C.captureFolder","");
             if(!string.IsNullOrEmpty(folder)){yield return new WaitForEndOfFrame();var frame=ScreenCapture.CaptureScreenshotAsTexture();System.IO.File.WriteAllBytes(System.IO.Path.Combine(folder,"period-click.png"),frame.EncodeToPNG());UnityEngine.Object.Destroy(frame);}
             Result="PASS: automatic periods, breathing, hover, click/drag, right-click word/sentence dissolution in both modes, period-only dissolution and return, progress, history, conflicts and cleanup";

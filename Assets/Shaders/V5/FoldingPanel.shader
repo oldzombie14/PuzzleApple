@@ -81,9 +81,15 @@ Shader "PuzzleApple/V5/Folding Panel"
                 ClipPanel(input.positionWS.xz);
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(input.uv,surface);
+                // Folding boxes are fully matte, including grazing views while opening.
+                // URP's PBR environment fallback still contributes indirect specular
+                // with reflections disabled; use its diffuse lighting path instead.
+                surface.smoothness=0;
+                surface.metallic=0;
+                surface.specular=0;
                 InputData lighting;
                 InitializeInputData(input,surface.normalTS,lighting);
-                result=UniversalFragmentPBR(lighting,surface);
+                result=UniversalFragmentBlinnPhong(lighting,surface);
                 float peak=max(result.r,max(result.g,result.b));
                 if(peak>.65)result.rgb*=(.65+.3*(1-exp(-(peak-.65)/.3)))/peak;
                 result.rgb=MixFog(result.rgb,lighting.fogCoord);

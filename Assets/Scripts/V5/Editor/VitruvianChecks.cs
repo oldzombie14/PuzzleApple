@@ -18,8 +18,9 @@ namespace PuzzleApple.V5.Editor
             e.OpenWorld(-1);yield return Until(()=>e.room.Opened && !e.Busy,"open Intro box");
             e.sentenceRuntime.presentation.enabledShots=false;e.board.Panel.SetOpen(false);
             yield return Until(()=>e.outdoor.Prepared,"outdoors prepared");
-            e.outdoor.ArriveFromAscent();
+            yield return WhiteAscentChecks.Leave(e);
             yield return ChapterChecks.Cross(e,e.outdoor.World.chapterFrame);
+            yield return ChapterLessonChecks.Traverse(e);
             yield return Until(()=>e.outdoor.InChapter && !e.outdoor.Transitioning,"enter gallery via frame");
         }
         internal static CognitionState.Group Say(CognitionBoard board,params string[] words){

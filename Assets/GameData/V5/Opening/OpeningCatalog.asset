@@ -46,4 +46,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: b670d4540942475d82a33eba6ab8b941, type: 2}
   - {fileID: 11400000, guid: 3d4717c2fdf1ed5428b89642f4ee06b1, type: 2}
   - {fileID: 11400000, guid: 6628115597847c64d89558bf0c8c6676, type: 2}
+  - {fileID: 11400000, guid: 2efa1ac244374d35b8e98ab442d50161, type: 2}
+  - {fileID: 11400000, guid: e042ddfb7d55492ab37582209b5349ce, type: 2}
   conflicts: []
+  grammar: {fileID: 11400000, guid: b4abc8695b9614d47a7dcae5f65ed920, type: 2}

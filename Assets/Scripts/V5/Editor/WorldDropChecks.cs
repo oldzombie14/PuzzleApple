@@ -18,6 +18,61 @@ namespace PuzzleApple.V5.Editor
             var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
             Result="Running";e.StartCoroutine(Exercise(e));
         }
+        public static void RunMotionStates()
+        {
+            var entry = UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            Result = "Running";
+            entry.StartCoroutine(MotionStates(entry));
+        }
+        static IEnumerator MotionStates(WorldEntry entry)
+        {
+            entry.OpenWorld(-1);
+            yield return ChargeDoorChecks.Wait(() => entry.room.Opened && !entry.Busy, "unfold");
+            yield return WhiteAscentChecks.Leave(entry);
+            var pass = entry.outdoor;
+            var world = pass.World;
+            var field = world.field;
+            var output = world.lights.MotionOutput.StateSource<LightSentenceEffects.MotionState>();
+            var origin = world.exit.position + Vector3.up * 12;
+            var survivor = field.Spawn(origin, 0, InstanceShape.Sphere, pass.DropRegion).GetComponent<LightMotion>();
+            var retired = field.Spawn(origin + Vector3.right * 8, 0, InstanceShape.Sphere, pass.DropRegion);
+            survivor.Launch(Vector3.right * 2, world.ground);
+            var saved = JsonUtility.FromJson<LightSentenceEffects.MotionState>(JsonUtility.ToJson(output.CaptureState()));
+            var flight = saved.lamps.Single(l => l.id == survivor.SpawnId).motion;
+            entry.player.Teleport(retired.transform.position + Vector3.back * 2, Quaternion.identity);
+            yield return null;
+            yield return new WaitForEndOfFrame();
+            Check(field.ActiveLamps.First() == retired, "distance sort moves the second lamp to the front");
+            retired.GetComponent<PlayerInstance>().Recover(0);
+            var fresh = field.Spawn(origin + Vector3.forward * 4, 0, InstanceShape.Sphere, pass.DropRegion).GetComponent<LightMotion>();
+            var freshPose = fresh.CaptureMotion();
+            var bad = JsonUtility.FromJson<LightSentenceEffects.MotionState>(JsonUtility.ToJson(saved));
+            bad.lamps[bad.lamps.Length - 1].id = bad.lamps[0].id;
+            var before = survivor.CaptureMotion();
+            Check(!output.TryRestoreState(bad) && survivor.CaptureMotion().pose.position == before.pose.position, "reject duplicate record before moving any lamp");
+            Array.Reverse(saved.lamps);
+            Check(output.TryRestoreState(saved) && survivor.Launched && survivor.CaptureMotion().pose.position == flight.pose.position &&
+                survivor.GetComponent<Rigidbody>().linearVelocity == flight.velocity, "surviving lamp restores its own flight");
+            Check(fresh.CaptureMotion().pose.position == freshPose.pose.position && !fresh.Launched && !field.ActiveLamps.Contains(retired),
+                "recovery and replacement survive restoring the older snapshot");
+            yield return ChargeDoorChecks.Wait(() => !survivor.Launched, "restored flight lands on its own ground");
+            entry.sentenceRuntime.presentation.enabledShots = false;
+            var words = entry.board.State;
+            var group = VitruvianChecks.Say(entry.board, "light", "move");
+            yield return ChargeDoorChecks.Wait(() => fresh.Moving, "replacement receives current motion");
+            var moving = JsonUtility.FromJson<LightSentenceEffects.MotionState>(JsonUtility.ToJson(output.CaptureState()));
+            var own = moving.lamps.Single(l => l.id == fresh.SpawnId).motion.pose;
+            words.Unsay(group.Id);
+            yield return ChargeDoorChecks.Wait(() => !fresh.Moving, "removing the period pauses drift");
+            Check(output.TryRestoreState(moving) && !fresh.Moving && fresh.Direction == own.direction, "restore pose while period remains removed");
+            yield return new WaitForSeconds(.12f);
+            Check(fresh.GetComponent<Rigidbody>().position == own.position, "restored lamp holds until sentence is spoken");
+            words.Speak(group.Id);
+            yield return ChargeDoorChecks.Wait(() => fresh.Moving && Vector3.Dot(fresh.GetComponent<Rigidbody>().position - own.position, own.direction) > .01f,
+                "lamp resumes along its saved heading");
+            Result = "PASS: actual distance reordering, recovery, same-shape replacement, atomic rejection, airborne velocity and landing";
+        }
+
         static IEnumerator Exercise(WorldEntry e){
             var keyboard=InputSystem.AddDevice<Keyboard>();var mouse=InputSystem.AddDevice<Mouse>();
             try{
@@ -88,9 +143,11 @@ namespace PuzzleApple.V5.Editor
             InputSystem.QueueStateEvent(mouse,new MouseState{position=point});yield return null;
             Check(!pickerUI.Open && field.PlayerCount==3,"right click cancels without recovery");
             Check(field.ActiveCount==nativeCount && board.Panel.IsOpen,"cancel preserves panel and lamps");
-            int limit=region.maxInstances;region.maxInstances=field.PlayerCount;
+            var fourth=field.Spawn(w.exit.position+Vector3.up*4,0,InstanceShape.Cube,region);
+            Check(fourth && PlayerInstance.Remaining==0,"fourth player lamp fills the global allowance");
             pass.TryWorldDrop(board,"light",point);pass.Picker.Select(InstanceShape.Cube);
-            Check(field.ActiveCount==nativeCount,"capacity refuses placement");region.maxInstances=limit;
+            Check(field.ActiveCount==nativeCount+1,"capacity refuses fifth placement");
+            fourth.GetComponent<PlayerInstance>().Recover(0);
             var created=field.ActiveLamps.Where(l=>l.GetComponent<PlayerInstance>()).ToArray();
             s.TryAcquireSentence("drop.move","light move");yield return new WaitForSeconds(.35f);
             Check(created.All(l=>l.GetComponent<LightMotion>().Moving),"all shapes move");

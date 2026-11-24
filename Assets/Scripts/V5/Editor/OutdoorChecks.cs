@@ -15,7 +15,6 @@ namespace PuzzleApple.V5.Editor
         static void Check(bool value,string message){if(!value){Result="FAIL: "+message;throw new Exception(Result);}}
         public static string Grammar()
         {
-            var v4=AssetDatabase.LoadAssetAtPath<PuzzleApple.V4.Cognition.CognitionCatalog>("Assets/GameData/V4/Opening/OpeningCatalog.asset");
             var v5=AssetDatabase.LoadAssetAtPath<CognitionCatalog>("Assets/GameData/V5/Opening/OpeningCatalog.asset");v5.ValidateOrThrow();
             Check(v5.Rules.Select(r=>r.Id).Distinct().Count()==v5.Rules.Count,"unique rule IDs after integration");
             var frozen=new CognitionState(v5);
@@ -40,15 +39,27 @@ namespace PuzzleApple.V5.Editor
             var floor=lit.Groups.First(g=>g.RuleId=="light.floor");
             lit.Detach(floor.Id,floor.Words[0].Id);
             Check(!lit.HasEffect(CognitionSignal.IlluminateFloor)&&lit.HasEffect(CognitionSignal.IlluminateDoor),"split removes only its illumination");
-            string Text(PuzzleApple.V4.Cognition.CognitionRule r)=>string.Join(" ",r.Words.Select(w=>w.Id));
-            foreach(var a in v4.Rules)foreach(var b in v4.Rules)
+            // Rules in one row compete for the same physical output. Identical sentences can coexist.
+            var channels = new[] {
+                new[] { "positive light", "negative light" },
+                new[] { "positive door", "negative door" },
+                new[] { "light move", "light move floor", "light move door", "light move light" },
+                new[] { "door move", "door move floor", "door move light" },
+                new[] { "floor move", "floor move light", "floor move door" },
+                new[] { "positive world" }, new[] { "negative world" }
+            };
+            var sentences = channels.SelectMany(row => row).ToArray();
+            foreach (var first in sentences)
+            foreach (var second in sentences)
             {
-                var old=new PuzzleApple.V4.Cognition.CognitionState(v4);var current=new CognitionState(v5);
-                old.TryAcquireSentence("a",Text(a));old.TryAcquireSentence("b",Text(b));
-                current.TryAcquireSentence("a",string.Join(" ",OutdoorSetup.V5Words(a)));current.TryAcquireSentence("b",string.Join(" ",OutdoorSetup.V5Words(b)));
-                Check(old.Groups.Select(g=>g.Effective).SequenceEqual(current.Groups.Select(g=>g.Effective)),"priority parity "+a.Id+" / "+b.Id);
-                current.ReturnToLibrary(current.Groups[0].Id,0,true);old.ReturnToLibrary(old.Groups[0].Id,0,true);
-                Check(old.Groups.Select(g=>g.Effective).SequenceEqual(current.Groups.Select(g=>g.Effective)),"split takeover parity");
+                var state = new CognitionState(v5);
+                state.TryAcquireSentence("a", first);
+                state.TryAcquireSentence("b", second);
+                bool conflict = first != second && channels.Any(row => row.Contains(first) && row.Contains(second));
+                Check(state.Groups.Count == 2 && state.Groups.All(g => g.Recognized) &&
+                    state.Groups[0].Effective && state.Groups[1].Effective == !conflict, first + " / " + second);
+                state.ReturnToLibrary(state.Groups[0].Id, 0, true);
+                Check(state.Groups.Count == 1 && state.Groups[0].Effective, "takeover: " + second);
             }
             foreach(var text in new[]{"mirror mirror","mirror move"}){
                 var state=new CognitionState(v5);state.TryAcquireSentence("mirror",text);
@@ -57,13 +68,13 @@ namespace PuzzleApple.V5.Editor
             foreach(var invalid in new[]{"mirror light","mirror door","mirror floor","mirror world","light floor move","world move","light world move","door door move","floor floor move","light door move","light light move","door floor move","door light move","floor door move","floor light move","light positive","positive light move","negative light move floor","light move move","light door floor"})
             {var state=new CognitionState(v5);state.TryAcquireSentence("invalid",invalid);Check(!state.Groups.Single().Recognized,"invalid syntax "+invalid);}
             var profiles=AssetDatabase.LoadAssetAtPath<SentencePresentationSettings>("Assets/GameData/V5/Resources/V5/SentencePresentation.asset");
+            Check(profiles&&profiles.timing!=null&&profiles.timing.enter>0&&profiles.timing.hold>0&&profiles.timing.exit>0,"shared sentence presentation timing");
             foreach(var rule in v5.Rules.Where(r=>r.Words.Count==3 && r.Words[1].Id=="move")){
                 var state=new CognitionState(v5);string words=string.Join(" ",rule.Words.Select(w=>w.Id));
                 state.TryAcquireSentence("grammar.history",words);
                 Check(rule.Kind==SentenceKind.Command && state.History.Any(h=>h.Effective && string.Join(" ",h.Words.Select(w=>w.Id))==words),"directional history "+words);
-                Check(profiles.shots.Any(shot=>shot.rule==rule.Id),"serialized shot "+rule.Id);
             }
-            return "PASS: four illumination sentences, duplicate and split behavior, all 16 V4 sentences, all ordered rule pairs, conflict takeover and invalid combinations (ground maps to floor).";
+            return "PASS: four illumination sentences, duplicate and split behavior, all 16 outdoor sentences, all ordered rule pairs, conflict takeover and invalid combinations.";
         }
         static IEnumerator Until(Func<bool> predicate,string label,float timeout=30)
         {float end=Time.realtimeSinceStartup+timeout;while(!predicate()&&Time.realtimeSinceStartup<end)yield return null;Check(predicate(),"timeout: "+label);}
@@ -104,12 +115,12 @@ namespace PuzzleApple.V5.Editor
                 yield return WhiteAscentChecks.Leave(e);
                 var w=e.outdoor.World;
                 Check(e.outdoor.TransitionCount==1&&w.field.ActiveCount==e.outdoor.TransferredLamps,"single transition retains the transferred lamps");
-                Check(w.door.GetComponentsInChildren<Renderer>().All(r=>r.enabled),"exit frame visible without V4 reveal event");
+                Check(w.door.GetComponentsInChildren<Renderer>().All(r=>r.enabled),"exit frame visible on arrival");
                 Check(player.transform.position.x>1000&&w.door.transform.position.x>1000,"player and physical frame are in the outdoor scene space");
                 Check(e.journey.Ascent.Completed && e.outdoor.LastExitVelocity==Vector3.zero,"ascent arrives standing outdoors");
                 Check(!player.CinematicLocked&&!player.MovementLocked&&!e.board.Panel.InputBlocked,"control restored");
                 Check(state.Knows("floor")&&state.Knows("light"),"vocabulary preserved");
-                Check(w.Audio&&w.Audio.GetComponents<AudioSource>().Any(a=>a.isPlaying&&a.loop&&a.clip==w.music.clip&&Mathf.Abs(a.volume-.45f)<.001f),"V4 BGM actually playing");
+                Check(w.Audio&&w.Audio.GetComponents<AudioSource>().Any(a=>a.isPlaying&&a.loop&&a.clip==w.music.clip&&Mathf.Abs(a.volume-.45f)<.001f),"outdoor BGM actually playing");
                 yield return new WaitForSeconds(2);
                 Check(player.GetComponent<CharacterController>().isGrounded,"gravity returns player to ground");
                 player.MovementLocked=true;player.Launch(Vector3.zero);
@@ -121,7 +132,7 @@ namespace PuzzleApple.V5.Editor
                 Drag(tile.gameObject,screen);Check(e.outdoor.Picker.Open,"library release opens picker");e.outdoor.Picker.Select(InstanceShape.Cube);
                 Check(w.field.ActiveCount==e.outdoor.TransferredLamps+1,"library drag creates lamp");
                 var first=w.field.ActiveLamps.First(l=>l.RevealAmount<1);Check(first.RevealAmount<1,"lamp starts faded");
-                yield return Until(()=>first.RevealAmount>=1,"lamp fades in at V4 configured duration");
+                yield return Until(()=>first.RevealAmount>=1,"lamp fades in at configured duration");
                 state.TryAcquireSentence("outdoor.drag.sentence","light move");yield return null;yield return null;
                 var group=state.Groups.First(g=>g.RuleId=="light.move");
                 var handle=e.board.GroupRect(group.Id).GetComponentsInChildren<CognitionDragHandle>().First(h=>h.WordId==group.Words[0].Id);
@@ -216,7 +227,7 @@ namespace PuzzleApple.V5.Editor
             yield return Until(()=>w.stateSource.IsOff,"dark movement pause");
             yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
             var held=lamps.ToDictionary(l=>l,l=>l.transform.position);yield return new WaitForSeconds(.3f);
-            Check(held.All(x=>Vector3.Distance(x.Key.transform.position,x.Value)<.005f),"outdoor V4 darkness suspends movement");
+            Check(held.All(x=>Vector3.Distance(x.Key.transform.position,x.Value)<.005f),"outdoor darkness suspends movement");
             yield return Until(()=>!s.Groups.Any(g=>g.RuleId=="light.off"),"off command retires");s.TryAcquireSentence("physical.dark.on","positive light");
             yield return Until(()=>w.stateSource.IsOn,"light restores movement");
             Check(held.Any(x=>Vector3.Distance(x.Key.transform.position,x.Value)>.1f),"on light resumes retained motion");
@@ -259,13 +270,15 @@ namespace PuzzleApple.V5.Editor
                 }
                 int weak=e.feedback.WeakCount,strong=e.feedback.StrongCount;
                 s.TryAcquireSentence("done."+syntax,syntax,out var group);
-                yield return Until(()=>s.Find(group.Id)==null,"retires "+syntax,40);
-                if(syntax.StartsWith("door move"))Check(e.feedback.WeakCount>weak && e.feedback.StrongCount==strong,"anchored door gives weak ripple "+syntax);
+                if(syntax.StartsWith("door move")){
+                    Check(!group.Spoken && !s.JudgementLocked && e.feedback.WeakCount>weak && e.feedback.StrongCount==strong,"anchored door gives weak ripple without locking "+syntax);
+                    s.ReturnToLibrary(group.Id,0,true);
+                }else yield return Until(()=>s.Find(group.Id)==null,"retires "+syntax,40);
                 var held=a.transform.position;var floorHeight=w.ground.bounds.max.y;
                 yield return new WaitForSeconds(.22f);
                 Check(Vector3.Distance(a.transform.position,held)<.02f && Mathf.Abs(floorHeight-w.ground.bounds.max.y)<.01f,"end position retained "+syntax);
             }
-            Result="PASS: all seven directional sentences retire, anchored door feedback is weak, end positions retained";
+            Result="PASS: executable directions retire, anchored door stays a weak draft, end positions retained";
         }
         static void Drag(GameObject source,Vector2 target,bool pointerDown=false)
         {

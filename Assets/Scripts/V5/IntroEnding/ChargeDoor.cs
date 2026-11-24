@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace PuzzleApple.V5
 {
-    public sealed class ChargeDoor : MonoBehaviour, ISwitchableDoor
+    public sealed class ChargeDoor : MonoBehaviour, ISwitchableDoor, IProgressBoundary, ISentenceOutputState<ChargeDoor.LiftState>
     {
         [Min(.1f)] public float width=3.6f,height=3.8f;
         [Min(.01f)] public float chargeRate=.19f,decayRate=.12f,bonus=1.5f;
@@ -19,7 +19,15 @@ namespace PuzzleApple.V5
         [Min(0)] public float railGap=.18f;
         public Color fullWarmColor=new Color(1,.90f,.85f);
         public Transform Leaf {get;private set;}
-        public float Lift {get;private set;}
+        LiftState travel = new LiftState {cyclingUp = true, fallTime = -1};
+        public float Lift
+        {
+            get => travel.lift;
+            private set { if (travel.lift == value) return; travel.lift = value; BoundaryChanged?.Invoke(); }
+        }
+        public float BoundaryProgress => Lift;
+        public bool AllowsConnection => Lift > 0;
+        public event System.Action BoundaryChanged;
         public float TotalEnergy {get;private set;}
         public float DoorGlow {get;private set;}=1;
         public float DoorEnergy=>doorEnergy;
@@ -28,7 +36,7 @@ namespace PuzzleApple.V5
         public float Warmth=>warmth;
         public float PassingHint=>Mathf.Max(proximityHint[0],Mathf.Max(proximityHint[1],proximityHint[2]));
         public bool Charged=>TotalEnergy>=.99999f;
-        public bool Falling=>fallTime>=0;
+        public bool Falling=>travel.fallTime>=0;
         public bool Stunned {get;private set;}
         public float NicheBloomWeight(Transform eye)
         {
@@ -49,9 +57,34 @@ namespace PuzzleApple.V5
         MaterialPropertyBlock ink;
         PassageJourney journey;
         AudioSource audioSource;
-        bool command,raise,cyclingUp=true;
+        [System.Serializable]
+        public struct LiftState
+        {
+            public float lift, fallTime, fallFrom;
+            public bool cyclingUp;
+        }
+        public LiftState CaptureState() => travel;
+        public bool TryRestoreState(LiftState state)
+        {
+            if (!Leaf || Stunned || !(state.lift >= 0 && state.lift <= 1) ||
+                !(state.fallFrom >= 0 && state.fallFrom <= 1)) return false;
+            bool falling = state.fallTime >= 0;
+            if (falling ? !(state.fallTime < warningSeconds + fallSeconds && state.lift > 0 && state.lift <= state.fallFrom)
+                        : state.fallTime != -1 || state.lift > 0 && !Charged) return false;
+            float next = falling ? state.lift : Mathf.SmoothStep(0, 1, state.lift);
+            if (next < SlabFraction && PlayerInDescent(SlabFraction, next)) return false;
+            if (falling || Falling) flash = falling ? Mathf.Max(0, warningSeconds - state.fallTime) : 0;
+            travel.cyclingUp = state.cyclingUp;
+            travel.fallFrom = state.fallFrom;
+            travel.fallTime = state.fallTime;
+            Lift = state.lift;
+            Leaf.localPosition = new Vector3(0, height * (.5f + next), LeafZ);
+            Physics.SyncTransforms();
+            return true;
+        }
+        bool command,raise;
         long cycle=-1;
-        float fallTime=-1,fallFrom,flash,glyphGlow;
+        float flash,glyphGlow;
         public Vector3 RoomLanding=>transform.TransformPoint(new Vector3(0,.08f,-2));
         public Vector3 StairLanding=>transform.TransformPoint(new Vector3(0,.12f,2.35f));
         const float WallHalfDepth=.15f,Bevel=.20f,LeafDepth=.38f,RailWidth=.055f;
@@ -66,7 +99,7 @@ namespace PuzzleApple.V5
             journey.entry.portableClosure&&journey.entry.portableClosure.Isolated;
         public bool LessonAcquired=>lesson && journey.entry.board.State.HasAcquired(lesson.acquisitionId);
         public PassageJourney.LightSpace ControlSpaces=>ProgressLock.DoorBoundary(this);
-        public bool LightHeld=>!LessonAcquired || journey.entry.sentenceRuntime.HasEffect(CognitionSignal.IlluminateDoor,ControlSpaces);
+        public bool LightHeld=>!LessonAcquired || journey.entry.sentenceRuntime.HasIntent(SentenceAction.Illuminate,SentenceCapabilityCatalog.Default.door,ControlSpaces);
         public bool TryCollectLesson(){
             if(!lesson || LessonAcquired || journey.entry.chamberLight.Collecting)return false;
             journey.entry.chamberLight.CollectObservation(lesson,showWord:false);return true;
@@ -192,16 +225,24 @@ namespace PuzzleApple.V5
             command=true;raise=open;
         }
         public bool Driving=>command;
+        public bool CommandSettling(bool open)=>Driving && WouldChange(open);
         public void Hold()=>command=false;
         public void Release()=>command=false;
-        public void StartCycle(long established){
+        public void ApplyMotion(SentenceMotionOutput output)
+        {
+            foreach(var established in output.Owners(SentenceMotion.Door))
+                if(!AcceptedCycle(established))StartCycle(established);
+        }
+        void StartCycle(long established){
             if(!Charged || Falling){Reject();return;}
             cycle=established;
-            if(Lift>=1)cyclingUp=false;
-            else if(Lift<=0)cyclingUp=true;
+            if(Lift>=1)travel.cyclingUp=false;
+            else if(Lift<=0)travel.cyclingUp=true;
         }
         public bool CanCycle=>Charged && !Falling && !command;
         public bool AcceptedCycle(long established)=>cycle==established;
+        internal SentenceStateOutput DoorOutput;
+        public SentenceMotionOutput MotionOutput {get;internal set;}
         public void Reject(){flash=.35f;}
         float DistanceToRail(Vector3 p,int rail){
             var closest=rail==1?new Vector3(Mathf.Clamp(p.x,-RailX,RailX),RailHeight,-WallHalfDepth):
@@ -214,7 +255,7 @@ namespace PuzzleApple.V5
             bool held=LightHeld;
             // Hold the first reveal at its authored energy while the entrance is still locked.
             if((ProgressLock.Accessible(PassageJourney.LightSpace.All)&room)==0)return;
-            float gain=chargeRate*(runtime.HasEffect(CognitionSignal.IlluminateLight,room)?bonus:1);
+            float gain=chargeRate*(runtime.HasIntent(SentenceAction.Illuminate,SentenceCapabilityCatalog.Default.light,room)?bonus:1);
             float dockedPower=0,passing=0;
             System.Array.Clear(nextHint,0,nextHint.Length);
             foreach(var lamp in journey.Lamps){
@@ -243,26 +284,25 @@ namespace PuzzleApple.V5
             DoorGlow=Mathf.MoveTowards(DoorGlow,LightHeld?1:0,Time.unscaledDeltaTime/.8f);
             if(Time.deltaTime<=0){Draw();return;}
             float dt=Time.deltaTime;
-            var runtime=journey.entry.sentenceRuntime;
             Charge(dt);
             flash=Mathf.Max(0,flash-dt);
             float before=SlabFraction;
             if(!Charged && Lift>0 && !Falling){
-                fallTime=0;fallFrom=before;command=false;cycle=-1;
+                travel.fallTime=0;travel.fallFrom=before;command=false;cycle=-1;
                 flash=warningSeconds;
                 if(strainClip)audioSource.PlayOneShot(strainClip);
             }
             if(Falling){
-                fallTime+=dt;
-                float t=Mathf.Clamp01((fallTime-warningSeconds)/fallSeconds);
-                Lift=Mathf.Max(0,fallFrom*(1-t*t)-Mathf.Min(fallFrom,.008f)*Mathf.Clamp01(fallTime/warningSeconds));
-                if(t>=1 || Lift<=0){Lift=0;fallTime=-1;}
+                travel.fallTime+=dt;
+                float t=Mathf.Clamp01((travel.fallTime-warningSeconds)/fallSeconds);
+                Lift=Mathf.Max(0,travel.fallFrom*(1-t*t)-Mathf.Min(travel.fallFrom,.008f)*Mathf.Clamp01(travel.fallTime/warningSeconds));
+                if(t>=1 || Lift<=0){Lift=0;travel.fallTime=-1;}
             }else if(Charged){
-                bool swing=cycle>=0 && runtime.Owns(CognitionSignal.DoorMove,ControlSpaces,cycle);
+                bool swing=cycle>=0 && MotionOutput?.HasMotion(SentenceMotion.Door)==true && MotionOutput.Owns(SentenceMotion.Door,cycle);
                 if(command || swing){
-                    bool up=command?raise:cyclingUp;
-                    Lift=Mathf.MoveTowards(Lift,up?1:0,dt/(up?riseSeconds:lowerSeconds));
-                    if(Lift==(up?1:0))cyclingUp=!up;
+                    bool up=command?raise:travel.cyclingUp;
+                    Lift=SentenceStateOutput.Advance(Lift,up?1:0,dt/(up?riseSeconds:lowerSeconds),DoorOutput);
+                    if(Lift==(up?1:0))travel.cyclingUp=!up;
                 }
             }
             Leaf.localPosition=new Vector3(0,height*(.5f+SlabFraction),LeafZ);
@@ -279,16 +319,17 @@ namespace PuzzleApple.V5
             var rt=journey.entry.sentenceRuntime;
             // The engraving remains visible below its gradually illuminated surface.
             inscription.SetFloat("_ExposureGain",rt?Mathf.Pow(2,-rt.WorldExposure):1);
-            bool warm=Charged && rt && rt.HasEffect(CognitionSignal.IlluminateLight,PassageJourney.LightSpace.FarRoom);
+            bool warm=Charged && rt && rt.HasIntent(SentenceAction.Illuminate,SentenceCapabilityCatalog.Default.light,PassageJourney.LightSpace.FarRoom);
             warmth=Mathf.MoveTowards(warmth,warm?1:0,Time.unscaledDeltaTime/colorFadeSeconds);
             Color color=Color.Lerp(Color.white,fullWarmColor,warmth);
             glow.SetColor("_EmissionColor",color*(flash>0?1.6f:1.2f));glow.SetColor("_BaseColor",color);
+            float surfaceLevel=DoorGlow*(rt ? 1+.25f*(rt.LampBoost(PassageJourney.LightSpace.FarRoom)-1):1);
             if(slabSurface){
-                slabSurface.GetPropertyBlock(ink);ink.SetFloat("_ChargeDoorEmission",doorEmission*DoorGlow);
+                slabSurface.GetPropertyBlock(ink);ink.SetFloat("_ChargeDoorEmission",doorEmission*surfaceLevel);
                 slabSurface.SetPropertyBlock(ink);
             }
             doorLight.intensity=journey.LightStyle.LampIntensity(.25f)*DoorGlow;
-            frame.GetPropertyBlock(ink);ink.SetFloat("_ChargeDoorEmission",doorEmission*DoorGlow+.25f*PassingHint);frame.SetPropertyBlock(ink);
+            frame.GetPropertyBlock(ink);ink.SetFloat("_ChargeDoorEmission",doorEmission*surfaceLevel+.25f*PassingHint);frame.SetPropertyBlock(ink);
             glyphGlow=Mathf.MoveTowards(glyphGlow,Charged?1:0,Time.unscaledDeltaTime/.8f);
             inscription.SetColor("_GlyphEmission",color*(.3f*glyphGlow));
             float topWidth=2*RailX+RailWidth;
@@ -318,14 +359,18 @@ namespace PuzzleApple.V5
         }
         float SlabFraction=>Falling?Lift:Mathf.SmoothStep(0,1,Lift);
         void CheckImpact(float before){
-            if(Stunned)return;
+            if (Stunned || !PlayerInDescent(before, SlabFraction)) return;
+            bool stairs = transform.InverseTransformPoint(journey.entry.player.GetComponent<CharacterController>().bounds.center).z > LeafZ;
+            StartCoroutine(Stun(stairs));
+        }
+        bool PlayerInDescent(float before, float next)
+        {
             var player=journey.entry.player;
             var capsule=player.GetComponent<CharacterController>();
             var centre=transform.InverseTransformPoint(capsule.bounds.center);
             float head=centre.y+capsule.bounds.extents.y;
-            if(Mathf.Abs(centre.x)>width*.5f+capsule.radius || Mathf.Abs(centre.z-LeafZ)>.2f+capsule.radius ||
-                head<SlabFraction*height || centre.y-capsule.bounds.extents.y>before*height)return;
-            StartCoroutine(Stun(centre.z>LeafZ));
+            return Mathf.Abs(centre.x)<=width*.5f+capsule.radius && Mathf.Abs(centre.z-LeafZ)<=.2f+capsule.radius &&
+                head>=next*height && centre.y-capsule.bounds.extents.y<=before*height;
         }
         public void RecoverFromFall(){if(!Stunned)StartCoroutine(Stun(false,false));}
         IEnumerator Stun(bool stairs,bool impact=true){

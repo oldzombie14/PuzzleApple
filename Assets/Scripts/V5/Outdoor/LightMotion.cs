@@ -5,6 +5,34 @@ namespace PuzzleApple.V5.Outdoor
     [RequireComponent(typeof(Rigidbody))]
     public sealed class LightMotion : MonoBehaviour
     {
+        [System.Serializable]
+        public struct State
+        {
+            public DriftPose pose;
+            public bool launched;
+            public Vector3 velocity;
+            public bool Valid => pose.Valid && DriftPose.Finite(velocity);
+        }
+
+        // A recovered lamp and a subsequent drop of the same word are distinct world objects.
+        public string SpawnId { get; } = System.Guid.NewGuid().ToString("N");
+        public State CaptureMotion() => new State {
+            pose = new DriftPose {position = body.position, direction = direction},
+            launched = Launched, velocity = Launched ? body.linearVelocity : Vector3.zero
+        };
+
+        internal void RestoreMotion(State state, Collider ground)
+        {
+            if (!body.isKinematic) body.linearVelocity = Vector3.zero;
+            DriftPose.Place(body, state.pose.position);
+            if (!Moving || state.pose.direction != Vector3.zero) direction = state.pose.direction;
+            Launched = state.launched;
+            landingSurface = Launched ? ground : null;
+            body.useGravity = Launched;
+            body.isKinematic = !Launched && !Moving;
+            if (!body.isKinematic) body.linearVelocity = Launched ? state.velocity : direction * speed;
+        }
+
         public float speed = 1.2f;
         Collider landingSurface;
         public bool Launched {get;private set;}

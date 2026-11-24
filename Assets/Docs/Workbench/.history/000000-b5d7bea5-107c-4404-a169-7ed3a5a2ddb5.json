@@ -1,0 +1,1558 @@
+{
+  "id": "000000-b5d7bea5-107c-4404-a169-7ed3a5a2ddb5.json",
+  "at": "2026-11-23T06:43:37.687Z",
+  "note": "从 V5 实现建立初始参考；尚未验收",
+  "doc": {
+    "format": "puzzleapple-v5-workbench",
+    "schemaVersion": 1,
+    "project": "PuzzleApple · V5",
+    "revision": 0,
+    "counters": {
+      "words": 8,
+      "grammars": 5,
+      "exceptions": 7,
+      "properties": 3,
+      "outputs": 4,
+      "spaces": 10,
+      "entities": 9,
+      "sentences": 26,
+      "cases": 24
+    },
+    "createdAt": "2026-11-23T06:43:37.685Z",
+    "review": {
+      "number": 1,
+      "items": {}
+    },
+    "rounds": [],
+    "words": [
+      {
+        "id": "W-0001",
+        "archived": false,
+        "key": "positive",
+        "name": "开启",
+        "classes": 1,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "e4ec2b73428d4e8db3a72aef270d2568",
+          "name": "positive",
+          "path": "Assets/GameData/V5/Opening/Words/positive.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0002",
+        "archived": false,
+        "key": "negative",
+        "name": "关闭",
+        "classes": 1,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "3200fb36f1e44738ab1c7ee1767519fc",
+          "name": "negative",
+          "path": "Assets/GameData/V5/Opening/Words/negative.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0003",
+        "archived": false,
+        "key": "world",
+        "name": "世界",
+        "classes": 2,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "5db29a0ff1bd4668a68c42ba108caf3d",
+          "name": "world",
+          "path": "Assets/GameData/V5/Opening/Words/world.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0004",
+        "archived": false,
+        "key": "light",
+        "name": "光",
+        "classes": 6,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "8f1781d399cc95145888f778418ccc36",
+          "name": "light",
+          "path": "Assets/GameData/V5/Opening/Words/light.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0005",
+        "archived": false,
+        "key": "door",
+        "name": "门",
+        "classes": 2,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "bbe5272c8f539fc4e9550f56fb04fd57",
+          "name": "door",
+          "path": "Assets/GameData/V5/Opening/Words/door.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0006",
+        "archived": false,
+        "key": "move",
+        "name": "移动",
+        "classes": 4,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "c09d8a99790e6bf45a1aebf21f100c0c",
+          "name": "move",
+          "path": "Assets/GameData/V5/Opening/Words/move.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0007",
+        "archived": false,
+        "key": "floor",
+        "name": "地面",
+        "classes": 2,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "310a5920a59b1ce4c8eaec45063fc3c3",
+          "name": "floor",
+          "path": "Assets/GameData/V5/Opening/Words/floor.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "W-0008",
+        "archived": false,
+        "key": "mirror",
+        "name": "镜像",
+        "classes": 0,
+        "meaning": "",
+        "symbol": "",
+        "source": {
+          "key": "89b148ad03ff7c840b80c6d2ac9119fc",
+          "name": "mirror",
+          "path": "Assets/GameData/V5/Opening/Words/mirror.asset"
+        },
+        "origin": "implementation"
+      }
+    ],
+    "grammars": [
+      {
+        "id": "G-0001",
+        "archived": false,
+        "key": "state.on",
+        "name": "开启对象",
+        "slots": [
+          {
+            "classes": 1,
+            "words": [
+              "W-0001"
+            ]
+          },
+          {
+            "classes": 2,
+            "words": [
+              "W-0004",
+              "W-0005",
+              "W-0003"
+            ]
+          }
+        ],
+        "intent": {
+          "action": "On",
+          "subject": 1,
+          "target": -1,
+          "kind": "Command",
+          "scope": "CommandRegion"
+        },
+        "behavior": "",
+        "conditions": "",
+        "lifecycle": "",
+        "camera": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "G-0002",
+        "archived": false,
+        "key": "state.off",
+        "name": "关闭对象",
+        "slots": [
+          {
+            "classes": 1,
+            "words": [
+              "W-0002"
+            ]
+          },
+          {
+            "classes": 2,
+            "words": [
+              "W-0004",
+              "W-0005",
+              "W-0003"
+            ]
+          }
+        ],
+        "intent": {
+          "action": "Off",
+          "subject": 1,
+          "target": -1,
+          "kind": "Command",
+          "scope": "CommandRegion"
+        },
+        "behavior": "",
+        "conditions": "",
+        "lifecycle": "",
+        "camera": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "G-0003",
+        "archived": false,
+        "key": "move.free",
+        "name": "对象自行移动",
+        "slots": [
+          {
+            "classes": 2,
+            "words": [
+              "W-0004",
+              "W-0005",
+              "W-0007"
+            ]
+          },
+          {
+            "classes": 4,
+            "words": [
+              "W-0006"
+            ]
+          }
+        ],
+        "intent": {
+          "action": "Move",
+          "subject": 0,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "CurrentRegion"
+        },
+        "behavior": "",
+        "conditions": "",
+        "lifecycle": "",
+        "camera": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "G-0004",
+        "archived": false,
+        "key": "move.directed",
+        "name": "对象朝目标移动",
+        "slots": [
+          {
+            "classes": 2,
+            "words": [
+              "W-0004",
+              "W-0005",
+              "W-0007"
+            ]
+          },
+          {
+            "classes": 4,
+            "words": [
+              "W-0006"
+            ]
+          },
+          {
+            "classes": 2,
+            "words": [
+              "W-0004",
+              "W-0005",
+              "W-0007"
+            ]
+          }
+        ],
+        "intent": {
+          "action": "Move",
+          "subject": 0,
+          "target": 2,
+          "kind": "Command",
+          "scope": "CurrentRegion"
+        },
+        "behavior": "",
+        "conditions": "",
+        "lifecycle": "",
+        "camera": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "G-0005",
+        "archived": false,
+        "key": "illuminate",
+        "name": "让对象灯化",
+        "slots": [
+          {
+            "classes": 4,
+            "words": [
+              "W-0004"
+            ]
+          },
+          {
+            "classes": 2,
+            "words": [
+              "W-0003",
+              "W-0004",
+              "W-0005",
+              "W-0007"
+            ]
+          }
+        ],
+        "intent": {
+          "action": "Illuminate",
+          "subject": 1,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "ExistingController"
+        },
+        "behavior": "",
+        "conditions": "",
+        "lifecycle": "",
+        "camera": "",
+        "origin": "implementation"
+      }
+    ],
+    "exceptions": [
+      {
+        "id": "X-0001",
+        "archived": false,
+        "key": "world.on",
+        "words": [
+          "W-0001",
+          "W-0003"
+        ],
+        "reject": false,
+        "intent": {
+          "action": "On",
+          "subject": 1,
+          "target": -1,
+          "kind": "WorldFlow",
+          "scope": "Global"
+        },
+        "name": "开启世界流程",
+        "notes": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "X-0002",
+        "archived": false,
+        "key": "world.off",
+        "words": [
+          "W-0002",
+          "W-0003"
+        ],
+        "reject": false,
+        "intent": {
+          "action": "Off",
+          "subject": 1,
+          "target": -1,
+          "kind": "WorldFlow",
+          "scope": "Global"
+        },
+        "name": "关闭世界流程",
+        "notes": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "X-0003",
+        "archived": false,
+        "key": "move.on",
+        "words": [
+          "W-0001",
+          "W-0006"
+        ],
+        "reject": false,
+        "intent": {
+          "action": "On",
+          "subject": 1,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "ExistingController"
+        },
+        "name": "开启移动（现有空效果）",
+        "notes": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "X-0004",
+        "archived": false,
+        "key": "move.freeze",
+        "words": [
+          "W-0002",
+          "W-0006"
+        ],
+        "reject": false,
+        "intent": {
+          "action": "Freeze",
+          "subject": 1,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "Global"
+        },
+        "name": "冻结全局运动",
+        "notes": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "X-0005",
+        "archived": false,
+        "key": "illuminate.world",
+        "words": [
+          "W-0004",
+          "W-0003"
+        ],
+        "reject": false,
+        "intent": {
+          "action": "Illuminate",
+          "subject": 1,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "Global"
+        },
+        "name": "全局灯化",
+        "notes": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "X-0006",
+        "archived": false,
+        "key": "unsupported.door.to.door",
+        "words": [
+          "W-0005",
+          "W-0006",
+          "W-0005"
+        ],
+        "reject": true,
+        "intent": {
+          "action": "Legacy",
+          "subject": -1,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "ExistingController"
+        },
+        "name": "门朝门移动：不成立",
+        "notes": "",
+        "origin": "implementation"
+      },
+      {
+        "id": "X-0007",
+        "archived": false,
+        "key": "unsupported.floor.to.floor",
+        "words": [
+          "W-0007",
+          "W-0006",
+          "W-0007"
+        ],
+        "reject": true,
+        "intent": {
+          "action": "Legacy",
+          "subject": -1,
+          "target": -1,
+          "kind": "Sustained",
+          "scope": "ExistingController"
+        },
+        "name": "地面朝地面移动：不成立",
+        "notes": "",
+        "origin": "implementation"
+      }
+    ],
+    "properties": [
+      {
+        "id": "P-0001",
+        "archived": false,
+        "key": "f01f2fd4c83866e4c859d3c2281a8907",
+        "name": "门",
+        "description": "",
+        "source": {
+          "key": "f01f2fd4c83866e4c859d3c2281a8907",
+          "name": "Door",
+          "path": "Assets/GameData/V5/Capabilities/Door.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "P-0002",
+        "archived": false,
+        "key": "204950c332c5e544eb89816110e86bd2",
+        "name": "正在发光",
+        "description": "",
+        "source": {
+          "key": "204950c332c5e544eb89816110e86bd2",
+          "name": "Light",
+          "path": "Assets/GameData/V5/Capabilities/Light.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "P-0003",
+        "archived": false,
+        "key": "573defb082c74864cb7c255faa60d6bf",
+        "name": "可发光",
+        "description": "",
+        "source": {
+          "key": "573defb082c74864cb7c255faa60d6bf",
+          "name": "PotentialLight",
+          "path": "Assets/GameData/V5/Capabilities/PotentialLight.asset"
+        },
+        "origin": "implementation"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "O-0001",
+        "archived": false,
+        "key": "69cb41947b2844244a475de0e329e538",
+        "name": "发光",
+        "description": "",
+        "source": {
+          "key": "69cb41947b2844244a475de0e329e538",
+          "name": "Emission",
+          "path": "Assets/GameData/V5/Capabilities/Emission.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "O-0002",
+        "archived": false,
+        "key": "acaa2cbd81da2f147930088770dbcaf4",
+        "name": "铰链旋转",
+        "description": "",
+        "source": {
+          "key": "acaa2cbd81da2f147930088770dbcaf4",
+          "name": "Hinge",
+          "path": "Assets/GameData/V5/Capabilities/Hinge.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "O-0003",
+        "archived": false,
+        "key": "203d3ebc792be8d4793c437001f94d72",
+        "name": "升降",
+        "description": "",
+        "source": {
+          "key": "203d3ebc792be8d4793c437001f94d72",
+          "name": "Lift",
+          "path": "Assets/GameData/V5/Capabilities/Lift.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "O-0004",
+        "archived": false,
+        "key": "6aa8c158b73178942b92b93d89b64f39",
+        "name": "位置",
+        "description": "",
+        "source": {
+          "key": "6aa8c158b73178942b92b93d89b64f39",
+          "name": "Position",
+          "path": "Assets/GameData/V5/Capabilities/Position.asset"
+        },
+        "origin": "implementation"
+      }
+    ],
+    "spaces": [
+      {
+        "id": "L-0001",
+        "archived": false,
+        "key": "2059fa903ed8b7548bbbf0f13b3ad042",
+        "name": "上升通道",
+        "description": "",
+        "source": {
+          "key": "2059fa903ed8b7548bbbf0f13b3ad042",
+          "name": "Ascent",
+          "path": "Assets/GameData/V5/Spaces/Ascent.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0002",
+        "archived": false,
+        "key": "fcd5c5593b3873341836837e9a1da014",
+        "name": "盒内",
+        "description": "",
+        "source": {
+          "key": "fcd5c5593b3873341836837e9a1da014",
+          "name": "Chamber",
+          "path": "Assets/GameData/V5/Spaces/Chamber.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0003",
+        "archived": false,
+        "key": "50e947a7c03295e4ebe6f0c1b2474261",
+        "name": "远端灯房",
+        "description": "",
+        "source": {
+          "key": "50e947a7c03295e4ebe6f0c1b2474261",
+          "name": "FarRoom",
+          "path": "Assets/GameData/V5/Spaces/FarRoom.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0004",
+        "archived": false,
+        "key": "c52d942ea54638040aeec958198c29b7",
+        "name": "第一段通道",
+        "description": "",
+        "source": {
+          "key": "c52d942ea54638040aeec958198c29b7",
+          "name": "FirstPath",
+          "path": "Assets/GameData/V5/Spaces/FirstPath.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0005",
+        "archived": false,
+        "key": "e2b33b0b6fa536a44a4dcf578b9f920b",
+        "name": "画廊",
+        "description": "",
+        "source": {
+          "key": "e2b33b0b6fa536a44a4dcf578b9f920b",
+          "name": "Gallery",
+          "path": "Assets/GameData/V5/Spaces/Gallery.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0006",
+        "archived": false,
+        "key": "450dd89cf36027f42909753a0047e426",
+        "name": "花房",
+        "description": "",
+        "source": {
+          "key": "450dd89cf36027f42909753a0047e426",
+          "name": "Garden",
+          "path": "Assets/GameData/V5/Spaces/Garden.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0007",
+        "archived": false,
+        "key": "ff7a646cc07c44b42b97929b7d48d604",
+        "name": "室外",
+        "description": "",
+        "source": {
+          "key": "ff7a646cc07c44b42b97929b7d48d604",
+          "name": "Outdoor",
+          "path": "Assets/GameData/V5/Spaces/Outdoor.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0008",
+        "archived": false,
+        "key": "01f66dca456a6ab4e83a93d36b531a5e",
+        "name": "返回通道",
+        "description": "",
+        "source": {
+          "key": "01f66dca456a6ab4e83a93d36b531a5e",
+          "name": "ReturnPath",
+          "path": "Assets/GameData/V5/Spaces/ReturnPath.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0009",
+        "archived": false,
+        "key": "9fae9056ba0dc9645bb2076f43364c96",
+        "name": "教学球房",
+        "description": "",
+        "source": {
+          "key": "9fae9056ba0dc9645bb2076f43364c96",
+          "name": "SphereRoom",
+          "path": "Assets/GameData/V5/Spaces/SphereRoom.asset"
+        },
+        "origin": "implementation"
+      },
+      {
+        "id": "L-0010",
+        "archived": false,
+        "key": "c9306e1ca5dea0040bbef162d829f1dd",
+        "name": "维特鲁威人房",
+        "description": "",
+        "source": {
+          "key": "c9306e1ca5dea0040bbef162d829f1dd",
+          "name": "Vitruvian",
+          "path": "Assets/GameData/V5/Spaces/Vitruvian.asset"
+        },
+        "origin": "implementation"
+      }
+    ],
+    "entities": [
+      {
+        "id": "E-0001",
+        "archived": false,
+        "name": "盒内灯",
+        "spaces": [
+          "L-0002"
+        ],
+        "properties": [
+          "P-0002",
+          "P-0003"
+        ],
+        "outputs": [
+          "O-0001"
+        ],
+        "description": "发光资格随当前亮度变化。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0002",
+        "archived": false,
+        "name": "通道星群",
+        "spaces": [
+          "L-0001",
+          "L-0004",
+          "L-0008"
+        ],
+        "properties": [
+          "P-0002",
+          "P-0003"
+        ],
+        "outputs": [
+          "O-0001",
+          "O-0004"
+        ],
+        "description": "各通道单独登记；星群共用渐变控制。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0003",
+        "archived": false,
+        "name": "教学房小球",
+        "spaces": [
+          "L-0009"
+        ],
+        "properties": [
+          "P-0002",
+          "P-0003"
+        ],
+        "outputs": [
+          "O-0001",
+          "O-0004"
+        ],
+        "description": "物理主体独立登记，共享房间发光输出。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0004",
+        "archived": false,
+        "name": "远端房间灯体",
+        "spaces": [
+          "L-0003"
+        ],
+        "properties": [
+          "P-0002",
+          "P-0003"
+        ],
+        "outputs": [
+          "O-0001",
+          "O-0004"
+        ],
+        "description": "灯体独立登记，共享房间渐变。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0005",
+        "archived": false,
+        "name": "白色铰链门",
+        "spaces": [
+          "L-0004",
+          "L-0009"
+        ],
+        "properties": [
+          "P-0001"
+        ],
+        "outputs": [
+          "O-0002"
+        ],
+        "description": "门的进度锁与动作资格仍由现有控制器判断。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0006",
+        "archived": false,
+        "name": "返回通道入口门",
+        "spaces": [
+          "L-0008"
+        ],
+        "properties": [
+          "P-0001"
+        ],
+        "outputs": [
+          "O-0002"
+        ],
+        "description": "具体控制范围由 ControlSpaces 提供。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0007",
+        "archived": false,
+        "name": "充能升降门",
+        "spaces": [
+          "L-0001",
+          "L-0003"
+        ],
+        "properties": [
+          "P-0001"
+        ],
+        "outputs": [
+          "O-0003"
+        ],
+        "description": "开关和运动资格受充能状态控制。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0008",
+        "archived": false,
+        "name": "室外灯场",
+        "spaces": [
+          "L-0007"
+        ],
+        "properties": [
+          "P-0002",
+          "P-0003"
+        ],
+        "outputs": [
+          "O-0001",
+          "O-0004"
+        ],
+        "description": "物理灯体独立登记，共享发光输出。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      },
+      {
+        "id": "E-0009",
+        "archived": false,
+        "name": "室外门",
+        "spaces": [
+          "L-0007"
+        ],
+        "properties": [
+          "P-0001"
+        ],
+        "outputs": [
+          "O-0001"
+        ],
+        "description": "门的出现与消失使用发光输出；运动另行登记。",
+        "conditions": "",
+        "source": {
+          "path": "Assets/Scripts/V5/Effects/SentenceSceneBindings.cs"
+        },
+        "origin": "code-reference"
+      }
+    ],
+    "sentences": [
+      {
+        "id": "S-0001",
+        "archived": false,
+        "wordIds": [
+          "W-0008",
+          "W-0008"
+        ],
+        "notes": "mirror 暂不维护，保留当前实现。",
+        "deferred": true,
+        "active": true
+      },
+      {
+        "id": "S-0002",
+        "archived": false,
+        "wordIds": [
+          "W-0008",
+          "W-0006"
+        ],
+        "notes": "mirror 暂不维护，保留当前实现。",
+        "deferred": true,
+        "active": true
+      },
+      {
+        "id": "S-0003",
+        "wordIds": [
+          "W-0001",
+          "W-0003"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0004",
+        "wordIds": [
+          "W-0001",
+          "W-0004"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0005",
+        "wordIds": [
+          "W-0001",
+          "W-0005"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0006",
+        "wordIds": [
+          "W-0002",
+          "W-0003"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0007",
+        "wordIds": [
+          "W-0002",
+          "W-0004"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0008",
+        "wordIds": [
+          "W-0002",
+          "W-0005"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0009",
+        "wordIds": [
+          "W-0004",
+          "W-0006"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0010",
+        "wordIds": [
+          "W-0005",
+          "W-0006"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0011",
+        "wordIds": [
+          "W-0007",
+          "W-0006"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0012",
+        "wordIds": [
+          "W-0004",
+          "W-0006",
+          "W-0004"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0013",
+        "wordIds": [
+          "W-0004",
+          "W-0006",
+          "W-0005"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0014",
+        "wordIds": [
+          "W-0004",
+          "W-0006",
+          "W-0007"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0015",
+        "wordIds": [
+          "W-0005",
+          "W-0006",
+          "W-0004"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0016",
+        "wordIds": [
+          "W-0005",
+          "W-0006",
+          "W-0005"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0017",
+        "wordIds": [
+          "W-0005",
+          "W-0006",
+          "W-0007"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0018",
+        "wordIds": [
+          "W-0007",
+          "W-0006",
+          "W-0004"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0019",
+        "wordIds": [
+          "W-0007",
+          "W-0006",
+          "W-0005"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0020",
+        "wordIds": [
+          "W-0007",
+          "W-0006",
+          "W-0007"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0021",
+        "wordIds": [
+          "W-0004",
+          "W-0003"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0022",
+        "wordIds": [
+          "W-0004",
+          "W-0004"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0023",
+        "wordIds": [
+          "W-0004",
+          "W-0005"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0024",
+        "wordIds": [
+          "W-0004",
+          "W-0007"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0025",
+        "wordIds": [
+          "W-0001",
+          "W-0006"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      },
+      {
+        "id": "S-0026",
+        "wordIds": [
+          "W-0002",
+          "W-0006"
+        ],
+        "notes": "",
+        "archived": false,
+        "active": true
+      }
+    ],
+    "cases": [
+      {
+        "id": "C-0001",
+        "archived": false,
+        "sentenceId": "S-0003",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0002",
+        "archived": false,
+        "sentenceId": "S-0004",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0003",
+        "archived": false,
+        "sentenceId": "S-0005",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0004",
+        "archived": false,
+        "sentenceId": "S-0006",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0005",
+        "archived": false,
+        "sentenceId": "S-0007",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0006",
+        "archived": false,
+        "sentenceId": "S-0008",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0007",
+        "archived": false,
+        "sentenceId": "S-0009",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0008",
+        "archived": false,
+        "sentenceId": "S-0010",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0009",
+        "archived": false,
+        "sentenceId": "S-0011",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0010",
+        "archived": false,
+        "sentenceId": "S-0012",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0011",
+        "archived": false,
+        "sentenceId": "S-0013",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0012",
+        "archived": false,
+        "sentenceId": "S-0014",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0013",
+        "archived": false,
+        "sentenceId": "S-0015",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0014",
+        "archived": false,
+        "sentenceId": "S-0016",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0015",
+        "archived": false,
+        "sentenceId": "S-0017",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0016",
+        "archived": false,
+        "sentenceId": "S-0018",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0017",
+        "archived": false,
+        "sentenceId": "S-0019",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0018",
+        "archived": false,
+        "sentenceId": "S-0020",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0019",
+        "archived": false,
+        "sentenceId": "S-0021",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0020",
+        "archived": false,
+        "sentenceId": "S-0022",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0021",
+        "archived": false,
+        "sentenceId": "S-0023",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0022",
+        "archived": false,
+        "sentenceId": "S-0024",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0023",
+        "archived": false,
+        "sentenceId": "S-0025",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      },
+      {
+        "id": "C-0024",
+        "archived": false,
+        "sentenceId": "S-0026",
+        "name": "一般情境",
+        "conditions": "",
+        "entityIds": [],
+        "spaceIds": [],
+        "behaviorMode": "supplement",
+        "behavior": "",
+        "feedback": "",
+        "camera": "",
+        "lifecycle": "",
+        "expected": "",
+        "notes": "待补充情境要求，不代表已验收。"
+      }
+    ],
+    "relations": [],
+    "requests": []
+  }
+}

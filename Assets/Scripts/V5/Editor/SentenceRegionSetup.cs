@@ -19,7 +19,6 @@ namespace PuzzleApple.V5.Editor
                 PrefabUtility.SaveAsPrefabAsset(go,path);
             }finally{if(existing)PrefabUtility.UnloadPrefabContents(go);else Object.DestroyImmediate(go);}
         }
-        [MenuItem("PuzzleApple/V5/Apply sentence regions")]
         public static void Apply(){
             if(Application.isPlaying)throw new System.InvalidOperationException("Apply in Edit mode.");
             WriteLock("PassageRevealProgressLock",Space.FirstPath,Space.Chamber,1);
@@ -29,7 +28,7 @@ namespace PuzzleApple.V5.Editor
             var ending=PrefabUtility.LoadPrefabContents(endingPath);
             try{
                 var gate=ending.GetComponent<ProgressLock>();if(!gate)gate=ending.AddComponent<ProgressLock>();
-                gate.chargeDoor=ending.GetComponent<ChargeDoor>();gate.unlocksSpaces=Space.Ascent;gate.requiresSpaces=Space.FarRoom;
+                gate.BindBoundary(ending.GetComponent<ChargeDoor>());gate.unlocksSpaces=Space.Ascent;gate.requiresSpaces=Space.FarRoom;
                 PrefabUtility.SaveAsPrefabAsset(ending,endingPath);
             }finally{PrefabUtility.UnloadPrefabContents(ending);}
             var active=SceneManager.GetActiveScene();

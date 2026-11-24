@@ -5,106 +5,115 @@ using PuzzleApple.V5.Cognition;
 
 namespace PuzzleApple.V5
 {
-    // Motion sentences (rules whose channel ends with .motion): light, door and floor movement.
-    // Checks every eligible space for motion; objects apply the scoped effects themselves.
+    // Native motion uses parsed Move intents; deferred legacy rules retain their .motion channel.
+    // Queries registered motion endpoints and pushes scoped intents. Controllers migrate
+    // individually from the legacy applied-effect reader to their own endpoint.
     public sealed class MotionEffect
     {
         readonly WorldEntry entry;
         public MotionEffect(WorldEntry owner){entry=owner;}
+        internal SentenceRuntime Runtime => entry.sentenceRuntime;
 
-        public static bool Handles(CognitionState.Group g)=>g!=null&&g.Rule&&g.Rule.Motion;
+        public static bool Handles(CognitionState.Group g)=>g?.Intent?.Action==SentenceAction.Move ||
+            g?.Intent?.Action==SentenceAction.Legacy&&g.Rule&&g.Rule.Motion;
 
-        public static bool MovesLamps(CognitionRule rule)=>rule && rule.Channel=="light.motion";
+        public static bool MovesLamps(CognitionState.Group group)=>group?.Intent?.Is(SentenceAction.Move,SentenceCapabilityCatalog.Default.light)==true;
 
-        // Set once a player-written light move applies, cleared until "move" is known again.
-        public bool PlayerDirectedLampMotion {get;private set;}
-        PassageJourney.LightSpace controlledSpaces;
-        public bool Controls(PassageJourney.LightSpace space)=>(controlledSpaces&space)!=0;
-        readonly Dictionary<PassageJourney.LightSpace,CognitionSignal> activeMotions=new Dictionary<PassageJourney.LightSpace,CognitionSignal>();
-        readonly Dictionary<PassageJourney.LightSpace,int> revisions=new Dictionary<PassageJourney.LightSpace,int>();
-        public int Revision(PassageJourney.LightSpace space)=>revisions.TryGetValue(space,out var version)?version:0;
-        public bool HasLampMotion(PassageJourney.LightSpace space)=>activeMotions.TryGetValue(space,out var signal) && signal!=CognitionSignal.Empty;
-        public CognitionSignal LightMotion {get;private set;}
-
+        internal bool MoveKnown { get; private set; }
+        internal int ControlEpoch { get; private set; }
+        public void ObserveKnowledge(CognitionState state)
+        {
+            bool known=state.Knows("move");
+            if(known==MoveKnown)return;
+            if(!known)ControlEpoch++;
+            MoveKnown=known;
+            foreach(var output in appliedOutputs)output.ObserveKnowledge(this);
+        }
         public void TrackLampControl()
         {
-            if(entry.board.State==null || !entry.board.State.Knows("move"))return;
-            foreach(var pair in activeMotions){
-                if(pair.Value==CognitionSignal.Empty)continue;
-                // Room 3's dark cubes drift independently; only emitting cubes are light targets.
-                if(pair.Key==PassageJourney.LightSpace.FarRoom && !entry.journey.LampsLit)continue;
-                controlledSpaces|=pair.Key;
-            }
+            foreach(var output in appliedOutputs)output.TrackLampControl();
         }
 
-        public bool CanMove(CognitionState.Group g,Func<CognitionSignal,bool> applied,PassageJourney.LightSpace? targetScope=null)
+        readonly HashSet<SentenceMotionOutput> appliedOutputs=new HashSet<SentenceMotionOutput>();
+        bool tracksDrift;
+        public bool LightPresenceChanged(){
+            if(!tracksDrift)return false;
+            foreach(var output in appliedOutputs)if(output.LightPresenceChanged)return true;
+            return false;
+        }
+        // Compare the first eligible owner at each address. A partially blocked
+        // sentence can own its free addresses, never those reserved by an earlier one.
+        public CognitionState.Group BlockingOwner(CognitionState.Group group,IReadOnlyList<CognitionState.Group> accepted)
         {
-            var signal=g.Signal;
-            var scope=targetScope??entry.sentenceRuntime.EffectScope(g);
-            bool Includes(PassageJourney.LightSpace room)=>(scope&room)!=0;
-            var outside=entry.outdoor;
-            if(Includes(PassageJourney.LightSpace.Outdoor))return ((ISentenceMovable)outside.World).CanMove(signal);
-            if(Includes(PassageJourney.LightSpace.Gallery)&&((ISentenceMovable)outside.Chapter).CanMove(signal))return true;
-            if(Includes(PassageJourney.LightSpace.Vitruvian)&&((ISentenceMovable)outside.Vitruvian).CanMove(signal))return true;
-            if(Includes(PassageJourney.LightSpace.Garden)&&((ISentenceMovable)outside.Garden).CanMove(signal))return true;
-            var j=entry.journey;
-            if(signal==CognitionSignal.WorldMove)return j.Platform&&Includes(PassageJourney.LightSpace.ReturnPath);
-            if(signal==CognitionSignal.DoorMove && j.EndingDoor && Includes(j.EndingDoor.ControlSpaces) && j.EndingDoor.CanCycle && (!entry.sentenceRuntime.Owns(signal,j.EndingDoor.ControlSpaces,g.Established) || j.EndingDoor.AcceptedCycle(g.Established)))return true;
-            if(signal==CognitionSignal.DoorMove && j.EntranceDoor && Includes(j.EntranceDoor.ControlSpaces) && j.EntranceDoor.CanCycle &&
-                !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,j.EntranceDoor.ControlSpaces) && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,j.EntranceDoor.ControlSpaces))return true;
-            if(signal==CognitionSignal.LightDoorMove && Includes(PassageJourney.LightSpace.FirstPath) && j.Stars && j.Stars.NeedsGather)return true;
-            if(signal==CognitionSignal.DoorMove){
-                var white=scope&j.WhiteDoorSpaces;
-                return white!=0 && j.CanCycleDoor && !entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOn,white)&&!entry.sentenceRuntime.HasEffect(CognitionSignal.DoorOff,white);
+            if(!accepted.Any(g=>g.Intent.Action==SentenceAction.Move))return null;
+            CognitionState.Group blocker=null;
+            var runtime=entry.sentenceRuntime;
+            foreach(var output in entry.Entities.Query<SentenceMotionOutput>(runtime.EffectScope(group))){
+                var desired=output.ResolveMotion(group);
+                if(desired==default || !output.HasSubject(group))continue;
+                var owner=FirstOwner(output,group,accepted,out var held);
+                if(held==desired)return null;
+                if(owner==null)return null;
+                if(blocker==null || owner.ExecutionLocked)blocker=owner;
             }
-            if(Includes(PassageJourney.LightSpace.SphereRoom)&&j.Tutorial&&j.Tutorial.CanMove(signal))return true;
-            if(Includes(PassageJourney.LightSpace.FarRoom)&&j.FarRoomMotion.CanMove(signal))return true;
-            if(Includes(PassageJourney.LightSpace.Ascent)&&j.Ascent && j.Ascent.Stars && j.Ascent.Stars.CanMove(signal))return true;
-            if(signal==CognitionSignal.LightMove && (Includes(PassageJourney.LightSpace.FirstPath)&&j.Stars&&j.Stars.Brightness>0 || Includes(PassageJourney.LightSpace.ReturnPath)&&j.ReturnStars&&j.ReturnStars.Brightness>0))return true;
-            return Includes(PassageJourney.LightSpace.Chamber)&&entry.room.Opened&&entry.chamberLight.CanMove(signal);
+            return blocker;
+        }
+
+        CognitionState.Group FirstOwner(SentenceMotionOutput output,CognitionState.Group candidate,
+            IReadOnlyList<CognitionState.Group> groups,out SentenceMotion held)
+        {
+            var region=entry.Entities.SpacesOf(output);
+            CognitionState.Group owner=null;
+            held=default;
+            foreach(var other in groups){
+                if(!other.Effective || other.Intent.Action!=SentenceAction.Move || (candidate.Established!=0 && other.Established>=candidate.Established) ||
+                    (owner!=null && other.Established>=owner.Established) || (entry.sentenceRuntime.EffectScope(other)&region)==0)continue;
+                var motion=output.ResolveMotion(other);
+                if(motion==default)continue;
+                owner=other;
+                held=motion;
+            }
+            return owner;
+        }
+
+        public bool CanMove(CognitionState.Group group,PassageJourney.LightSpace? targetScope=null,bool newEffect=false)
+        {
+            var scope=targetScope??entry.sentenceRuntime.EffectScope(group);
+            foreach(var output in entry.Entities.Query<SentenceMotionOutput>(scope)){
+                if(!output.WouldChange(group,scope))continue;
+                // Earlier speech may still be waiting for the same presentation to start.
+                if(!newEffect || FirstOwner(output,group,entry.board.State.Groups,out _)==null)return true;
+            }
+            return false;
+        }
+
+        public bool OwnsVisibleMotion(CognitionState.Group group,PassageJourney.LightSpace scope)
+        {
+            foreach(var output in entry.Entities.Query<SentenceMotionOutput>(scope))
+                if(output.WouldChange(group,scope) && output.Owners(output.ResolveMotion(group)).FirstOrDefault()==group.Established)return true;
+            return false;
         }
 
         public bool WaitingForLight(CognitionState.Group group,PassageJourney.LightSpace scope)
         {
-            if(group.Rule.Channel!="light.motion" && group.Signal!=CognitionSignal.WorldLightMove)return false;
-            var outside=entry.outdoor;
-            var signal=group.Signal;
-            if(scope==PassageJourney.LightSpace.Outdoor){
-                var world=outside.World;
-                if(!world.stateSource.IsOff || world.field.ActiveCount==0)return false;
-                if(signal==CognitionSignal.LightDoorMove)return world.door.Revealed;
-                if(signal==CognitionSignal.LightLightMove)return world.field.ActiveCount>1;
-                return signal==CognitionSignal.LightFloorMove || signal==CognitionSignal.WorldLightMove;
-            }
-            // Only the outdoor ground can rise to a light. Darkness elsewhere supplies no motion target.
-            if(signal==CognitionSignal.WorldLightMove)return false;
-            if(scope==PassageJourney.LightSpace.Vitruvian){
-                var fixture=outside.Vitruvian.puzzle;
-                return fixture.source.IsOff && fixture.field.PlayerCount>0 &&
-                    (signal==CognitionSignal.LightFloorMove || signal==CognitionSignal.LightLightMove && fixture.field.PlayerCount>1);
-            }
-            if(group.Signal==CognitionSignal.LightDoorMove && (scope&PassageJourney.LightSpace.FirstPath)!=0 && entry.journey.Stars && !entry.journey.Stars.On)return true;
-            if((scope&PassageJourney.LightSpace.FarRoom)!=0 && entry.journey.Lamps.Count>0 && entry.journey.Brightness==0)return true;
-            if((scope&PassageJourney.LightSpace.SphereRoom)!=0 && entry.journey.Tutorial && !entry.journey.Tutorial.AnyLit)return true;
-            if(signal!=CognitionSignal.LightFloorMove)return false;
-            return ((scope&PassageJourney.LightSpace.Garden)!=0 && outside.Garden.lamp && outside.Garden.Brightness==0)
-                || ((scope&PassageJourney.LightSpace.Gallery)!=0 && outside.Chapter.lamp && outside.Chapter.Brightness==0);
+            var c=SentenceCapabilityCatalog.Default;
+            if(!MovesLamps(group) && group.Intent?.Moves(c.floor,c.light)!=true)return false;
+            return entry.Entities.Query<SentenceMotionOutput>(scope).Any(output=>output.WaitingForLight(group,scope));
         }
 
         public void Commit(CognitionState state,CognitionState.Group[] groups)
         {
-            var next=groups.FirstOrDefault(g=>MovesLamps(g.Rule))?.Signal??CognitionSignal.Empty;
-            LightMotion=next;
-            for(int bit=0;bit<10;bit++){
-                var space=(PassageJourney.LightSpace)(1<<bit);
-                var current=groups.FirstOrDefault(g=>MovesLamps(g.Rule) && (entry.sentenceRuntime.EffectScope(g)&space)!=0)?.Signal??CognitionSignal.Empty;
-                activeMotions.TryGetValue(space,out var old);
-                if(current==old)continue;
-                activeMotions[space]=current;revisions[space]=Revision(space)+1;
+            ObserveKnowledge(state);
+            // A fully blocked but still spoken drift can become eligible when another light appears.
+            tracksDrift=state.Groups.Any(g=>g.Spoken && g.Intent?.Motion==SentenceMotion.Light);
+            var outputs=entry.Entities.QueryAll<SentenceMotionOutput>().ToArray();
+            foreach(var output in appliedOutputs)if(!outputs.Contains(output))output.Hold();
+            appliedOutputs.Clear();
+            foreach(var output in outputs){
+                var region=entry.Entities.SpacesOf(output);
+                output.Apply(groups.Where(g=>Handles(g)&&(entry.sentenceRuntime.EffectScope(g)&region)!=0),this);
+                appliedOutputs.Add(output);
             }
-            if(!state.Knows("move")){PlayerDirectedLampMotion=false;controlledSpaces=0;}
-            else if(next!=CognitionSignal.Empty)PlayerDirectedLampMotion=true;
-            TrackLampControl();
         }
     }
 }

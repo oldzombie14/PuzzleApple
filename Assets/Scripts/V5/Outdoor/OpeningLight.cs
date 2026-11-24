@@ -4,19 +4,22 @@ using UnityEngine.Events;
 namespace PuzzleApple.V5.Outdoor
 {
     public enum LightLevelState { Off, InBetween, On }
-    public sealed class OpeningLight : MonoBehaviour
+    public sealed class OpeningLight : MonoBehaviour, ISentenceOutputState<EmissionState>
     {
+        internal SentenceStateOutput LightOutput;
         public Renderer surface;
         public Light glow;
         [Tooltip("动态灯共用全局灯的材质与亮度，避免每盏灯复制材质。")]
         public OpeningLight appearanceSource;
         [System.NonSerialized] public bool illuminate = true;
+        [System.NonSerialized] public float localOutput=.7f;
         public Material AppearanceMaterial => runtimeMaterial;
         public bool initiallyOff;
         public Color offColor = Color.black;
         [Min(0)] public float transitionDuration = 1.2f;
         public UnityEvent<bool> stateChanged = new UnityEvent<bool>();
         public float Brightness => appearanceSource ? appearanceSource.Brightness : brightness;
+        public bool EmitsLight => Brightness * RevealAmount > 0;
         public bool IsOn => Brightness >= 1;
         public bool IsOff => Brightness <= 0;
         public LightLevelState CurrentState => IsOn ? LightLevelState.On : IsOff ? LightLevelState.Off : LightLevelState.InBetween;
@@ -87,6 +90,15 @@ namespace PuzzleApple.V5.Outdoor
             if (transitionDuration <= 0) { brightness = value ? 1 : 0; ApplyAppearance(); }
             stateChanged.Invoke(value);
         }
+        internal bool CanRestoreBrightness => !appearanceSource && runtimeMaterial;
+        public EmissionState CaptureState() => new EmissionState(Brightness);
+        public bool TryRestoreState(EmissionState state)
+        {
+            if (!CanRestoreBrightness || !state.Valid) return false;
+            brightness = state.brightness;
+            ApplyAppearance();
+            return true;
+        }
         public void HoldCurrentState() { transitionEnabled = false; }
         void Update()
         {
@@ -107,7 +119,7 @@ namespace PuzzleApple.V5.Outdoor
                     // Nearby-light budget changes must fade too, even after the body is revealed.
                     localGlowAmount=Mathf.MoveTowards(localGlowAmount,illuminate?1:0,
                         Time.unscaledDeltaTime/LocalGlowFadeDuration);
-                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * .7f * RevealAmount * appearanceSource.lampMultiplier
+                    glow.intensity = Mathf.SmoothStep(0, 1, appearanceSource.brightness) * localOutput * RevealAmount * appearanceSource.lampMultiplier
                         * Mathf.SmoothStep(0,1,localGlowAmount);
                     glow.enabled = glow.intensity>0;
                 }
@@ -120,7 +132,7 @@ namespace PuzzleApple.V5.Outdoor
             float target = targetOn ? 1 : 0;
             if (brightness == target) return;
             brightness = transitionDuration > 0
-                ? RoomLighting.AdvanceLevel(brightness, target, Time.unscaledDeltaTime / transitionDuration) : target;
+                ? RoomLighting.AdvanceLevel(brightness, target, Time.unscaledDeltaTime / transitionDuration,LightOutput?.FinishFraction??0) : target;
             ApplyAppearance();
         }
         float lampMultiplier=1;

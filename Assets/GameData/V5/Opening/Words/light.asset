@@ -15,3 +15,6 @@ MonoBehaviour:
   id: light
   displayText: light
   symbol: {fileID: 21300000, guid: e1825a5d21674aae9668bccbb4ba35a5, type: 3}
+  classes: 6
+  property: {fileID: 11400000, guid: 204950c332c5e544eb89816110e86bd2, type: 2}
+  stateProperty: {fileID: 11400000, guid: 573defb082c74864cb7c255faa60d6bf, type: 2}

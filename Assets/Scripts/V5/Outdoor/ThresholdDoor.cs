@@ -4,7 +4,7 @@ using System.Collections;
 namespace PuzzleApple.V5.Outdoor
 {
     [RequireComponent(typeof(Rigidbody))]
-    public sealed class ThresholdDoor : MonoBehaviour
+    public sealed class ThresholdDoor : MonoBehaviour, ISentenceOutputState<ThresholdDoor.MotionState>
     {
         public float groundHeight = .02f;
         [Min(.1f)] public float loweringSpeed = 6;
@@ -27,6 +27,27 @@ namespace PuzzleApple.V5.Outdoor
         BoxCollider[] frameColliders;
         Collider ground;
         float speed;
+        [System.Serializable]
+        public struct MotionState
+        {
+            public LightMotion.State drift;
+            public float descentSpeed;
+        }
+        public MotionState CaptureState() => new MotionState {
+            drift = freeMotion.CaptureMotion(), descentSpeed = speed
+        };
+        public bool TryRestoreState(MotionState state)
+        {
+            if (!freeMotion || !state.drift.Valid || state.drift.launched ||
+                !float.IsFinite(state.descentSpeed) || state.descentSpeed < 0) return false;
+            var offset = state.drift.pose.position - body.position;
+            if (isActiveAndEnabled && offset.sqrMagnitude > .000001f &&
+                ClearTravel(offset.normalized, offset.magnitude) + .0001f < offset.magnitude) return false;
+            freeMotion.RestoreMotion(state.drift, null);
+            speed = Descending ? state.descentSpeed : 0;
+            return true;
+        }
+
         void Awake()
         {
             body = GetComponent<Rigidbody>();
@@ -88,6 +109,12 @@ namespace PuzzleApple.V5.Outdoor
             float acceleration = Mathf.Max(.1f, loweringAcceleration);
             speed = Mathf.MoveTowards(speed, Mathf.Min(loweringSpeed, Mathf.Sqrt(2 * acceleration * remaining)), Time.fixedDeltaTime * acceleration);
             float travel = Mathf.Min(remaining, speed * Time.fixedDeltaTime);
+            travel = ClearTravel(Vector3.down, travel);
+            body.MovePosition(body.position + Vector3.down * travel);
+        }
+
+        float ClearTravel(Vector3 direction, float travel)
+        {
             // The opening remains passable; solid frame pieces must not descend through a player or prop.
             foreach (var frame in frameColliders)
             {
@@ -95,11 +122,11 @@ namespace PuzzleApple.V5.Outdoor
                 var scale = frame.transform.lossyScale;
                 var halfSize = Vector3.Scale(frame.size * .5f, new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
                 foreach (var hit in Physics.BoxCastAll(frame.transform.TransformPoint(frame.center), halfSize,
-                    Vector3.down, frame.transform.rotation, travel + .01f, ~0, QueryTriggerInteraction.Ignore))
+                    direction, frame.transform.rotation, travel + .01f, ~0, QueryTriggerInteraction.Ignore))
                     if (hit.rigidbody != body && !hit.collider.transform.IsChildOf(transform) && !hit.collider.GetComponentInParent<OpeningLight>())
                         travel = Mathf.Min(travel, Mathf.Max(0, hit.distance - .01f));
             }
-            body.MovePosition(body.position + Vector3.down * travel);
+            return travel;
         }
         void OnCollisionEnter(Collision collision) => RecordGroundContact(collision);
         void OnCollisionStay(Collision collision) => RecordGroundContact(collision);

@@ -21,6 +21,7 @@ namespace PuzzleApple.V5.Cognition
             if(e.button==PointerEventData.InputButton.Right)
             {
                 pressed=began=false;
+                if (board.Selection.RemoveSelectedAt(e)) return;
                 board.RemoveToken(groupId,WordId,wholeSentence);
                 e.Use();return;
             }

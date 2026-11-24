@@ -479,7 +479,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: ef77890ae720b5642812dbd2d7cab8b7, type: 2}
+  - {fileID: 2100000, guid: e3e924d056ef40f5a4a98836d6db1737, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -998,7 +998,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 34d455be8bfe51242a9de012a1f5a941, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.MembraneDoor
-  inside: 256
+  interiorSpaces:
+  - {fileID: 11400000, guid: c9306e1ca5dea0040bbef162d829f1dd, type: 2}
   interior: {fileID: 57156046}
   room: {fileID: 1848573147}
 --- !u!1 &598968715
@@ -1060,7 +1061,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: ef77890ae720b5642812dbd2d7cab8b7, type: 2}
+  - {fileID: 2100000, guid: e3e924d056ef40f5a4a98836d6db1737, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1284,7 +1285,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: ef77890ae720b5642812dbd2d7cab8b7, type: 2}
+  - {fileID: 2100000, guid: e3e924d056ef40f5a4a98836d6db1737, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1563,7 +1564,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: ef77890ae720b5642812dbd2d7cab8b7, type: 2}
+  - {fileID: 2100000, guid: e3e924d056ef40f5a4a98836d6db1737, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2652,7 +2653,6 @@ MonoBehaviour:
   words:
   - light
   shapes: 000000000100000002000000
-  maxInstances: 24
 --- !u!4 &1848573149
 Transform:
   m_ObjectHideFlags: 0

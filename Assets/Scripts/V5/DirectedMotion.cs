@@ -43,6 +43,24 @@ namespace PuzzleApple.V5
         }
 
         static readonly float[] approachAngles = {0, 35, -35, 65, -65, 85, -85};
+        // Longer catch-up strides must clear the intervening path as well as the final pose.
+        public static bool GatherStepClear(SphereCollider sphere,Vector3 offset,bool ignorePlayer,float normalStep)
+        {
+            float distance=offset.magnitude;
+            if(distance>normalStep+.001f){
+                var direction=offset/distance;
+                int count=Physics.SphereCastNonAlloc(sphere.transform.TransformPoint(sphere.center),
+                    sphere.bounds.extents.x,direction,hits,distance,~0,QueryTriggerInteraction.Ignore);
+                if(count==hits.Length)return false;
+                for(int i=0;i<count;i++){
+                    var hit=hits[i];
+                    if(hit.collider==sphere || hit.collider.transform.IsChildOf(sphere.transform) ||
+                        (ignorePlayer && hit.collider is CharacterController))continue;
+                    if(Vector3.Dot(direction,hit.normal)<-.001f)return false;
+                }
+            }
+            return SphereStepClear(sphere,offset,ignorePlayer);
+        }
         public static Vector3 ApproachStep(Vector3 delta, System.Predicate<Vector3> clear)
         {
             foreach (float angle in approachAngles)

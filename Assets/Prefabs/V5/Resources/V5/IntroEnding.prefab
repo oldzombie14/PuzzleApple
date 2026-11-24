@@ -137,9 +137,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a66ffca602c0b9a469f84c6844ce6abd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PuzzleApple.V5.ProgressLock
-  unlocksSpaces: 512
-  requiresSpaces: 16
-  whiteDoor: {fileID: 0}
-  chargeDoor: {fileID: 3928870085767899125}
-  entranceDoor: {fileID: 0}
+  unlockedRegion:
+  - {fileID: 11400000, guid: 2059fa903ed8b7548bbbf0f13b3ad042, type: 2}
+  prerequisiteRegion:
+  - {fileID: 11400000, guid: 50e947a7c03295e4ebe6f0c1b2474261, type: 2}
+  boundarySource: {fileID: 3928870085767899125}
   passableProgress: 0.5

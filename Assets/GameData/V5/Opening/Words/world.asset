@@ -15,3 +15,6 @@ MonoBehaviour:
   id: world
   displayText: world
   symbol: {fileID: 21300000, guid: 6d782a1ce8d843399b91edf86d3c685b, type: 3}
+  classes: 2
+  property: {fileID: 11400000, guid: d6058e570f314df098fedc09099322c6, type: 2}
+  stateProperty: {fileID: 0}

@@ -76,10 +76,12 @@ Shader "PuzzleApple/V5/World Surface"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile _ _LIGHT_LAYERS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            #pragma instancing_options renderinglayer
             #define REQUIRES_WORLD_SPACE_POS_INTERPOLATOR
             #define _SPECULARHIGHLIGHTS_OFF
             #define _ENVIRONMENTREFLECTIONS_OFF
@@ -174,10 +176,10 @@ Shader "PuzzleApple/V5/World Surface"
                     // The handle has exactly two tones with a hard light/shadow boundary.
                     result.rgb=step(0,key);
                 }
-                if(_IsDoorLeaf>1.5)result.rgb+=.60*smoothstep(0,1,_P5SpaceSentenceGlow[4].y);
+                if(_IsDoorLeaf>1.5)result.rgb+=.60*max(DoorSentenceGlow(3), DoorSentenceGlow(4));
                 else if(_SurfaceMode==1)
                 {
-                    if(_IsDoorLeaf>.5)result.rgb+=(2.25*smoothstep(0,1,max(_P5SpaceSentenceGlow[1].y,_P5SpaceSentenceGlow[2].y)));
+                    if(_IsDoorLeaf>.5)result.rgb+=(2.25*max(DoorSentenceGlow(1),DoorSentenceGlow(2)));
                     else if(normalOS.y>.9)result.rgb+=FloorSentenceGlow(input.positionWS);
                 }
                 float3 inward=TransformObjectToWorldNormal(_InteriorNormal.xyz);

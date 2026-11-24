@@ -52,6 +52,14 @@ namespace PuzzleApple.V5.Cognition
             Destroy(view.Root.gameObject);
         }
         internal float PeriodVisibility(int id)=>views.TryGetValue(id,out var v)?Mathf.Clamp01(v.Fade.alpha/(v.Conflicted?ConflictAlpha:1)):0;
+        internal void DelayRetryPrompt(int id,float seconds){if(periods)periods.DelayPrompt(id,seconds);}
+        internal void SetResponseOpacity(int id,float opacity)
+        {
+            if(!views.TryGetValue(id,out var view))return;
+            // Keep the spoken period, selection and removal fades independent of word tone.
+            float wordAlpha=view.Conflicted?1:opacity;
+            foreach(var word in view.Words)word.canvasRenderer.SetAlpha(wordAlpha);
+        }
         public void PauseSentence(int id){if(State.Find(id)?.ExecutionLocked==true)return;CancelDrag();State.Unsay(id);}
         public void SetSentenceOpacity(int id,float opacity)
         {
@@ -345,6 +353,7 @@ namespace PuzzleApple.V5.Cognition
             foreach (var word in group.Words)
             {
                 var text = Instantiate(wordPrefab,v.Mask);text.name="Word "+word.Id;text.sprite=word.Definition.Symbol;
+                if(group.Spoken && group.Recognized)text.color=Color.white;
                 float width = SymbolUI.Width(word.Definition, wordSize);
                 v.Words.Add(text); v.Offsets.Add(x); v.Widths.Add(width);
                 CognitionUI.Place(text.rectTransform, x, 0, width, WordHeight);
@@ -639,7 +648,7 @@ namespace PuzzleApple.V5.Cognition
             PreviewMirrorCopy=PreviewMirrorMove=false;
             if (drag == null) return;
             if (views.TryGetValue(drag.GroupId, out var v))
-            { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = ChalkColor; }
+            { v.Fade.alpha = v.Conflicted ? ConflictAlpha : 1; foreach (var text in v.Words) text.color = v.Group.Spoken && v.Group.Recognized ? Color.white : ChalkColor; }
             drag.Ghost.gameObject.SetActive(false);
             Destroy(drag.Ghost.gameObject); drag = null;
             snapTargetId = -1;

@@ -23,7 +23,7 @@ namespace PuzzleApple.V5
         public float WorldExposure=>exposure.postExposure.value;
         public float FloorIllumination=>Mathf.SmoothStep(0,1,levels.z);
         public float LampMultiplier => 1 + Mathf.SmoothStep(0,1,levels.w);
-        readonly Vector4[] localLevels=new Vector4[11];
+        readonly Vector4[] localLevels=new Vector4[13];
         static int Index(PassageJourney.LightSpace space){
             int index=0;
             for(int mask=(int)space;mask>1;mask>>=1)index++;
@@ -77,11 +77,12 @@ namespace PuzzleApple.V5
             return (scope & (property==c.door?emittingDoors:property==c.floor?emittingFloors:0))!=0;
         }
 
-        public bool WouldChange(CognitionState.Group g)
+        public bool WouldChange(CognitionState.Group g,PassageJourney.LightSpace scope)
         {
             var c=SentenceCapabilityCatalog.Default;
-            if(g.Intent.SubjectProperty!=c.light)return true;
-            var scope=source.EffectScope(g);
+            if(g.Intent.SubjectProperty==c.door)
+                return source.entry.Entities.QueryEntities(scope,c.door).Any();
+            if(g.Intent.SubjectProperty!=c.light)return scope!=0;
             return Emits(c.floor,scope)||source.entry.Entities.QueryEntities(scope,c.light).Any();
         }
 
@@ -103,6 +104,7 @@ namespace PuzzleApple.V5
             if(j && j.Root && j.Tutorial){
                 Shader.SetGlobalMatrix("_P5JourneyInverse",j.Root.worldToLocalMatrix);
                 Shader.SetGlobalVector("_P5SpaceEnds",new Vector4(0,j.pathLength,j.Tutorial.ExitZ,j.RoomStart));
+                Shader.SetGlobalVector("_P5GarageEnds",new Vector4(j.GarageStart,j.GarageExit,0,0));
                 Shader.SetGlobalFloat("_P5AscentStart",j.RoomStart+j.roomSize.z);
             }
             var passage=source.entry.outdoor;

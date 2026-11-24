@@ -85,7 +85,7 @@ namespace PuzzleApple.V5.Outdoor
             var renderer=go.GetComponent<Renderer>();renderer.shadowCastingMode=ShadowCastingMode.Off;
             var lamp=go.AddComponent<OpeningLight>();lamp.surface=renderer;lamp.appearanceSource=stateSource;
             var glow=new GameObject("Local glow",typeof(Light));glow.transform.SetParent(go.transform,false);
-            lamp.glow=glow.GetComponent<Light>();lamp.glow.type=LightType.Point;lamp.glow.range=2.5f;lamp.glow.intensity=.7f;lamp.glow.shadows=LightShadows.None;
+            lamp.glow=glow.GetComponent<Light>();lamp.glow.type=LightType.Point;lamp.glow.range=OpeningLight.OutdoorPointRange;lamp.glow.intensity=lamp.localOutput;lamp.glow.shadows=LightShadows.None;
             if(indoorStyle){
                 lamp.localOutput=indoorStyle.LampIntensity(scale);
                 lamp.glow.range=indoorStyle.LampRange(lamp.localOutput);

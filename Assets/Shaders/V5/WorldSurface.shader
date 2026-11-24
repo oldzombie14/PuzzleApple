@@ -38,6 +38,7 @@ Shader "PuzzleApple/V5/World Surface"
         [HideInInspector] _ChargeDoorEmission("Charge door emission",Float)=0
         [HideInInspector] _NicheFillAnchor("Room-side fill sample",Vector)=(0,0,0,0)
         [HideInInspector] _IsDoorLeaf("Door leaf",Float)=0
+        [HideInInspector] _TwoSidedDoor("Matching door faces",Float)=0
         [HideInInspector] _DoorBackBrightness("Room-side brightness",Float)=0
         [HideInInspector] _DoorBackColor("Room-side wall color",Color)=(1,1,1,1)
         [HideInInspector] _SpecColor("Specular",Color)=(.2,.2,.2,1)
@@ -129,7 +130,7 @@ Shader "PuzzleApple/V5/World Surface"
                 }
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(input.uv,surface);
-                bool roomFace=_SurfaceMode==1&&_IsDoorLeaf==1&&normalOS.z>.5;
+                bool roomFace=_SurfaceMode==1&&_IsDoorLeaf==1&&_TwoSidedDoor<.5&&normalOS.z>.5;
                 if(_SurfaceMode==1)
                 {
 

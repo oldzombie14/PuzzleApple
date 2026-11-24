@@ -12,45 +12,86 @@ namespace PuzzleApple.V5.Editor
         static void Check(bool value,string label){if(!value){Result="FAIL: "+label;throw new InvalidOperationException(Result);}}
         static IEnumerator Wait(Func<bool> done,string label){float end=Time.realtimeSinceStartup+40;while(!done()&&Time.realtimeSinceStartup<end)yield return null;Check(done(),label);}
         public static void Run(){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(Exercise(e));}
-        static IEnumerator Exercise(WorldEntry e){
-            e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
-            var j=e.journey;var p=e.player;var b=e.board;var rt=e.sentenceRuntime;
-            rt.presentation.enabledShots=false;b.Panel.SetOpen(false);p.MovementLocked=true;
-            const Space start=Space.Chamber|Space.FirstPath,middle=Space.SphereRoom|Space.ReturnPath;
-            Check(j.SentenceScope()==Space.Chamber,"unopened progress begins at room one");
-            e.chamberLight.SetOn(false);
-            yield return Wait(()=>j.SentenceScope()==start,"passage reveal permanently joins the first path");
-            j.SetDoor(true);yield return Wait(()=>j.DoorProgress==1,"open first physical gate");
-            j.EntranceDoor.SetOpen(true);yield return Wait(()=>j.EntranceDoor.Progress==1,"open second physical gate");
-            Check(j.SentenceScope()==(start|middle|Space.FarRoom),"two open gates join unlocked regions");
-            var motion=VitruvianChecks.Say(b,"light","move");yield return null;yield return null;
-            Check(rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"sustained sentence reaches connected room three");
-            j.SetDoor(false);yield return Wait(()=>j.DoorProgress<.45f && j.DoorProgress>0,"closing below first-unlock threshold");
-            Check(j.SentenceScope()==(start|middle|Space.FarRoom) && rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"partly closed door still connects both sides");
-            yield return Wait(()=>j.DoorProgress==0,"close white door");yield return null;
-            Check(j.SentenceScope()==start && !rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"outside side stops at closed white door");
-            Check((ProgressLock.Accessible(Space.All)&Space.FarRoom)!=0,"closing preserves permanent progress");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength+4)),j.Root.rotation);yield return null;yield return null;
-            Check(j.SentenceScope()==(middle|Space.FarRoom) && !rt.HasEffect(CognitionSignal.LightMove,Space.Chamber),"inside side sees only its connected component");
-            j.EntranceDoor.SetOpen(false);yield return Wait(()=>j.EntranceDoor.Progress==0,"close room three entrance");yield return null;
-            Check(j.SentenceScope()==middle,"two closed gates bound the middle region");
-            p.Teleport(j.EndingDoor.RoomLanding,j.EndingDoor.transform.rotation);yield return null;yield return null;
-            Check(j.SentenceScope()==Space.FarRoom,"room three side stops at its entrance and unopened exit");
-            var open=VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(()=>j.EntranceDoor.Progress>0 && j.EntranceDoor.Progress<.45f,"first opening frames");
-            Check(j.SentenceScope()==(middle|Space.FarRoom),"unlocked membrane reconnects before passable height");
-            yield return Wait(()=>j.EntranceDoor.Progress==1 && b.State.Find(open.Id)==null,"boundary entrance can reopen from its inside");
-            Check(j.DoorProgress==0 && j.SentenceScope()==(middle|Space.FarRoom),"opening command does not recruit doors across its original boundary");
-            b.State.ClearWorkspace();
-            j.EntranceDoor.SetOpen(false);yield return Wait(()=>j.EntranceDoor.Progress==0,"restore closed entrance");
-            j.EndingDoor.GetComponent<ProgressLock>().Unlock();
-            p.Teleport(j.EndingDoor.StairLanding,j.EndingDoor.transform.rotation);yield return null;
-            Check(j.SentenceScope()==Space.Ascent,"unlocked closed exit isolates the staircase side");
-            Check((j.EndingDoor.ControlSpaces&Space.Ascent)!=0,"exit remains controllable from the staircase");
-            p.Teleport(Vector3.up*.1f,Quaternion.identity);e.chamberLight.SetOn(true);
-            yield return Wait(()=>e.chamberLight.Brightness==1,"relight first room");
-            Check(j.SentenceScope()==start,"doorless passage remains joined after relighting");
-            Result="PASS: permanent progress, bidirectional closed-door components, chained boundaries, sustained rescope, inside reopening and doorless passage";
+        internal static IEnumerator Exercise(WorldEntry e)
+        {
+            e.OpenWorld(-1);
+            yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
+            var j=e.journey; var p=e.player; var b=e.board;
+            b.Panel.SetOpen(false); e.sentenceRuntime.presentation.enabledShots=false;
+            Check(j.SentenceScope()==Space.Chamber,"start in chamber only");
+            yield return ChargeDoorChecks.UnlockFirstPassage(e);
+            var white=VitruvianChecks.Say(b,"positive","door");
+            yield return Wait(()=>j.DoorProgress==1 && b.State.Find(white.Id)==null,"manual white door opens");
+            Check((ProgressLock.Accessible(Space.All)&Space.RailRoom)==0,"rail room remains locked");
+            Check(j.GarageDoor.Energy==1 && j.GarageExitDoor.Energy<1 && j.RailRoom.Brightness==0,"full entrance and incomplete exit");
+
+            var platform=j.Platform;
+            p.Teleport(platform.transform.position+Vector3.up*.23f,j.Root.rotation);
+            yield return Wait(()=>p.StandingOn(platform.Deck),"board the stationary floor");
+            var move=VitruvianChecks.Say(b,"floor","move");
+            yield return Wait(()=>j.PlayerSpace==Space.RailRoom && p.StandingOn(platform.Deck),"ride through opening entrance");
+            Check(j.GarageDoor.GetComponentInChildren<ProgressLock>().Unlocked && j.GarageDoor.Clearance>=p.GetComponent<CharacterController>().height,"passable lift unlocks rail room");
+            p.Teleport(j.RailRoom.SafeLanding,j.Root.rotation);
+            yield return Wait(()=>j.GarageDoor.Progress==0,"walk clear to collect from inside");
+            Check(j.SentenceScope()==Space.RailRoom,"closed garage cuts off outer rail");
+            yield return Wait(()=>j.Root.InverseTransformPoint(platform.transform.position).z<j.GarageStart-2,"empty board crosses closed gate");
+            Check(j.GarageDoor.Progress==0,"empty board never trips sensor");
+
+            p.view.LookAt(j.GarageDoor.Leaf.position); p.AdoptCurrentView(); Cursor.lockState=CursorLockMode.Locked;
+            yield return null;
+            Check(e.chamberLight.TryCollect(),"collect from the inner bank");
+            yield return Wait(()=>j.EndingDoor.LessonAcquired && b.Panel.FullyOpen,"shared live light door sentence");
+            Check(j.GarageDoor.Energy==1 && j.GarageExitDoor.Energy>0,"ownership transfers both doors");
+            var lesson=System.Linq.Enumerable.First(b.State.Groups,g=>g.Intent?.Is(SentenceAction.Illuminate,SentenceCapabilityCatalog.Default.door)==true);
+            b.State.ReturnToLibrary(lesson.Id,0,true);
+            yield return Wait(()=>j.GarageDoor.Energy==0 && j.GarageExitDoor.Energy==0,"removing light door extinguishes both frames");
+
+            // Board the returning platform just inside an unpowered entrance.
+            yield return Wait(()=>j.Root.InverseTransformPoint(platform.transform.position).z>j.GarageStart+2.1f &&
+                Vector3.Dot(platform.TravelDirection,j.Root.forward)<0,"board returning inside");
+            p.Teleport(platform.transform.position+Vector3.up*.23f,j.Root.rotation);
+            yield return Wait(()=>p.StandingOn(platform.Deck),"return rider grounded");
+            yield return Wait(()=>Vector3.Dot(platform.TravelDirection,j.Root.forward)>0,"blocked rider and floor reverse together");
+            Check(p.StandingOn(platform.Deck) && j.PlayerSpace==Space.RailRoom && j.GarageDoor.Progress==0,"rider stays aboard inside");
+            b.Panel.SetOpen(false);
+            p.Teleport(j.Root.TransformPoint(new Vector3(0,-2.5f,j.GarageStart+1)),j.Root.rotation);
+            yield return Wait(()=>platform.Respawning,"fall in room trench");
+            yield return Wait(()=>!platform.Respawning,"respawn indoors");
+            Check(Vector3.Distance(p.transform.position,j.RailRoom.SafeLanding)<.35f,"fixed bank respawn");
+            b.Panel.SetOpen(false);
+            VitruvianChecks.Say(b,"light","door");
+            ChargeDoorChecks.PositionAtDoor(e,j.GarageExitDoor,-1);
+            yield return null; yield return null;
+            Check(j.GarageExitDoor.Energy<1 && j.GarageExitDoor.Progress==0,"near an incomplete door");
+            ChargeDoorChecks.PositionAtDoor(e,j.GarageExitDoor,-4);
+            yield return null;
+            var on=VitruvianChecks.Say(b,"positive","light");
+            yield return Wait(()=>b.State.Find(on.Id)==null && j.GarageExitDoor.Energy==1,"fixed cube fills the exit");
+            Check(j.GarageExitDoor.Progress==0 && j.Brightness==0,"charging at a distance leaves both rooms separated");
+            ChargeDoorChecks.PositionAtDoor(e,j.GarageExitDoor,-1);
+            yield return Wait(()=>j.GarageExitDoor.Progress==1,"player opens charged exit");
+            Check((j.SentenceScope()&Space.ApproachPath)!=0 && (j.SentenceScope()&Space.FarRoom)==0,"only walkway joins");
+            float edge=j.RoomStart-RailChargeRoom.LandingDepth-RailChargeRoom.JumpGap;
+            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,edge-.3f)),j.Root.rotation);
+            yield return Wait(()=>p.GetComponent<CharacterController>().isGrounded,"grounded at approach walkway edge");
+            var advance=typeof(FirstPersonController).GetMethod("AdvanceMovement",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+            for(int frame=0;frame<95;frame++){
+                advance.Invoke(p,new object[]{frame<65?Vector2.up:Vector2.zero,true,1f/120,frame==0});
+            }
+            yield return null;
+            Check(j.PlayerSpace==Space.ApproachPath && p.GetComponent<CharacterController>().isGrounded &&
+                j.Root.InverseTransformPoint(p.transform.position).z>j.RoomStart-RailChargeRoom.LandingDepth,"ordinary jump lands on fixed doorstep");
+            yield return Wait(()=>j.EntranceDoor.Progress==1,"doorstep opens far room");
+            ChargeDoorChecks.PositionAtDoor(e,j.EntranceDoor,4);
+            yield return Wait(()=>j.EntranceDoor.Progress==0,"leaving closes far entrance");
+            yield return null;
+            Check(j.SentenceScope()==Space.FarRoom && j.Brightness==0,"far room remains dark and isolates");
+            Check((ProgressLock.Accessible(Space.All)&Space.ApproachPath)!=0,"closing retains previous unlocks");
+            foreach(var words in new[]{new[]{"positive","door"},new[]{"negative","door"},new[]{"door","move"}}){
+                VitruvianChecks.Say(b,words); yield return null; yield return null;
+                Check(j.EntranceDoor.Progress==0 && j.EndingDoor.Lift==0,"manual sentence cannot drive a sensor lift");
+            }
+            Result="PASS: occupied approach, empty rail, onboard reversal, two-sided lesson, power loss, fixed respawn, local lamp, chained unlocks, closed scopes and manual door exclusion";
         }
     }
 }

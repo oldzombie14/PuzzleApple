@@ -46,6 +46,18 @@ namespace PuzzleApple.V5.Editor
             yield return Wait.Wait(()=>!a.Playing,"white flash recovery");
             Check(Time.realtimeSinceStartup-switched>=2.7f && Vector3.Angle(p.view.forward,p.transform.forward)<1,"three-second recovery and level view");
             Check(a.Completed && e.board.State.Groups.Count==0 && !p.CinematicLocked,"completion, cleared workspace and restored control");
+            Check(e.board.Panel.IsOpen,"first arrival opens the vocabulary panel");
+            var dots=library.GetComponentInChildren<LightCapacityDots>(true);
+            var count=dots.transform.Find("Library symbol/Remaining light instances").GetComponent<UnityEngine.UI.Graphic>();
+            yield return Wait.Wait(()=>GameObject.Find("Light transfer"),"centre light transfers into the tile");
+            Check(count.canvasRenderer.GetAlpha()<.01f,"capacity hidden before the transfer");
+            yield return Wait.Wait(()=>GameObject.Find("Light drag prompt") && count.canvasRenderer.GetAlpha()>.99f,"capacity reveal precedes drag hint");
+            var guide=GameObject.Find("Light drag prompt").GetComponent<RectTransform>();
+            var canvas=(RectTransform)guide.GetComponentInParent<Canvas>().rootCanvas.transform;
+            var endpoint=canvas.TransformPoint(canvas.rect.center+Vector2.down*canvas.rect.height*.16f);
+            yield return Wait.Wait(()=>Vector3.Distance(guide.position,endpoint)<5,"guide reaches the lower centre of the world view");
+            e.board.Panel.SetOpen(false);
+            yield return null;
             var marker=e.outdoor.World.IntroWord;var mirror=e.outdoor.World.ChapterWord;
             Check(marker && mirror && marker.Completed && marker.Glow==1 && !mirror.Completed && mirror.Glow==0,"Intro core word glows after completion, Chapter I remains black");
             Check(marker.GetComponentsInChildren<Collider>().Length==0 && mirror.GetComponentsInChildren<Collider>().Length==0,"core words do not obstruct crossings");
@@ -56,7 +68,7 @@ namespace PuzzleApple.V5.Editor
             var a=e.journey.Ascent;
             e.player.Teleport(a.Landing.position+Vector3.up*.4f,a.transform.rotation);
             yield return Wait.Wait(()=>e.outdoor.IsOutside && !a.Playing,"ordinary upper crossing");
-            Check(a.WhiteAmount==0 && !a.Symbol.gameObject.activeSelf,"no second altar");
+            Check(a.WhiteAmount==0 && !a.Symbol.gameObject.activeSelf && !e.board.Panel.IsOpen,"revisit skips altar and tutorial");
         }
         public static void RunStars(){
             var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();

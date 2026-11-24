@@ -241,6 +241,11 @@ namespace PuzzleApple.V5
                 volume.weight=0;flash.gameObject.SetActive(false);p.AdoptCurrentView();
                 p.MovementLocked=move;p.CinematicLocked=look;panel.InputBlocked=input;p.RestoreGameplayCursor();p.SuppressInteractionThisFrame();Playing=false;
             }
+            if(first){
+                panel.SetOpen(true);
+                var library=panel.GetComponent<WordLibrary>();
+                if(library)library.IntroduceLight();
+            }
         }
         void OnDestroy(){
             if(flash)Destroy(flash.gameObject);

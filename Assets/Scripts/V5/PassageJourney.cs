@@ -28,6 +28,7 @@ namespace PuzzleApple.V5
         [Min(8)] public float pathLength=26;
         [Min(0)] public float platformDockGap=.8f;
         [Min(.1f)] public float platformSpeed=2.2f;
+        [Min(.2f)] public float sensorRange=1.75f, sensorLiftSeconds=1.15f;
         public PassagePlatform Platform {get;private set;}
         public Vector3 roomSize=new Vector3(16,8,18);
         [Range(2,24)] public int lampCount=14;
@@ -74,12 +75,19 @@ namespace PuzzleApple.V5
         public bool BeyondChamber {get;private set;}
         public bool InSecondRoom {get;private set;}
         public MoveTutorialRoom Tutorial {get;private set;}
-        public float RoomStart=>Tutorial?Tutorial.ExitZ+pathLength:pathLength;
+        public float GarageStart => Tutorial ? Tutorial.ExitZ + pathLength : pathLength;
+        public float GarageExit => GarageStart + RailChargeRoom.Depth;
+        public float RoomStart => GarageExit + RailChargeRoom.HallLength;
+        public RailChargeRoom RailRoom {get;private set;}
+        public PassageEntranceDoor GarageDoor {get;private set;}
+        public PassageEntranceDoor GarageExitDoor {get;private set;}
+        public bool InRailRoom {get;private set;}
+        public bool InApproach {get;private set;}
         public bool InTutorial {get;private set;}
         public bool InReturnPath {get;private set;}
-        public bool InCorridor=>BeyondChamber&&!InSecondRoom&&!InTutorial;
+        public bool InCorridor=>BeyondChamber&&!InSecondRoom&&!InTutorial&&!InRailRoom;
         public CorridorStars ReturnStars=>secondStars;
-        public CorridorStars ActiveStars=>InReturnPath?secondStars:Stars;
+        public CorridorStars ActiveStars=>InApproach?null:InReturnPath?secondStars:Stars;
         [SerializeField] CorridorStars firstStars, secondStars;
         public float DoorwayLighting {get;private set;}
         public float RoomBloom {get;private set;}
@@ -158,7 +166,9 @@ namespace PuzzleApple.V5
             Tutorial.Build(this, openingHeight,lampInk);
             returnMaterial=new Material(whitePath);
             if(openingEdgeMaterial)returnEdge=new Material(openingEdgeMaterial);
-            BuildPath(Tutorial.ExitZ+.15f, RoomStart-.15f, openingHeight, returnMaterial, returnEdge, true);
+            BuildPath(Tutorial.ExitZ+.15f, GarageStart+RailChargeRoom.TrackDepth, openingHeight, returnMaterial, returnEdge, true);
+            RailRoom=gameObject.AddComponent<RailChargeRoom>();
+            RailRoom.Build(this,openingHeight);
             // The entrance, path, door leaf and destination opening share one size.
             float doorWidth=width,doorHeight=openingHeight;
             doorHinge=new GameObject("Door hinge").transform;
@@ -246,7 +256,9 @@ namespace PuzzleApple.V5
             }
             firstStars.Bind(this, 0, openingHeight, wallThickness, corridorMaterial, doorEdge);
             secondStars.Bind(this, Tutorial.ExitZ, openingHeight, .3f, returnMaterial, returnEdge);
-            EntranceDoor=PassageEntranceDoor.Build(this,doorHinge,Root.Find("Door wall").GetComponent<Renderer>());
+            GarageDoor=PassageEntranceDoor.Build(this,"Rail entrance lift",GarageStart,openingHeight,"RailRoomProgressLock",receivesPlatform:true);
+            GarageExitDoor=PassageEntranceDoor.Build(this,"Rail exit lift",GarageExit,openingHeight,"ApproachPathProgressLock",RailRoom);
+            EntranceDoor=PassageEntranceDoor.Build(this,"Room 3 entrance lift",RoomStart,openingHeight,"RoomEntranceProgressLock");
             ApplyLight();
             SentenceSceneBindings.BindIntro(entry);
         }
@@ -280,7 +292,7 @@ namespace PuzzleApple.V5
             if(!edge)return;
             if(movingFloor)
             {
-                foreach(float end in new[]{Tutorial.ExitZ,RoomStart})
+                foreach(float end in new[]{Tutorial.ExitZ})
                 foreach(float depth in new[]{-.16f,.16f})
                 foreach(float sign in new[]{-1f,1f})
                 {
@@ -306,12 +318,12 @@ namespace PuzzleApple.V5
             foreach(var lamp in lamps)Physics.IgnoreCollision(lamp.GetComponent<SphereCollider>(),player,true);
             if (ignoringDoorPlayer) SetDoorPlayerCollision(true);
         }
-        Renderer Block(string name,Vector3 position,Vector3 size,Material material)
+        internal Renderer Block(string name,Vector3 position,Vector3 size,Material material)
         {
             var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name=name;go.transform.SetParent(Root,false);go.transform.localPosition=position;go.transform.localScale=size;
             var r=go.GetComponent<Renderer>();r.sharedMaterial=material;return r;
         }
-        void RoomBlock(string name,Vector3 p,Vector3 size,Vector3 inward)
+        internal void RoomBlock(string name,Vector3 p,Vector3 size,Vector3 inward)
         {
             var surface=Block(name,p,size,roomMaterial);
             surface.gameObject.layer=29;
@@ -378,7 +390,7 @@ namespace PuzzleApple.V5
             public bool Lit => lit();
         }
         [System.Flags]
-        public enum LightSpace { Chamber=1, FirstPath=2, SphereRoom=4, ReturnPath=8, FarRoom=16, All=543, Outdoor=32, Gallery=64, Garden=128, Vitruvian=256, Ascent=512, ChapterLesson=1024 }
+        public enum LightSpace { Chamber=1, FirstPath=2, SphereRoom=4, ReturnPath=8, FarRoom=16, All=Chamber|FirstPath|SphereRoom|ReturnPath|FarRoom|Ascent|RailRoom|ApproachPath, Outdoor=32, Gallery=64, Garden=128, Vitruvian=256, Ascent=512, ChapterLesson=1024, RailRoom=2048, ApproachPath=4096 }
 
         public LightSpace PlayerSpace {
             get {
@@ -390,6 +402,8 @@ namespace PuzzleApple.V5
                 if(EndingDoor && Root && EndingDoor.OnStairSide(Root.InverseTransformPoint(entry.player.transform.position)))return LightSpace.Ascent;
                 if(InSecondRoom)return LightSpace.FarRoom;
                 if(InTutorial)return LightSpace.SphereRoom;
+                if(InRailRoom)return LightSpace.RailRoom;
+                if(InApproach)return LightSpace.ApproachPath;
                 return InReturnPath?LightSpace.ReturnPath:LightSpace.FirstPath;
             }
         }
@@ -414,6 +428,7 @@ namespace PuzzleApple.V5
             if ((scope & LightSpace.FirstPath)!=0 && firstStars) yield return firstStars;
             if ((scope & LightSpace.SphereRoom)!=0 && Tutorial) yield return Tutorial;
             if ((scope & LightSpace.ReturnPath)!=0 && secondStars) yield return secondStars;
+            if ((scope & LightSpace.RailRoom)!=0 && RailRoom) yield return RailRoom;
             if ((scope & LightSpace.FarRoom)!=0) yield return FarRoom;
             if ((scope & LightSpace.Ascent)!=0 && Ascent && Ascent.Stars)yield return Ascent.Stars;
         }
@@ -458,14 +473,15 @@ namespace PuzzleApple.V5
         }
         public string WordAt(Collider target,float distance)
         {
-            if(EntranceDoor && EntranceDoor.Owns(target) && distance<=doorCollectionDistance)
-                return EntranceDoor.Progress<=0 && Root.InverseTransformPoint(entry.player.view.position).z>RoomStart?null:"door";
+            if(target.GetComponentInParent<PassageEntranceDoor>() && distance<=doorCollectionDistance)
+                return "door";
             if(EndingDoor && target.transform.IsChildOf(EndingDoor.transform) && distance<=doorCollectionDistance && EndingDoor.Owns(target))return "door";
+            if(RailRoom && RailRoom.IsLit(target))return "light";
             if(InTutorial&&Tutorial.IsLit(target))return "light";
             if(target.transform.IsChildOf(doorHinge)&&distance<=doorCollectionDistance)
                 return DoorProgress<=0&&Root.InverseTransformPoint(entry.player.view.position).z>pathLength?null:"door";
             if(Platform && target==Platform.Deck && distance<=7)return "floor";
-            if(distance<=7 && entry.board.State.Knows("floor") && ((floorSurface && floorSurface.Owns(target)) || target.transform==Root.Find("White path") || Tutorial.IsFloor(target)))return "floor";
+            if(distance<=7 && entry.board.State.Knows("floor") && ((floorSurface && floorSurface.Owns(target)) || target.transform==Root.Find("White path") || RailRoom.IsFloor(target) || Tutorial.IsFloor(target)))return "floor";
             if(InSecondRoom&&LampsLit&&target.GetComponent<DriftingLight>())return "light";
             return null;
         }
@@ -476,10 +492,12 @@ namespace PuzzleApple.V5
             {
                 var p=Root.InverseTransformPoint(entry.player.transform.position);
                 BeyondChamber=p.z>chamberBoundary&&(p.z<RoomStart+roomSize.z+1 || EndingDoor && EndingDoor.OnStairSide(p))&&Mathf.Abs(p.x)<(p.z>=pathLength&&p.z<=Tutorial.ExitZ?Tutorial.HalfWidth:roomSize.x*.5f)+1;
-                InSecondRoom=BeyondChamber&&p.z>RoomStart+.3f;
+                InSecondRoom=BeyondChamber&&p.z>=RoomStart;
+                InRailRoom=BeyondChamber&&p.z>=GarageStart&&p.z<GarageExit;
+                InApproach=BeyondChamber&&p.z>=GarageExit&&p.z<RoomStart;
                 if(InSecondRoom)FarRoomMotionOutput?.Introduce(entry.board.State.Knows("move"));
                 InTutorial=BeyondChamber&&p.z>pathLength+.15f&&p.z<Tutorial.ExitZ;
-                InReturnPath=InCorridor&&p.z>=Tutorial.ExitZ;
+                InReturnPath=InCorridor&&!InApproach&&p.z>=Tutorial.ExitZ;
             }
 
             float viewZ=Root.InverseTransformPoint(entry.player.view.position).z;
@@ -487,8 +505,8 @@ namespace PuzzleApple.V5
             CorridorBlend=ViewBeyondChamber?Mathf.SmoothStep(0,1,Mathf.InverseLerp(chamberBoundary,chamberBoundary+2,viewZ)):0;
             float viewDepth=viewZ-RoomStart;
             // The far room is visible along the whole second corridor, so its glow and fog build up over that walk.
-            DoorwayLighting=BeyondChamber?Mathf.SmoothStep(0,1,Mathf.InverseLerp(Tutorial.ExitZ+2-RoomStart,2,viewDepth)):0;
-            if(InReturnPath)DoorwayLighting*=EntranceDoor?Mathf.SmoothStep(0,1,EntranceDoor.Progress):0;
+            DoorwayLighting=BeyondChamber?Mathf.SmoothStep(0,1,Mathf.InverseLerp(GarageExit-RoomStart,2,viewDepth)):0;
+            if(InApproach)DoorwayLighting*=EntranceDoor?Mathf.SmoothStep(0,1,EntranceDoor.Progress):0;
             UpdateDoorSwing();
             // Both doorway faces remain visible while open, regardless of the viewing side.
             foreach(var edge in roomEdges)edge.enabled=DoorProgress>0;
@@ -498,7 +516,7 @@ namespace PuzzleApple.V5
             float sphereRoomBloom = InTutorial ? 1 : 0;
             if (InCorridor)
                 sphereRoomBloom=InReturnPath ? Mathf.SmoothStep(0,1,Mathf.InverseLerp(Tutorial.ExitZ+2,Tutorial.ExitZ,viewZ))
-                    : DoorProgress; // seen through the open door, the sphere room keeps its in-room glow
+                    : InApproach ? 0 : DoorProgress; // seen through the open door, the sphere room keeps its in-room glow
             // Ten bright spheres can overlap in the entrance view. Blend in only a little of the wide lamp bloom.
             RoomBloom=Mathf.MoveTowards(RoomBloom,Mathf.Max(.065f*sphereRoomBloom,DoorwayLighting),Time.unscaledDeltaTime/.8f);
             if(glowVolume){

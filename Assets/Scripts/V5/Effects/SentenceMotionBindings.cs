@@ -28,16 +28,10 @@ namespace PuzzleApple.V5
                 (m,g)=>j.FarRoomMotion.CanMove(m),(g,s)=>!g.Intent.Moves(c.floor,c.light)&&j.Lamps.Count>0&&j.Brightness==0,
                 canTakeLampControl:()=>j.LampsLit,stateSource:j,stateType:typeof(PassageJourney.LampMotionState),emits:()=>j.LampsLit);
             if(j.Ascent&&j.Ascent.Stars)j.Ascent.Stars.MotionOutput=SentenceMotionOutput.Bind(r,j.Ascent.Stars,()=>Space.Ascent,c.position,Drift,(m,g)=>j.Ascent.Stars.CanMove(m),stateType:typeof(AscentStars.MotionState),emits:()=>j.Ascent.Stars.Lit);
-            if(j.Platform)j.Platform.MotionOutput=SentenceMotionOutput.Bind(r,j.Platform,()=>Space.ReturnPath,c.position,m=>m==SentenceMotion.Floor,(m,g)=>true,stateType:typeof(PassagePlatform.RailState));
+            if(j.Platform)j.Platform.MotionOutput=SentenceMotionOutput.Bind(r,j.Platform,()=>Space.ReturnPath|Space.RailRoom,c.position,m=>m==SentenceMotion.Floor,(m,g)=>true,stateType:typeof(PassagePlatform.RailState));
             j.WhiteDoorMotionOutput=SentenceMotionOutput.Bind(r,j.Door,()=>j.WhiteDoorSpaces,c.hinge,Swing,(m,g)=>m==SentenceMotion.Door&&j.CanCycleDoor,stateSource:j.WhiteDoor,stateType:typeof(HingeState));
-            j.EntranceDoor.MotionOutput=SentenceMotionOutput.Bind(r,j.EntranceDoor,()=>j.EntranceDoor.ControlSpaces,c.hinge,Swing,(m,g)=>m==SentenceMotion.Door&&j.EntranceDoor.CanCycle,stateType:typeof(HingeState));
-            j.EndingDoor.MotionOutput=SentenceMotionOutput.Bind(r,j.EndingDoor,()=>j.EndingDoor.ControlSpaces,c.lift,Swing,(m,g)=>m==SentenceMotion.Door&&j.EndingDoor.CanCycle
-                &&(!e.sentenceRuntime.Owns(g,j.EndingDoor.ControlSpaces)||j.EndingDoor.AcceptedCycle(g.Established)),
-                apply:output=>{if(j.EndingDoor)j.EndingDoor.ApplyMotion(output);},stateType:typeof(ChargeDoor.LiftState));
-            j.Platform?.MotionOutput?.BindIllumination(SentenceMotion.Floor,()=>e.sentenceRuntime.Emits(c.floor,Space.ReturnPath));
+            j.Platform?.MotionOutput?.BindIllumination(SentenceMotion.Floor,()=>e.sentenceRuntime.Emits(c.floor,Space.ReturnPath|Space.RailRoom));
             j.WhiteDoorMotionOutput.BindIllumination(SentenceMotion.Door,()=>e.sentenceRuntime.Emits(c.door,j.WhiteDoorSpaces));
-            j.EntranceDoor.MotionOutput.BindIllumination(SentenceMotion.Door,()=>e.sentenceRuntime.Emits(c.door,j.EntranceDoor.ControlSpaces));
-            j.EndingDoor.MotionOutput.BindIllumination(SentenceMotion.Door,()=>j.EndingDoor.DoorGlow>0);
         }
         public static void BindChapter(ChapterRoom room)
         {

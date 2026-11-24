@@ -22,6 +22,10 @@ namespace PuzzleApple.V5
         [Tooltip("Extra per-side spread for sentence stars, in canvas units.")]
         public Vector2 repeatSparklePadding=new Vector2(44,32);
         internal SentenceRuntime runtime;
+        // Refresh while the board is visible, including when the player crosses a space boundary.
+        Dictionary<int,SentenceResponse> visibleResponses=new Dictionary<int,SentenceResponse>();
+        Dictionary<int,SentenceResponse> previousResponses=new Dictionary<int,SentenceResponse>();
+        float nextSample;
         readonly HashSet<int> pulsing=new HashSet<int>();
         readonly HashSet<long> sounded = new HashSet<long>();
         readonly HashSet<long> effective = new HashSet<long>();
@@ -65,14 +69,27 @@ namespace PuzzleApple.V5
             if(texture.width!=Screen.width||texture.height!=Screen.height)Resize();
             output.enabled=board.Panel.IsOpen&&board.Surface.gameObject.activeInHierarchy;
             if(!runtime || board.State==null)return;
+            if(!output.enabled){visibleResponses.Clear();nextSample=0;return;}
+            if(Time.unscaledTime<nextSample)return;
+            nextSample=Time.unscaledTime+.08f;
+            var spare=previousResponses;
+            previousResponses=visibleResponses;
+            visibleResponses=spare;
+            visibleResponses.Clear();
             effective.Clear();
             foreach(var group in board.State.Groups)
             {
-                if (!group.Effective) continue;
+                if(!group.Recognized || !group.Spoken)continue;
                 effective.Add(group.Established);
-                if (!runtime.SustainsFeedback(group)) continue;
-                if(output.enabled && !pulsing.Contains(group.Id))
-                    StartCoroutine(Pulse(group.Id,true,true));
+                if(group.OneShot || (!group.Conflicted && !runtime.Committed(group)))continue;
+                var response=runtime.Response(group);
+                visibleResponses[group.Id]=response;
+                board.SetResponseOpacity(group.Id,WordOpacity(response));
+                if(SentenceRuntime.Responding(response)){
+                    if(!pulsing.Contains(group.Id))StartCoroutine(Pulse(group.Id,response,true));
+                }else if(previousResponses.TryGetValue(group.Id,out var previous) && previous!=response){
+                    StartCoroutine(Pulse(group.Id,response,true));
+                }
             }
             sounded.IntersectWith(effective);
         }
@@ -81,16 +98,26 @@ namespace PuzzleApple.V5
             if (rippleAudio && rippleSound && sounded.Add(group.Established))
                 rippleAudio.PlayOneShot(rippleSound,rippleVolume);
         }
-        public void Play(int groupId,bool strong)
+        static float WordOpacity(SentenceResponse response)=>response==SentenceResponse.Local?1:
+            response==SentenceResponse.Remote?.62f:CognitionBoard.ConflictAlpha;
+        static float RingOpacity(SentenceResponse response)=>response==SentenceResponse.Local?.62f:
+            response==SentenceResponse.Remote?.42f:.25f;
+
+        public void Play(int groupId,bool strong)=>Play(groupId,strong?SentenceResponse.Local:SentenceResponse.NoTarget);
+        internal void Play(int groupId,SentenceResponse response)
         {
+            visibleResponses.Remove(groupId);
             var group = board.State.Find(groupId);
-            if (strong && group!=null && group.Effective) SoundOnce(group);
+            bool responding=SentenceRuntime.Responding(response);
+            if(responding && group!=null && group.Effective)SoundOnce(group);
+            board.SetResponseOpacity(groupId,WordOpacity(response));
             if(!stage||!board.Panel.IsOpen)return;
-            if(strong)StrongCount++;else WeakCount++;
-            StartCoroutine(Pulse(groupId,strong));
+            if(responding)StrongCount++;else WeakCount++;
+            StartCoroutine(Pulse(groupId,response));
         }
-        IEnumerator Pulse(int groupId,bool strong,bool repeat=false)
+        IEnumerator Pulse(int groupId,SentenceResponse response,bool repeat=false)
         {
+            bool strong=SentenceRuntime.Responding(response);
             var rect=board.GroupRect(groupId);if(!rect)yield break;
             var initialGroup=board.State.Find(groupId);
             if(initialGroup==null||!initialGroup.Recognized||(strong&&!initialGroup.Effective))yield break;
@@ -110,7 +137,7 @@ namespace PuzzleApple.V5
                 lines[i]=line;
             }
             float scale=board.GetComponentInParent<Canvas>().scaleFactor;
-            if(strong&&sparklePrefab)
+            if(response!=SentenceResponse.NoTarget&&sparklePrefab)
             {
                 var particles=Instantiate(sparklePrefab,root.transform);
                 var padding=repeatSparklePadding;
@@ -128,7 +155,8 @@ namespace PuzzleApple.V5
             {
                 var group=board.State.Find(groupId);
                 if(!rect||!board.Panel.IsOpen||group==null||group.Established!=established||
-                    !group.Recognized||(strong&&!group.Effective)||(repeat&&!runtime.SustainsFeedback(group)))break;
+                    !group.Recognized||(strong&&!group.Effective))break;
+                if(!group.OneShot && visibleResponses.TryGetValue(groupId,out var current) && current!=response)break;
                 if (ownsPulse && t >= repeatDuration*1.2f)
                 {
                     // Let the next pulse start while this pair of rings finishes fading.
@@ -142,7 +170,7 @@ namespace PuzzleApple.V5
                 {
                     float delay=i*.14f*visualDuration;
                     float u=Mathf.Clamp01((t-delay)/(visualDuration-delay));
-                    float alpha=(strong?.62f:.25f)*Mathf.Sin(Mathf.PI*Mathf.Pow(u,.55f));
+                    float alpha=RingOpacity(response)*Mathf.Sin(Mathf.PI*Mathf.Pow(u,.55f));
                     lines[i].startColor=lines[i].endColor=new Color(.89f,.94f,1,alpha);
                     // Briefly hold the expanded frame before it resumes spreading and fades.
                     const float held = CognitionBoard.HeldRippleExpansion;

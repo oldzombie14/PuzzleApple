@@ -30,7 +30,7 @@ namespace PuzzleApple.V5.Editor
             e.OpenWorld(-1);yield return Until(()=>e.room.Opened && !e.Busy);
             yield return ChargeDoorChecks.UnlockFirstPassage(e);
             j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);
-            j.EntranceDoor.SetOpen(true);yield return Until(()=>j.EntranceDoor.Progress==1);
+            yield return ChargeDoorChecks.ReachRoomThree(e);
             e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart+3)),j.Root.rotation);
             yield return Until(()=>j.InSecondRoom);
             e.sentenceRuntime.presentation.enabledShots=false;
@@ -39,6 +39,7 @@ namespace PuzzleApple.V5.Editor
             yield return Until(()=>j.Brightness==1 && e.chamberLight.Brightness==1);
             float fade=e.chamberLight.fadeDuration,doorDuration=j.doorDuration;
             try{
+                ChargeDoorChecks.ConnectTimingFixture(j,true);
                 e.chamberLight.fadeDuration=10;
                 foreach(bool on in new[]{false,true}){
                     float target=on?1:0;
@@ -84,7 +85,7 @@ namespace PuzzleApple.V5.Editor
                 yield return Until(()=>s.Find(cluster.Id)==null);
                 Check(Time.timeAsDouble-movingAt<1 && !j.FarRoomMotion.CanMove(SentenceMotion.LightToLight),"distant lamp pairs reach spacing before judgement unlocks");
                 Result="PASS: on/off light, star fades, hinge opening, directed descent and clustering finish in the local half-second window";
-            }finally{e.chamberLight.fadeDuration=fade;j.doorDuration=doorDuration;}
+            }finally{ChargeDoorChecks.ConnectTimingFixture(j,false);e.chamberLight.fadeDuration=fade;j.doorDuration=doorDuration;}
         }
         public static void RunFeedback(){
             Result="Running";
@@ -134,36 +135,36 @@ namespace PuzzleApple.V5.Editor
             Check(emission.Value == dim.brightness && !lamp.TransitionEnabled, "retired off command cannot restart a fade");
 
             var journey = entry.journey;
-            var door = journey.EntranceDoor;
+            var door = journey.Door;
             var hinge = door.GetComponents<SentenceEntity>().SelectMany(entity => entity.Outputs)
-                .Single(output => output.Source == door && output.Definition == SentenceCapabilityCatalog.Default.hinge);
+                .Single(output => output.Source == journey.WhiteDoor && output.Definition == SentenceCapabilityCatalog.Default.hinge);
             var swing = hinge.StateSource<HingeState>();
             Check(swing != null, "registered entrance hinge supports restore");
             hinge.Command(true);
             yield return Until(() => hinge.Value > .25f && hinge.Value < .75f);
             hinge.Hold();
             var partial = JsonUtility.FromJson<HingeState>(JsonUtility.ToJson(swing.CaptureState()));
-            var pose = door.transform.localRotation;
+            var pose = door.parent.localRotation;
             hinge.Command(true);
             yield return Until(() => hinge.Value == 1);
             var motor = entry.player.GetComponent<CharacterController>();
             var clearPosition = entry.player.transform.position;
             var clearRotation = entry.player.transform.rotation;
             entry.player.Teleport(journey.Root.TransformPoint(new Vector3(0, .1f,
-                door.transform.localPosition.z + door.Leaf.localPosition.z)), journey.Root.rotation);
+                journey.pathLength)), journey.Root.rotation);
             Physics.SyncTransforms();
             Check(!swing.TryRestoreState(partial) && hinge.Value == 1, "restored closing path respects doorway occupancy");
             entry.player.Teleport(clearPosition, clearRotation);
             Physics.SyncTransforms();
             Check(swing.TryRestoreState(partial) && hinge.Value == partial.progress &&
-                Quaternion.Angle(pose, door.transform.localRotation) < .01f, "restore actual hinge angle");
+                Quaternion.Angle(pose, door.parent.localRotation) < .01f, "restore actual hinge angle");
             yield return null;
-            Check(hinge.Value == partial.progress && !door.Driving &&
-                !Physics.GetIgnoreCollision(door.Leaf.GetComponent<Collider>(), motor), "restored hinge holds and collides");
+            Check(hinge.Value == partial.progress && !journey.DoorTransitionEnabled &&
+                !Physics.GetIgnoreCollision(door.GetComponent<Collider>(), motor), "restored hinge holds and collides");
             Check(!swing.TryRestoreState(new HingeState { progress = 2 }) &&
                 hinge.Value == partial.progress, "invalid hinge state leaves angle intact");
             hinge.Command(false);
-            Check(swing.TryRestoreState(partial) && door.Driving && !door.Open, "restore keeps live closing command");
+            Check(swing.TryRestoreState(partial) && journey.DoorTransitionEnabled && !journey.DoorOpen, "restore keeps live closing command");
             yield return Until(() => hinge.Value == 0);
             yield return OtherIntroStates(journey);
             Result = "PASS: Intro hinge, grouped lamps, corridor and ascent star states, live commands, holds and safe collision";
@@ -260,6 +261,8 @@ namespace PuzzleApple.V5.Editor
                 state.TryAcquireSentence("feedback."+words,words,out var group);
                 yield return null;yield return null;
                 Check(e.feedback.WeakCount==weak+1,"one weak feedback on unavailable "+words);
+                Check(!UnityEngine.Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None).Any(ps=>ps.transform.parent && ps.transform.parent.name=="Sentence grammar ripple"),
+                    "no matching target emits no stars: "+words);
                 yield return new WaitForSecondsRealtime(fade);
                 Check(!e.sentenceRuntime.SustainsFeedback(group) && !Rippling(),"unavailable "+words+" never loops");
                 Check(!state.JudgementLocked && (words=="light move" || !group.Spoken),"unavailable command leaves judgement free: "+words);
@@ -284,7 +287,12 @@ namespace PuzzleApple.V5.Editor
             state.TryAcquireSentence("feedback.multi","light move",out var multi);
             j.SetLights(false,PassageJourney.LightSpace.FarRoom);yield return Until(()=>j.Brightness==0);
             yield return new WaitForSecondsRealtime(fade);
-            Check(j.ReturnStars.Brightness>0 && !e.sentenceRuntime.SustainsFeedback(multi) && !Rippling(),"lit distant stars do not sustain a dark room's feedback");
+            Check(!e.sentenceRuntime.SustainsFeedback(multi) && !Rippling(),"a closed entrance excludes the lit return path");
+            try{
+                ChargeDoorChecks.ConnectTimingFixture(j,true);
+                yield return Until(()=>e.sentenceRuntime.SustainsFeedback(multi) && GameObject.Find("Sentence effect ripple"));
+                Check(j.ReturnStars.Brightness>0 && j.PlayerSpace==PassageJourney.LightSpace.FarRoom,"reconnecting restores remote feedback while the player stays in the dark room");
+            }finally{ChargeDoorChecks.ConnectTimingFixture(j,false);}
             Result="PASS: drafts, unavailable effects, actual sustained motion, darkness, one-shot commands and mixed-space feedback";
         }
         public static void RunDoorSwing()
@@ -608,10 +616,8 @@ namespace PuzzleApple.V5.Editor
                 Check(wall.sharedMaterial.GetFloat("_Brightness")==1,"wall retains dim fill");
                 Check(!j.Root.Cast<Transform>().Any(t=>t.name.StartsWith("Door frame")),"fixed decorative frame absent");
                 Check(j.Root.Cast<Transform>().Count(t=>t.name.Contains("opening")&&t.name.Contains("reveal"))==0,"no widened filament reveal planes");
-                var floor=f.Surface.transform;
-                float dock=floor.localPosition.z-floor.localScale.z*.5f;
-                var gap=j.Root.TransformPoint(new Vector3(0,1,dock-j.platformDockGap*.5f));
-                Check(!Physics.Raycast(gap,-j.Root.up,2,~0,QueryTriggerInteraction.Ignore),"platform leaves an open gap at the far room");
+                var gap=j.Root.TransformPoint(new Vector3(0,1,j.RoomStart-RailChargeRoom.LandingDepth-RailChargeRoom.JumpGap*.5f));
+                Check(!Physics.Raycast(gap,-j.Root.up,2,~0,QueryTriggerInteraction.Ignore),"jump gap before the fixed room-three doorstep");
                 state.ClearWorkspace();state.TryAcquireSentence("check.box.off","negative world");
                 yield return Until(()=>e.room.Progress<.8f);
                 var close=state.Groups.First(g=>g.RuleId=="world.off");

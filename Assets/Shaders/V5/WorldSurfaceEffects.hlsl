@@ -1,6 +1,6 @@
 // Existing Toon Passage door and Impact Floor effects, kept on the shared surface.
 // Their coordinates, timing and property names remain compatible with the controllers.
-float _SurfaceMode,_FrontWhite,_Dissolve,_IsDoorLeaf,_DoorBackBrightness;
+float _SurfaceMode,_FrontWhite,_Dissolve,_IsDoorLeaf,_TwoSidedDoor,_DoorBackBrightness;
 float _CorridorFill;
 float4 _ShadeColor,_ShadowColor,_DoorBackColor;
 float4 _FloorColor,_Impacts[16],_Hole,_RoomBounds;

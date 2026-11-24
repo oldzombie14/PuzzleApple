@@ -99,9 +99,9 @@ namespace PuzzleApple.V5.Outdoor
             var openingCenter=new Vector3((left.max.x+right.min.x)*.5f,(sill.max.y+lintel.min.y)*.5f,(sill.center.z+lintel.center.z)*.5f);
             var pictureCenter=FrameBounds(chapterFrame,chapterFrame.GetComponentInChildren<MeshFilter>()).center;
             IntroWord=new GameObject("Intro core word").AddComponent<ChapterWordMarker>();
-            IntroWord.transform.SetParent(frame,false);IntroWord.Build("light",1.03f,openingCenter);
+            IntroWord.transform.SetParent(frame,false);IntroWord.Build("light",1.03f,openingCenter,stateSource);
             ChapterWord=new GameObject("Chapter I core word").AddComponent<ChapterWordMarker>();
-            ChapterWord.transform.SetParent(chapterFrame,false);ChapterWord.Build("mirror",.64f,pictureCenter);
+            ChapterWord.transform.SetParent(chapterFrame,false);ChapterWord.Build("mirror",.64f,pictureCenter,stateSource);
             // The V5 copies are assets. Runtime cloud projection must never dirty them.
             PrepareResources();
             RenderSettings.sun=sun;RenderSettings.skybox=environment.daySky;

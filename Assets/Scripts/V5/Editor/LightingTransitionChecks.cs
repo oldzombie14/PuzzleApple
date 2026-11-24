@@ -108,16 +108,16 @@ namespace PuzzleApple.V5.Editor
                 p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart+side*4)),j.Root.rotation*Quaternion.Euler(0,side>0?180:0,0));
                 yield return new WaitForSecondsRealtime(1);
                 foreach(bool open in new[]{true,false}){
-                    j.EntranceDoor.SetOpen(open);float previous=-1;
+                    ChargeDoorChecks.PositionAtDoor(e,j.EntranceDoor,side*(open?1:4));float previous=-1;
                     do{
                         yield return new WaitForEndOfFrame();float value=SentenceRuntimeChecks.FrameLuminance(p.view.GetComponent<Camera>());
                         if(previous>=0){float delta=Mathf.Abs(value-previous);MaximumFrameDelta=Mathf.Max(MaximumFrameDelta,delta);
                             if(delta>threshold){Result="FAIL: room entrance swing frame delta "+delta;throw new Exception(Result);}}
                         previous=value;samples++;
-                    }while(j.EntranceDoor.Driving);
+                    }while(j.EntranceDoor.Progress!=(open?1:0));
                 }
             }
-            j.EntranceDoor.SetOpen(true);yield return Wait.Wait(()=>j.EntranceDoor.Progress==1,"entrance ready for bidirectional crossing");
+            ChargeDoorChecks.PositionAtDoor(e,j.EntranceDoor,-1);yield return Wait.Wait(()=>j.EntranceDoor.Progress==1,"entrance ready for bidirectional crossing");
             j.SetDoor(true);yield return Wait.Wait(()=>j.DoorProgress==1,"open white door");
             j.SetLights(false,PassageJourney.LightSpace.Chamber);
             yield return Wait.Wait(()=>e.chamberLight.Brightness==0,"reveal playable chamber entrance");
@@ -134,7 +134,7 @@ namespace PuzzleApple.V5.Editor
             p.Teleport(j.EndingDoor.RoomLanding,j.EndingDoor.transform.rotation);yield return null;
             var gather=VitruvianChecks.Say(e.board,"light","move","door");
             yield return Wait.Wait(()=>e.board.State.Find(gather.Id)==null && j.EndingDoor.Charged,"recharge before sampling the stair doorway");
-            j.EndingDoor.SetOpen(true);yield return Wait.Wait(()=>j.EndingDoor.Lift==1,"open the real stair route");
+            p.Teleport(j.EndingDoor.transform.TransformPoint(new Vector3(0,.08f,j.EndingDoor.LeafZ-1)),j.Root.rotation);yield return Wait.Wait(()=>j.EndingDoor.Lift==1,"open the real stair route");
             yield return Traverse(e,a.transform,new Vector3(0,.1f,-2),new Vector3(0,1.8f,5),"charge door / stair");
             yield return Traverse(e,a.transform,new Vector3(0,a.totalRise*.3f+.1f,2+(a.TopZ-2)*.3f),new Vector3(0,a.totalRise*.7f+.1f,2+(a.TopZ-2)*.7f),"stair black-white blend");
             var folder=UnityEditor.SessionState.GetString("C2C.captureFolder","");

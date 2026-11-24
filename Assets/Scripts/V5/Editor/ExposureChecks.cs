@@ -97,7 +97,7 @@ namespace PuzzleApple.V5.Editor
             e.sentenceRuntime.presentation.enabledShots = false;
             var j = e.journey;
             foreach (var gate in UnityEngine.Object.FindObjectsByType<ProgressLock>(FindObjectsSortMode.None)) gate.Unlock();
-            j.SetDoor(true); j.EntranceDoor.SetOpen(true); j.SetLights(true, PassageJourney.LightSpace.All);
+            j.SetDoor(true); yield return ChargeDoorChecks.ReachRoomThree(e); j.SetLights(true, PassageJourney.LightSpace.All);
             yield return ChargeDoorChecks.Wait(() => j.DoorProgress == 1 && j.EntranceDoor.Progress == 1 && j.Brightness == 1 && e.chamberLight.Brightness == 1, "fully lit fixture");
             foreach (bool boost in new[] { false, true })
             {

@@ -12,7 +12,10 @@ namespace PuzzleApple.V5.Outdoor
         [Tooltip("动态灯共用全局灯的材质与亮度，避免每盏灯复制材质。")]
         public OpeningLight appearanceSource;
         [System.NonSerialized] public bool illuminate = true;
-        [System.NonSerialized] public float localOutput=.7f;
+        public const float OutdoorPointIntensity=.7f, OutdoorPointRange=2.5f;
+        [System.NonSerialized] public float localOutput=OutdoorPointIntensity;
+        public Color LitEmission => emission;
+        public Color LitBaseColor => onColor;
         public Material AppearanceMaterial => runtimeMaterial;
         public bool initiallyOff;
         public Color offColor = Color.black;

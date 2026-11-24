@@ -47,6 +47,6 @@ MonoBehaviour:
   unlockedRegion:
   - {fileID: 11400000, guid: 50e947a7c03295e4ebe6f0c1b2474261, type: 2}
   prerequisiteRegion:
-  - {fileID: 11400000, guid: 01f66dca456a6ab4e83a93d36b531a5e, type: 2}
+  - {fileID: 11400000, guid: 562ec75d1d74438f89eb2348c54b8b21, type: 2}
   boundarySource: {fileID: 0}
   passableProgress: 0.5

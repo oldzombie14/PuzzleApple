@@ -29,6 +29,7 @@ namespace PuzzleApple.V5.Cognition
             public int RejectedAttempts {get; internal set;}
             public bool Spoken { get; internal set; }
             public bool ExecutionLocked { get; internal set; }
+            internal bool FirstSuccessfulAttempt { get; set; }
             internal bool AwaitingRetry { get; set; }
             internal bool OneShot => Intent?.Kind == SentenceKind.Command || Intent?.Kind == SentenceKind.WorldFlow;
             public bool Effective => Recognized && Spoken && !Conflicted;
@@ -68,9 +69,7 @@ namespace PuzzleApple.V5.Cognition
         public bool JudgementLocked => RequirePeriod && groups.Any(g=>g.ExecutionLocked);
         public bool CanPrompt(Group group)
         {
-            if (!RequirePeriod || group == null || group.Spoken || !group.Recognized || JudgementLocked) return false;
-            if (!group.AwaitingRetry) return true;
-            return FindBlocker(group,groups.Where(g=>g.Effective).ToArray()) == null && CanStart(group);
+            return RequirePeriod && group != null && !group.Spoken && group.Recognized && !JudgementLocked;
         }
         bool CanStart(Group group) => !group.OneShot || CanStartCommand == null || CanStartCommand(group);
         public bool HasEffect(CognitionSignal signal) => groups.Any(g => g.Effective && g.Signals.Contains(signal));
@@ -158,6 +157,7 @@ namespace PuzzleApple.V5.Cognition
             var g=Find(groupId);
             if(!RequirePeriod || g==null || !g.Spoken || g.ExecutionLocked)return false;
             g.Spoken=false;
+            g.Conflicted=false;
             g.RejectedAttempts=0;
             Commit(CognitionChange.Split);
             return true;
@@ -166,6 +166,7 @@ namespace PuzzleApple.V5.Cognition
         {
             if(!RequirePeriod)return;
             group.Spoken=false;
+            group.Conflicted=false;
             group.AwaitingRetry=false;
             group.RejectedAttempts=0;
         }
@@ -193,6 +194,18 @@ namespace PuzzleApple.V5.Cognition
             if (groups.Count == 0) return;
             groups.Clear();
             Commit(CognitionChange.Split);
+        }
+        internal void RejectBeforeExecution(Group group)
+        {
+            if(!group.ExecutionLocked || !groups.Contains(group))return;
+            group.ExecutionLocked=false;
+            group.Spoken=false;
+            group.AwaitingRetry=true;
+            if(group.FirstSuccessfulAttempt)
+                history.RemoveAll(h=>h.Effective && h.Words.SequenceEqual(group.words.Select(w=>w.Definition)));
+            RecordAttempt(group);
+            Commit(CognitionChange.Situation);
+            CommandBlocked?.Invoke(group.Id);
         }
         internal void CompleteExecution(Group group, long established)
         {
@@ -298,10 +311,14 @@ namespace PuzzleApple.V5.Cognition
                 {
                     if (!group.ExecutionLocked && (FindBlocker(group,owners)!=null || (group==attempt && !CanStart(group))))
                     {
-                        group.Spoken=false;
-                        group.Established=0;
-                        group.AwaitingRetry=true;
-                        rejected |= group==attempt;
+                        if(group.OneShot){
+                            group.Spoken=false;
+                            group.Established=0;
+                            group.AwaitingRetry=true;
+                            rejected |= group==attempt;
+                        }else{
+                            group.Conflicted=true;
+                        }
                         continue;
                     }
                     group.AwaitingRetry=false;
@@ -347,7 +364,8 @@ namespace PuzzleApple.V5.Cognition
         void RecordAttempt(Group group)
         {
             var words=group.words.Select(w=>w.Definition).ToArray();
-            history.RemoveAll(h=>h.Effective==group.Effective && h.Words.SequenceEqual(words));
+            int removed=history.RemoveAll(h=>h.Effective==group.Effective && h.Words.SequenceEqual(words));
+            group.FirstSuccessfulAttempt=group.ExecutionLocked && removed==0;
             history.Insert(0,new HistoryEntry{Words=words,Effective=group.Effective});
             HistoryVersion++;
         }

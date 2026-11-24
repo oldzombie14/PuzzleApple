@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 
 namespace PuzzleApple.V5.Editor
@@ -38,7 +39,13 @@ namespace PuzzleApple.V5.Editor
         {
             foreach(var noun in new[]{"world","light","door","floor"}){
                 e.board.State.ClearWorkspace();yield return new WaitForSecondsRealtime(1.6f);
-                yield return Shot(e,noun=="floor","light",noun);
+                if(noun=="door" && !e.Entities.QueryEntities(e.journey.PlayerSpace,SentenceCapabilityCatalog.Default.door).Any()){
+                    e.board.Panel.SetOpen(true);yield return Wait(()=>e.board.Panel.FullyOpen,"open editor");
+                    int shots=e.sentenceRuntime.presentation.PlayCount;
+                    var glow=VitruvianChecks.Say(e.board,"light","door");
+                    yield return Wait(()=>e.sentenceRuntime.HasEffect(glow.Signal),"apply door illumination to its region");
+                    Check(e.board.Panel.IsOpen && e.sentenceRuntime.presentation.PlayCount==shots,"no door in this room keeps Tab open");
+                }else yield return Shot(e,noun=="floor","light",noun);
                 int count=e.sentenceRuntime.presentation.PlayCount;
                 VitruvianChecks.Say(e.board,"light",noun);yield return new WaitForSecondsRealtime(.2f);
                 Check(e.sentenceRuntime.presentation.PlayCount==count,"duplicate illumination has no extra shot");
@@ -55,9 +62,15 @@ namespace PuzzleApple.V5.Editor
             e.sentenceRuntime.presentation.enabledShots=true;
             yield return Shot(e,true,"light","world");
             Check(e.sentenceRuntime.MotionFrozen,"non-motion presentation preserves freeze");
+            e.board.State.ClearWorkspace();
+            yield return ChargeDoorChecks.UnlockFirstPassage(e);
+            var j=e.journey;
+            e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength-2)),j.Root.rotation);
+            yield return Wait(()=>j.PlayerSpace==PassageJourney.LightSpace.FirstPath,"enter the white-door space");
+            yield return Shot(e,true,"light","door");
             e.board.State.ClearWorkspace();e.player.MovementLocked=false;
             yield return Wait(()=>e.outdoor.Prepared,"outdoors prepared");
-            e.outdoor.ArriveFromAscent();yield return null;
+            yield return WhiteAscentChecks.Leave(e);
             e.player.MovementLocked=true;
             e.board.Panel.SetOpen(true);yield return Wait(()=>e.board.Panel.FullyOpen,"open outdoor editor");
             var outdoor=e.outdoor.World;float duration=outdoor.environment.transitionDuration;
@@ -69,14 +82,18 @@ namespace PuzzleApple.V5.Editor
             yield return Wait(()=>outdoor.environment.NightBlend==0,"reverse twilight to full day");
             outdoor.environment.transitionDuration=duration;
             e.board.State.ClearWorkspace();e.player.MovementLocked=false;
-            yield return VitruvianChecks.Gallery(e);
+            e.sentenceRuntime.presentation.enabledShots=false;
+            e.board.Panel.SetOpen(false);
+            yield return ChapterChecks.Cross(e,e.outdoor.World.chapterFrame);
+            yield return ChapterLessonChecks.Traverse(e);
+            yield return Wait(()=>e.outdoor.InChapter && !e.outdoor.Transitioning,"enter gallery");
             VitruvianChecks.Say(e.board,"positive","world");yield return Wait(()=>e.outdoor.Chapter.box.Opened&&!e.Busy,"open gallery");
             e.outdoor.Chapter.SetLight(true);e.player.MovementLocked=true;
             yield return new WaitForSecondsRealtime(1.6f);
             e.sentenceRuntime.presentation.enabledShots=true;
             yield return Illuminate(e);
             yield return Shot(e,true,"negative","light");
-            yield return Wait(()=>e.outdoor.Chapter.Brightness==0,"chapter lamps extinguish after interruption");
+            yield return Wait(()=>e.outdoor.Chapter.Brightness==0 && !e.board.State.JudgementLocked,"chapter lamps extinguish and the command releases its period after interruption");
             yield return Shot(e,false,"positive","light");
             e.player.MovementLocked=false;
             Result="PASS: illumination shots in Intro/Chapter, outdoor twilight reversal, unchanged view, deferred effects, normal completion, interruption, duplicate suppression and frozen-world illumination";

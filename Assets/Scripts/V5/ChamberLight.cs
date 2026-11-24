@@ -280,12 +280,12 @@ namespace PuzzleApple.V5
                     litDoor=target.GetComponentInParent<Outdoor.ThresholdDoor>()==world.door && world.doors.appearance.SentenceLit;
                 }else if(entry.journey){
                     var j=entry.journey;
-                    if(j.EndingDoor && j.EndingDoor.Owns(target)){
+                    var sensor=target.GetComponentInParent<PassageEntranceDoor>();
+                    if(sensor || j.EndingDoor && j.EndingDoor.Owns(target)){
                         if(j.EndingDoor.TryCollectLesson())return true;
-                        litDoor=j.EndingDoor.DoorGlow>0;
+                        litDoor=sensor ? sensor.Energy>0 : j.EndingDoor.DoorGlow>0;
                     }else{
-                        var motion=j.EntranceDoor && j.EntranceDoor.Owns(target)?j.EntranceDoor.MotionOutput:j.WhiteDoorMotionOutput;
-                        litDoor=motion?.EmitsLight==true;
+                        litDoor=j.WhiteDoorMotionOutput?.EmitsLight==true;
                     }
                 }
             }
@@ -388,7 +388,7 @@ namespace PuzzleApple.V5
                 panel.SetOpen(true);
                 while(panel.IsOpen&&!panel.FullyOpen)yield return null;
                 if(panel.FullyOpen&&entry.board.State.Find(acquired.Id)==acquired&&acquired.Effective)
-                    entry.feedback.Play(acquired.Id,entry.sentenceRuntime.SustainsFeedback(acquired));
+                    entry.feedback.Play(acquired.Id,entry.sentenceRuntime.Response(acquired));
             }
         }
         void OnDisable()

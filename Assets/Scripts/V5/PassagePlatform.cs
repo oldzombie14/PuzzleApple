@@ -39,7 +39,7 @@ namespace PuzzleApple.V5
             transform.position = destination;
             Physics.SyncTransforms();
         }
-        bool visitedFarRoom, fallingFromTrack;
+        bool visitedGarage, fallingFromTrack, recoverInGarage;
         Coroutine respawn;
         ReticleBackground output;
         public bool Respawning => respawn != null;
@@ -67,6 +67,21 @@ namespace PuzzleApple.V5
             if(travelLength>0 && Time.deltaTime>0 && MotionOutput!=null && MotionOutput.HasMotion(SentenceMotion.Floor))
             {
                 float nextPhase = Mathf.Repeat(travel.phase + journey.platformSpeed * Time.deltaTime, 2 * travelLength);
+                var lift=journey.GarageDoor;
+                if (lift && player.StandingOn(Deck)) {
+                    var capsule=player.GetComponent<CharacterController>();
+                    var centre=journey.Root.InverseTransformPoint(capsule.bounds.center);
+                    float z=nearZ+Mathf.PingPong(travel.phase,travelLength);
+                    float nextZ=nearZ+Mathf.PingPong(nextPhase,travelLength);
+                    float step=nextZ-z, side=centre.z-journey.GarageStart;
+                    // Reflect the rail phase before the rider's leading edge touches the slab.
+                    // The board's own nose can pass under the closed lift.
+                    float clearance=capsule.radius+capsule.skinWidth+.13f;
+                    if (side*step<0 && Mathf.Sign(side)*(side+step)<=clearance &&
+                        lift.Clearance<centre.y+capsule.bounds.extents.y+capsule.skinWidth) {
+                        nextPhase=Mathf.Repeat(2*travelLength-travel.phase+Mathf.Abs(step),2*travelLength);
+                    }
+                }
                 ApplyRailState(new RailState { phase = nextPhase });
             }
 
@@ -74,16 +89,17 @@ namespace PuzzleApple.V5
             if(feet.y>=-.3f)
             {
                 fallingFromTrack=false;
-                if(feet.y>=-.02f && feet.z>journey.RoomStart+.3f && feet.z<journey.RoomStart+journey.roomSize.z &&
-                    Mathf.Abs(feet.x)<journey.roomSize.x*.5f && feet.y<journey.roomSize.y)
-                    visitedFarRoom=true;
+                if(feet.z>=journey.GarageStart && feet.z<journey.GarageExit)visitedGarage=true;
                 return;
             }
             // Remember the fall even if the player steers underneath a threshold on the way down.
-            if(feet.z>=journey.Tutorial.ExitZ-.3f && feet.z<=journey.RoomStart+.3f)fallingFromTrack=true;
+            if(!fallingFromTrack && feet.z>=journey.Tutorial.ExitZ-.3f && feet.z<journey.RoomStart+.15f) {
+                fallingFromTrack=true;
+                recoverInGarage=feet.z>=journey.GarageStart || visitedGarage &&
+                    feet.z-journey.Tutorial.ExitZ > journey.GarageStart-feet.z;
+            }
             if(Respawning||!fallingFromTrack||feet.y>-4)return;
-            bool far=visitedFarRoom && feet.z-journey.Tutorial.ExitZ>journey.RoomStart-feet.z;
-            respawn=StartCoroutine(Respawn(far));
+            respawn=StartCoroutine(Respawn(recoverInGarage));
         }
 
         IEnumerator Respawn(bool far)
@@ -122,8 +138,9 @@ namespace PuzzleApple.V5
         Vector3 LandingPoint(bool far)
         {
             var motor=journey.entry.player.GetComponent<CharacterController>();
-            float doorZ=far?journey.RoomStart:journey.Tutorial.ExitZ;
-            float intoRoom=far?1:-1;
+            if(far)return journey.RailRoom.SafeLanding;
+            float doorZ=journey.Tutorial.ExitZ;
+            const float intoRoom=-1;
             // The moving spheres can occupy the centre of the room 2 doorway.
             for(int row=0;row<3;row++)
                 for(int lane=0;lane<3;lane++)

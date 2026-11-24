@@ -28,13 +28,9 @@ namespace PuzzleApple.V5
                 g => LampHint(g) && (LightStateEffect.Handles(g) ? e.chamberLight.WouldChange(LightStateEffect.Commands(g, true)) : e.chamberLight.CanMove(g.Intent.Motion)),
                 () => e.chamberLight.surface.bounds.center);
             Bind(r, j.Tutorial, Space.SphereRoom, g => LampHint(g) && j.Tutorial.SphereWillChange(g), () => j.Tutorial.Sphere.position);
-            if (j.Platform) Bind(r, j.Platform, Space.ReturnPath, g => g.Intent?.Moves(SentenceCapabilityCatalog.Default.floor) == true, () => j.Platform.Deck.bounds.center);
+            if (j.Platform) Bind(r, j.Platform, Space.ReturnPath | Space.RailRoom, g => g.Intent?.Moves(SentenceCapabilityCatalog.Default.floor) == true, () => j.Platform.Deck.bounds.center);
             Bind(r, j.Door, Space.FirstPath | Space.SphereRoom,
                 g => DoorHint(g, () => j.WhiteDoor.WouldChange(true), () => j.CanCycleDoor), () => j.Door.position);
-            Bind(r, j.EntranceDoor, Space.ReturnPath,
-                g => DoorHint(g, () => j.EntranceDoor.WouldChange(true), () => j.EntranceDoor.CanCycle), () => j.EntranceDoor.Leaf.position);
-            Bind(r, j.EndingDoor, Space.FarRoom | Space.Ascent,
-                g => DoorHint(g, () => j.EndingDoor.WouldChange(true), () => j.EndingDoor.CanCycle), () => j.EndingDoor.Leaf.position);
         }
 
         public static void BindOutdoor(Outdoor.OutdoorWorld world)

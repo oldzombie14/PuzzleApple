@@ -32,7 +32,14 @@ namespace PuzzleApple.V5.Editor
             stars.SetOn(true);
             yield return WaitFor(()=>stars.EmissionLevel>0,"stars relight");
             weak=e.feedback.WeakCount;
-            Check(!state.Speak(gather.Id) && e.feedback.WeakCount==weak+1 && !state.CanPrompt(gather),"occupied output rejects the draft");
+            Check(!state.Speak(gather.Id) && e.feedback.WeakCount==weak+1 && state.CanPrompt(gather),"occupied output leaves an immediately retryable draft");
+            Check(UnityEngine.Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None).Any(ps=>ps.transform.parent && ps.transform.parent.name=="Sentence grammar ripple"),
+                "occupied targets give a dim ripple with stars");
+            var prompt=b.Surface.GetComponentsInChildren<PeriodGlyph>(true).Single(p=>p.name=="Period prompt" && p.group==gather.Id);
+            yield return null;
+            Check(!prompt.gameObject.activeSelf,"the failed attempt finishes its sentence ripple first");
+            yield return WaitFor(()=>prompt.gameObject.activeSelf,"period prompt relights with the same target still occupied");
+            Check(!gather.Spoken && drift.Effective,"relighting a prompt does not retry the command");
             state.Unsay(drift.Id);
             int attempts=state.HistoryVersion;
             yield return WaitFor(()=>state.CanPrompt(gather),"release restores prompt");
@@ -48,6 +55,52 @@ namespace PuzzleApple.V5.Editor
             var unsupported=VitruvianChecks.Say(b,"door","move","floor");
             Check(!unsupported.Spoken && !state.JudgementLocked,"anchored target never locks");
             Result="PASS: dark, conflicting and unsupported targets, explicit retry and global execution lock";
+        }
+        public static void RunSustainedWaiting(){
+            Result="Running";
+            var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
+            e.StartCoroutine(SustainedWaiting(e));
+        }
+        static IEnumerator SustainedWaiting(WorldEntry e){
+            e.OpenWorld(-1);yield return WaitFor(()=>e.room.Opened&&!e.Busy,"open Intro");
+            yield return ChargeDoorChecks.UnlockFirstPassage(e);
+            var j=e.journey;var b=e.board;var state=b.State;var show=e.sentenceRuntime.presentation;
+            j.SetDoor(true);yield return WaitFor(()=>j.DoorProgress==1,"unlock platform");
+            b.Panel.SetOpen(true);yield return WaitFor(()=>b.Panel.FullyOpen,"open editor");
+            var owner=VitruvianChecks.Say(b,"floor","mirror","light");
+            yield return null;yield return null;
+            int weak=e.feedback.WeakCount,shots=show.PlayCount;
+            var waiting=VitruvianChecks.Say(b,"floor","move");
+            long order=waiting.Established;
+            yield return WaitFor(()=>e.feedback.WeakCount>weak,"occupied floor gives one weak pulse");
+            Check(waiting.Spoken && waiting.Conflicted && !waiting.Effective && !j.Platform.MotionOutput.HasMotion(SentenceMotion.Floor),
+                "blocked sustained sentence keeps its period and waits");
+            int attempts=state.HistoryVersion;
+            state.Unsay(owner.Id);
+            yield return WaitFor(()=>j.Platform.MotionOutput.HasMotion(SentenceMotion.Floor),"release starts waiting platform");
+            Check(waiting.Established==order && waiting.Effective && state.HistoryVersion==attempts && show.PlayCount==shots,
+                "release resumes the original utterance without another attempt or shot");
+            state.ClearWorkspace();
+            owner=VitruvianChecks.Say(b,"floor","mirror","light");yield return null;yield return null;
+            waiting=VitruvianChecks.Say(b,"floor","move");
+            Check(waiting.Conflicted && state.Detach(waiting.Id,waiting.Words[1].Id)!=null,"split while waiting");
+            state.Unsay(owner.Id);yield return null;yield return null;
+            Check(!j.Platform.MotionOutput.HasMotion(SentenceMotion.Floor),"removed utterance never resumes");
+            state.ClearWorkspace();
+            var lamp=e.chamberLight;
+            lamp.SetOn(true);yield return WaitFor(()=>lamp.Brightness==1,"lit local target");
+            e.journey.SetLights(false,Space.FirstPath|Space.SphereRoom|Space.ReturnPath|Space.FarRoom);
+            yield return WaitFor(()=>!j.Lights(Space.FirstPath|Space.SphereRoom|Space.ReturnPath|Space.FarRoom).Any(l=>l.WouldChange(false)),"dark remote targets");
+            var command=VitruvianChecks.Say(b,"negative","light");
+            yield return WaitFor(()=>show.Playing,"begin local feedback lead");
+            lamp.HoldCurrentState();
+            Check(lamp.TryRestoreState(new EmissionState(0)),"extinguish and hold the target before dispatch");
+            yield return WaitFor(()=>!state.JudgementLocked && !show.Playing,"lost target releases command");
+            Check(state.Find(command.Id)==command && !command.Spoken && state.CanPrompt(command) && b.Panel.IsOpen,
+                "unstarted command stays editable for manual retry");
+            Check(!state.History.Any(h=>h.Effective && h.Words.SequenceEqual(command.Words.Select(w=>w.Definition))),
+                "a lost target does not leave a false successful history entry");
+            Result="PASS: blocked sustained period, automatic takeover, split while waiting and loss of a one-shot target before dispatch";
         }
         public static void RunChapterConflicts(){
             Result="Running";
@@ -268,29 +321,12 @@ namespace PuzzleApple.V5.Editor
             yield return ChargeDoorChecks.OpenEnding(e);
             var j=e.journey;var d=j.EndingDoor;
             e.player.MovementLocked=true;
-            // All doors are unlocked and charged. Removing only one motion registration must
-            // stop that physical door while the same global sentence remains effective.
+            e.player.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.pathLength-2)),j.Root.rotation);
+            yield return null;
             yield return EndpointPause(e,j.Door,j.WhiteDoorMotionOutput,()=>Vector3.up*j.DoorProgress,"door","move");
-            yield return EndpointPause(e,j.EntranceDoor,j.EntranceDoor.MotionOutput,()=>Vector3.up*j.EntranceDoor.Progress,"door","move");
-            yield return EndpointPause(e,d,d.MotionOutput,()=>Vector3.up*d.Lift,"door","move");
-            var registration=d.GetComponents<SentenceEntity>().Single(entity=>ReferenceEquals(entity.Endpoint,d.MotionOutput));
-            try{
-                registration.enabled=false;yield return null;yield return null;
-                var first=VitruvianChecks.Say(e.board,"door","move");yield return null;yield return null;
-                Check(e.sentenceRuntime.HasEffect(first.Signal)&&!d.AcceptedCycle(first.Established),"unregistered lift does not accept a globally active cycle");
-                registration.enabled=true;
-                yield return ChargeDoorChecks.Wait(()=>d.AcceptedCycle(first.Established),"registration starts the existing local cycle");
-                var duplicate=VitruvianChecks.Say(e.board,"door","move");
-                yield return ChargeDoorChecks.Wait(()=>d.AcceptedCycle(duplicate.Established),"duplicate cycle keeps existing ownership order");
-                Check(d.MotionOutput.Owns(first.Intent.Motion,first.Established)&&d.MotionOutput.Owns(duplicate.Intent.Motion,duplicate.Established),"both equivalent motion owners are retained");
-                e.board.State.ReturnToLibrary(duplicate.Id,0,true);
-                yield return ChargeDoorChecks.Wait(()=>d.AcceptedCycle(first.Established),"remaining cycle resumes ownership after removing duplicate");
-                e.board.State.ClearWorkspace();yield return null;yield return null;
-                float held=d.Lift;yield return new WaitForSeconds(.2f);
-                Check(Mathf.Abs(held-d.Lift)<.001f,"removing the last cycle holds the lift");
-            }finally{registration.enabled=true;}
-            e.player.MovementLocked=false;
-            Result="PASS: local door outputs, disable/resume, registration-gated cycle start, duplicate owner order, remaining-owner takeover and final split hold";
+            foreach (var lift in new Component[]{j.GarageDoor,j.GarageExitDoor,j.EntranceDoor,d})
+                Check(lift.GetComponents<SentenceEntity>().All(entity=>!entity.Outputs.Any()),"proximity lift has no sentence motion actuator");
+            Result="PASS: white hinge responds to motion and all proximity lifts are observational door targets";
         }
         static IEnumerator OutdoorControllers(WorldEntry e)
         {

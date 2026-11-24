@@ -85,10 +85,7 @@ namespace PuzzleApple.V5.Editor
             Check(j.EntranceDoor.Progress==0,"first on door must not chain into the newly unlocked entrance");
             var on=VitruvianChecks.Say(b,"positive","light");yield return Wait(()=>s.Find(on.Id)==null,"light unlocked early rooms");
             Check(j.Brightness==0,"room three remains dark behind its entrance lock");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart-3)),j.Root.rotation);yield return null;
-            e.sentenceRuntime.presentation.enabledShots=true;
-            var entrance=VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(()=>j.EntranceDoor.Progress==1 && s.Find(entrance.Id)==null && !e.sentenceRuntime.presentation.Playing,"open room three through the actual sentence presentation");
+            yield return ChargeDoorChecks.ReachRoomThree(e);
             Check(j.Brightness==0 && d.LightHeld && d.DoorGlow==1 && !d.LessonAcquired,"first reveal has dark lamps and the world-held glowing door");
             yield return new WaitForSecondsRealtime(1);yield return new WaitForEndOfFrame();
             VitruvianChecks.Capture(p,p.view.position,d.Leaf.position,"first-entrance-reveal");
@@ -197,7 +194,7 @@ namespace PuzzleApple.V5.Editor
                 Check(!cube.Docked && j.EndingDoor.Charged,"the obstructed lamp stays undocked while the slab retains its actual charge");
                 yield return Wait(()=>board.Surface.GetComponentsInChildren<PeriodGlyph>().Any(p=>p.group==draft.Id && p.ring),"the existing draft regains its visible period prompt");
                 PeriodChecks.Click(board,draft.Id);
-                yield return Wait(()=>j.EndingDoor.Lift==1 && state.Find(draft.Id)==null,"clicking the original draft opens the charged door");
+                yield return Wait(()=>j.DoorProgress==1 && state.Find(draft.Id)==null,"clicking the original draft opens the white hinge");
                 obstacle.SetActive(false);
                 Physics.SyncTransforms();
                 var stars=((ISentenceOutputState<CorridorStars.FlightState>)j.Stars).CaptureState();
@@ -223,69 +220,16 @@ namespace PuzzleApple.V5.Editor
 
         public static void RunGlobalDoors(){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(GlobalDoors(e));}
         static IEnumerator GlobalDoors(WorldEntry e){
-            e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
-            var j=e.journey;var b=e.board;var s=b.State;var p=e.player;var rt=e.sentenceRuntime;
-            var entrance=j.EntranceDoor;var charge=j.EndingDoor;
-            rt.presentation.enabledShots=false;b.Panel.SetOpen(false);p.MovementLocked=true;
-            var locked=VitruvianChecks.Say(b,"positive","door");
-            Check(s.Find(locked.Id)==locked && !locked.Spoken && !s.JudgementLocked,"unreachable doors leave an editable draft");
-            Check(j.DoorProgress==0 && entrance.Progress==0 && charge.Lift==0,"locked spaces receive no door command");
-            yield return ChargeDoorChecks.UnlockFirstPassage(e);
-            j.SetDoor(true);yield return Wait(()=>j.DoorProgress==1,"unlock room two");
-            entrance.SetOpen(true);yield return Wait(()=>entrance.Progress==1,"unlock room three");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart+3)),j.Root.rotation*Quaternion.Euler(0,180,0));yield return null;
-            var original=j.Door.parent.Find("Round handle").GetComponent<Renderer>();
-            var handle=entrance.transform.Find("Round handle").GetComponent<Renderer>();
-            var a=new MaterialPropertyBlock();var c=new MaterialPropertyBlock();original.GetPropertyBlock(a);handle.GetPropertyBlock(c);
-            Check(handle.sharedMaterial==original.sharedMaterial && c.GetFloat("_RoundOutline")==a.GetFloat("_RoundOutline") && c.GetFloat("_RoundOutline")==1 && c.GetFloat("_CorridorPureWhite")==a.GetFloat("_CorridorPureWhite"),"room three handle copies room two material and runtime shading");
-            rt.presentation.enabledShots=true;var beforeClose=p.view.rotation;
-            var close=VitruvianChecks.Say(b,"negative","door");
-            yield return Wait(()=>rt.presentation.Playing && rt.presentation.CanInterrupt,"global close presentation begins");
-            Check(Quaternion.Angle(p.view.rotation,beforeClose)<.1f,"off door preserves the view");
-            yield return Wait(()=>entrance.Progress<.8f && j.DoorProgress<.8f,"room-side off door closes both eligible doors");
-            Check(charge.Lift==0 && !charge.Charged,"unpowered charge door does not block the other doors");
-            yield return Wait(()=>entrance.Progress==0 && j.DoorProgress==0 && s.Find(close.Id)==null,"global close waits for both doors and retires");
-            rt.presentation.enabledShots=false;
-            Check((j.SentenceScope()&Space.FarRoom)!=0,"closing retains unlocked room three");
-            yield return new WaitForEndOfFrame();
-            VitruvianChecks.Capture(p,handle.bounds.center+entrance.transform.TransformDirection(new Vector3(1,.25f,-1.6f)),handle.bounds.center,"room-three-handle");
-            var open=VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(()=>entrance.Progress==1 && s.Find(open.Id)==null,"on door opens the boundary from room three");
-            Check(j.DoorProgress==0,"the closed entrance excludes the white door at command start");
-            open=VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(()=>j.DoorProgress==1 && s.Find(open.Id)==null,"a new command reaches the reconnected white door");
-            var cycle=VitruvianChecks.Say(b,"door","move");
-            yield return Wait(()=>entrance.Progress<.7f && j.DoorProgress<.7f,"door move reaches both unlocked hinged doors");
-            s.ReturnToLibrary(cycle.Id,0,true);yield return null;yield return null;
-            float white=j.DoorProgress,entry=entrance.Progress;yield return new WaitForSeconds(.2f);
-            Check(j.DoorProgress==white && entrance.Progress==entry,"splitting global door motion holds every door");
-            var on=VitruvianChecks.Say(b,"positive","light");yield return Wait(()=>s.Find(on.Id)==null && j.Brightness==1,"light all unlocked spaces");
-            var gather=VitruvianChecks.Say(b,"light","move","door");yield return null;yield return null;
-            Check(rt.HasEffect(CognitionSignal.LightDoorMove,Space.FirstPath) && rt.HasEffect(CognitionSignal.LightDoorMove,Space.SphereRoom) && rt.HasEffect(CognitionSignal.LightDoorMove,Space.FarRoom),"directed light command covers every eligible space, independently of camera focus");
-            float started=Time.time;
-            string PendingGather(){
-                var scope=rt.EffectScope(gather);
-                var outputs=e.Entities.Query<SentenceMotionOutput>(scope).Where(o=>o.WouldChange(gather,scope) && o.Owns(SentenceMotion.LightToDoor,gather.Established));
-                var remaining=j.CaptureState().lamps.Where(l=>!l.docked).Select(l=>l.slot+" at "+j.Root.InverseTransformPoint(l.pose.position)+" to "+j.Root.InverseTransformPoint(l.doorTarget));
-                return "simulated="+(Time.time-started)+", command active="+(s.Find(gather.Id)!=null)+", charge="+charge.TotalEnergy+
-                    ", stars pending="+j.Stars.NeedsGather+", outputs="+string.Join(", ",outputs.Select(o=>e.Entities.SpacesOf(o)))+
-                    ", undocked="+string.Join(", ",remaining);
-            }
-            yield return Wait(()=>j.Lamps.All(l=>l.Docked) && !j.Stars.NeedsGather && charge.Charged && s.Find(gather.Id)==null,"all local gathering targets finish before command retirement",90,PendingGather);
-            yield return BlockedSlotAndOpen(e);
-            Check(charge.Lift==1 && entrance.Progress==1 && j.DoorProgress==1,"charged slab and both hinged doors all open");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart-.23f)),j.Root.rotation);yield return null;
-            close=VitruvianChecks.Say(b,"negative","door");
-            yield return Wait(()=>charge.Lift==0 && j.DoorProgress==0,"other doors finish while entrance is occupied");
-            Check(entrance.Progress==1 && s.Find(close.Id)!=null,"occupied entrance keeps the shared command alive");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.1f,j.RoomStart+3)),j.Root.rotation*Quaternion.Euler(0,180,0));
-            yield return Wait(()=>entrance.Progress==0 && s.Find(close.Id)==null,"entrance closes from room side after doorway clears");
-            cycle=VitruvianChecks.Say(b,"door","move");
-            yield return Wait(()=>charge.Lift>.2f && entrance.Progress>.2f && j.DoorProgress>.2f,"all three powered doors cycle together");
-            s.ReturnToLibrary(cycle.Id,0,true);yield return null;yield return null;
-            white=j.DoorProgress;entry=entrance.Progress;float slab=charge.Lift;yield return new WaitForSeconds(.2f);
-            Check(white==j.DoorProgress && entry==entrance.Progress && slab==charge.Lift,"splitting holds all three doors");
-            Result="PASS: global door on/off/move, room-side entrance closure, locks retained, unpowered exclusion, multi-target gathering/retirement, doorway guard and matching handle material";
+            yield return ChargeDoorChecks.OpenEnding(e);
+            var j=e.journey;
+            try{
+                ChargeDoorChecks.ConnectTimingFixture(j,true);
+                e.player.Teleport(j.EndingDoor.RoomLanding,j.Root.rotation);
+                j.SetDoor(false);
+                yield return Wait(()=>j.DoorProgress==0 && j.EndingDoor.Lift==0,"prepare manual hinge and charged sensor");
+                yield return BlockedSlotAndOpen(e);
+                Result="PASS: blocked docking releases judgement, manual opening targets the white hinge, retry docks the freed lamp";
+            }finally{ChargeDoorChecks.ConnectTimingFixture(j,false);}
         }
         public static void RunAppearance(){Result="Running";var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();e.StartCoroutine(Appearance(e));}
         static IEnumerator Appearance(WorldEntry e){
@@ -332,112 +276,19 @@ namespace PuzzleApple.V5.Editor
             }
             p.Teleport(world.door.transform.TransformPoint(new Vector3(0,.1f,-9)),world.door.transform.rotation);
             p.view.LookAt(target);p.AdoptCurrentView();yield return new WaitForSecondsRealtime(2);
-            Check(world.IntroWord.emission<=1,"outdoor core word emission stays readable");
+            var tint=new MaterialPropertyBlock();
+            var surface=world.IntroWord.GetComponent<Renderer>();
+            surface.GetPropertyBlock(tint);
+            Check(surface.sharedMaterial==world.stateSource.AppearanceMaterial &&
+                tint.GetColor("_EmissionColor")==world.stateSource.LitEmission &&
+                Mathf.Approximately(world.IntroWord.GetComponentInChildren<Light>().intensity,PuzzleApple.V5.Outdoor.OpeningLight.OutdoorPointIntensity),
+                "completed marker matches a lit outdoor instance");
             yield return new WaitForEndOfFrame();VitruvianChecks.Capture(p,p.view.position,target,"outdoor-door-symbol");
-            Result="PASS: fixed outdoor orientation, restrained symbol emission, dark/lit charge-door views and separated charge rails";
+            Result="PASS: fixed outdoor orientation, lamp-matched symbol emission, dark/lit charge-door views and separated charge rails";
         }
         static IEnumerator Entrance(WorldEntry e){
-            e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");
-            var j=e.journey;var d=j.EntranceDoor;var p=e.player;var b=e.board;var s=b.State;var rt=e.sentenceRuntime;
-            b.Panel.SetOpen(false);rt.presentation.enabledShots=false;p.MovementLocked=true;
-            Check(d && d.Progress==0 && d.transform.localPosition.x>0 && d.Leaf.localPosition.x<0 && d.transform.localScale.x==1,"right hinge mirrors original door with positive collider scale");
-            Check(!j.LightsOn && j.Brightness==0 && j.EndingDoor.DoorGlow==1,"dark room has only the charge door glow");
-            Check(Mathf.Abs(j.EndingDoor.TotalEnergy-.15f)<.001f,"initial energy is .15 before entrance unlock");
-            yield return ChargeDoorChecks.UnlockFirstPassage(e);
-            j.SetDoor(true);yield return Wait(()=>j.DoorProgress==1,"white door unlocks room two");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-5)),j.Root.rotation);yield return null;
-            Check(j.InReturnPath && (j.SentenceScope()&Space.FarRoom)==0,"closed entrance excludes room three");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-1)),j.Root.rotation);Physics.SyncTransforms();
-            p.GetComponent<CharacterController>().Move(j.Root.forward*2);
-            Check(j.Root.InverseTransformPoint(p.transform.position).z<j.RoomStart-.2f,"native character collision blocks the closed entrance");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-5)),j.Root.rotation);yield return null;
-            var on=VitruvianChecks.Say(b,"positive","light");var move=VitruvianChecks.Say(b,"light","move");
-            yield return Wait(()=>s.Find(on.Id)==null,"light command finishes before entrance");
-            Check(j.Brightness==0 && !rt.HasEffect(CognitionSignal.LightMove,Space.FarRoom),"closed gate blocks light commands and motion");
-            s.ClearWorkspace();
-            p.Teleport(j.Tutorial.Fill.transform.position-Vector3.up*4,j.Root.rotation);yield return null;
-            var nearest=VitruvianChecks.Say(b,"positive","door");
-            Check((rt.EffectScope(nearest)&(Space.FirstPath|Space.ReturnPath))==(Space.FirstPath|Space.ReturnPath),"room two controls both unlocked hinged doors");
-            yield return Wait(()=>s.Find(nearest.Id)==null,"room-two opening finishes before testing the next opening");
-            d.SetOpen(false);yield return Wait(()=>d.Progress==0,"reset entrance angle for camera check");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-5)),j.Root.rotation);yield return null;
-            rt.presentation.enabledShots=true;var position=p.transform.position;
-            var open=VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(()=>rt.presentation.Playing,"entrance camera begins");
-            yield return Wait(()=>!rt.presentation.Playing && d.Progress==1 && s.Find(open.Id)==null,"entrance shot finishes after opening");
-            Check(Vector3.Distance(position,p.transform.position)<.05f,"entrance cutscene preserves player position");
-            Check(j.Brightness==0 && j.EndingDoor.DoorGlow==1 && (j.SentenceScope()&Space.FarRoom)!=0,"opening reveals dark room and unlocks room three");
-            Check(Mathf.DeltaAngle(0,d.transform.localEulerAngles.y)<-134,"entrance rotates opposite the first white door");
-            if(!string.IsNullOrEmpty(UnityEditor.SessionState.GetString("C2C.captureFolder","")))
-                VitruvianChecks.Capture(p,p.view.position,j.EndingDoor.Leaf.position,"room-three-first-reveal");
-            rt.presentation.enabledShots=false;
-            var close=VitruvianChecks.Say(b,"negative","door");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-.23f)),j.Root.rotation);yield return null;
-            float held=d.Progress;yield return new WaitForSeconds(.4f);
-            Check(Mathf.Abs(d.Progress-held)<.001f,"entrance closing waits for an occupied doorway");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-5)),j.Root.rotation);
-            yield return Wait(()=>d.Progress==0 && s.Find(close.Id)==null,"closing resumes after player leaves");
-            var gate=d.GetComponentsInChildren<ProgressLock>().Single(boundary=>boundary.BoundarySource==d);
-            Check(gate.Unlocked && !gate.Connected && (j.SentenceScope()&Space.FarRoom)==0,
-                "closed entrance retains progress and separates room three from the corridor");
-            d.SetOpen(true);yield return Wait(()=>d.Progress>.3f,"partial entrance opening");d.Hold();held=d.Progress;
-            p.Teleport(d.Leaf.position-Vector3.up*(d.Leaf.localScale.y*.5f-.08f),j.Root.rotation);yield return null;yield return null;
-            Check(Physics.GetIgnoreCollision(d.Leaf.GetComponent<Collider>(),p.GetComponent<CharacterController>()) && d.Progress==held,"paused overlapping leaf waits before restoring collision");
-            p.Teleport(j.Root.TransformPoint(new Vector3(.5f,.08f,j.RoomStart-1.6f)),j.Root.rotation);yield return null;
-            position=p.transform.position;d.SetOpen(true);yield return Wait(()=>d.Progress==1,"opening passes through the player");
-            Check(Vector3.Distance(position,p.transform.position)<.05f,"opening leaf does not push the player");
-            p.Teleport(j.Root.TransformPoint(new Vector3(0,.08f,j.RoomStart-5)),j.Root.rotation);yield return null;yield return null;
-            Check(!Physics.GetIgnoreCollision(d.Leaf.GetComponent<Collider>(),p.GetComponent<CharacterController>()),"door collision restores once clear");
-            var cycle=VitruvianChecks.Say(b,"door","move");yield return Wait(()=>d.Progress>.3f&&d.Progress<.7f,"entrance cycle begins");
-            var token=s.Detach(cycle.Id,cycle.Words.Last().Id);held=d.Progress;yield return new WaitForSeconds(.3f);
-            Check(Mathf.Abs(held-d.Progress)<.001f,"split entrance cycle holds its angle");
-            var hinge=d.MotionOutput.StateSource<HingeState>();
-            Check(hinge!=null,"hinge motion exposes its physical state");
-            var saved=JsonUtility.FromJson<HingeState>(JsonUtility.ToJson(hinge.CaptureState()));
-            var opposite=saved;
-            opposite.cycleOpening=!saved.cycleOpening;
-            Check(hinge.TryRestoreState(opposite)&&hinge.TryRestoreState(saved) &&
-                hinge.CaptureState().cycleOpening==saved.cycleOpening,"restore held swing direction");
-            s.JoinAndSpeak(token.Id,cycle.Id,false);yield return Wait(()=>Mathf.Abs(held-d.Progress)>.1f,"rejoin resumes entrance motion");
-            Check((d.Progress>held)==saved.cycleOpening,"rejoined motion follows the restored direction");
-            var forced = VitruvianChecks.Say(b,"positive","door");
-            yield return Wait(() => d.Driving && !d.MotionOutput.HasMotion(SentenceMotion.Door), "command takes the shared hinge");
-            float previous = d.Progress;
-            float peak = previous;
-            bool released = false;
-            float deadline = Time.realtimeSinceStartup + 35;
-            while (Time.realtimeSinceStartup < deadline)
-            {
-                yield return null;
-                float current = d.Progress;
-                Check(Mathf.Abs(current - previous) <= Time.deltaTime / Mathf.Max(.01f, j.doorDuration) + .002f,
-                    "handoff never jumps back to the angle before the command");
-                peak = Mathf.Max(peak, current);
-                released |= s.Find(forced.Id) == null && d.MotionOutput.HasMotion(SentenceMotion.Door);
-                if (released && current < previous && current < .8f) break;
-                previous = current;
-            }
-            Check(released && peak > .997f && d.Progress < .8f, "cycle closes from the fully opened hinge");
-
-            yield return Wait(() => d.Progress < .5f && d.Progress > .22f, "closing leg before second command");
-            float closing = d.Progress;
-            var secondOpen = VitruvianChecks.Say(b, "positive", "door");
-            yield return Wait(() => d.Driving && d.Progress > closing + .08f && d.Progress < .98f, "command owns partly opened door");
-            Check(!s.Unsay(secondOpen.Id) && s.Detach(secondOpen.Id,secondOpen.Words.Last().Id)==null, "partial opening refuses period removal and split");
-            b.RemoveToken(secondOpen.Id,secondOpen.Words[0].Id);
-            b.RemoveToken(secondOpen.Id,0,true);
-            Check(secondOpen.ExecutionLocked && s.Find(secondOpen.Id)==secondOpen && secondOpen.Words.Count==2,"right-click leaves the command intact");
-            yield return Wait(() => d.Progress==1, "command reaches full opening despite edit attempts");
-            yield return Wait(() => s.Find(secondOpen.Id)==null && d.MotionOutput.HasMotion(SentenceMotion.Door) && d.Progress<.8f,
-                "sustained cycle resumes closing after command retires");
-            s.ClearWorkspace();held=d.Progress;
-            p.Teleport(j.EndingDoor.RoomLanding,j.EndingDoor.transform.rotation);yield return null;
-            var far=VitruvianChecks.Say(b,"positive","door");yield return Wait(()=>s.Find(far.Id)==null,"all eligible doors finish despite unpowered charge door");
-            Check(d.Progress==1 && j.DoorProgress==1 && j.EndingDoor.Lift==0 && rt.EffectScope(far)==rt.Scope(far),"room three also opens earlier doors without bypassing charge requirements");held=d.Progress;
-            e.RequestExit();yield return Wait(()=>e.DialogReady,"close world preserves entrance");
-            Check(d.Progress==held,"entrance angle survives closure");e.CancelExit();e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"restore world");
-            Check(d.Progress==held && (j.SentenceScope()&Space.FarRoom)!=0,"angle and unlock survive return");
-            Result="PASS: right mirrored entrance, global door scope, fixed camera dark reveal, collision guards, split/resume, command priority and retained state";
+            yield return ConnectivityChecks.Exercise(e);
+            Result=ConnectivityChecks.Result;
         }
         public static IEnumerator Energy(WorldEntry e){
             Result="Running";e.OpenWorld(-1);yield return Wait(()=>e.room.Opened&&!e.Busy,"open Intro");

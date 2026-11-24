@@ -18,11 +18,36 @@ namespace PuzzleApple.V5.Editor
             var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
             Result="Running";e.StartCoroutine(Exercise(e));
         }
-        public static IEnumerator UnlockEntrance(WorldEntry e){
+        public static void PositionAtDoor(WorldEntry e, PassageEntranceDoor door, float distance, float x=0)
+        {
+            e.player.Teleport(door.transform.TransformPoint(new Vector3(x,.08f,distance)),door.transform.rotation);
+        }
+        public static IEnumerator ReachRoomThree(WorldEntry e)
+        {
+            var j=e.journey;
             yield return UnlockFirstPassage(e);
-            var door=e.journey.EntranceDoor;door.SetOpen(true);
-            yield return Wait(()=>door.Progress==1,"unlock room entrance progress");
-            door.SetOpen(false);yield return Wait(()=>door.Progress==0,"close unlocked room entrance");
+            if(!j.Door.GetComponentInChildren<ProgressLock>().Unlocked){
+                j.SetDoor(true);
+                yield return Wait(()=>j.DoorProgress==1,"unlock the rail approach");
+            }
+            PositionAtDoor(e,j.GarageDoor,.9f,j.PathWidth*.5f+.15f);
+            yield return Wait(()=>j.GarageDoor.Progress==1,"garage senses player");
+            PositionAtDoor(e,j.GarageExitDoor,-1);
+            j.RailRoom.SetOn(true);
+            yield return Wait(()=>j.GarageExitDoor.Progress==1,"lit bracket supplies exit lift");
+            PositionAtDoor(e,j.EntranceDoor,-1);
+            yield return Wait(()=>j.EntranceDoor.Progress==1,"approach opens room three");
+        }
+        public static IEnumerator UnlockEntrance(WorldEntry e){
+            yield return ReachRoomThree(e);
+            PositionAtDoor(e,e.journey.EntranceDoor,4);
+            yield return Wait(()=>e.journey.EntranceDoor.Progress==0,"closed room three entrance");
+        }
+        // Cross-space timing fixtures keep the graph connected after physically unlocking the lifts.
+        // The route checks exercise the actual proximity boundaries independently.
+        internal static void ConnectTimingFixture(PassageJourney journey,bool hold){
+            foreach(var lift in new[]{journey.GarageDoor,journey.GarageExitDoor,journey.EntranceDoor})
+                lift.GetComponentInChildren<ProgressLock>().BindBoundary(hold?null:lift);
         }
         public static IEnumerator UnlockFirstPassage(WorldEntry e){
             var gate=UnityEngine.Object.FindFirstObjectByType<WallPassage>().GetComponentsInChildren<ProgressLock>().Single(g=>g.BoundarySource is WallPassage);
@@ -53,9 +78,7 @@ namespace PuzzleApple.V5.Editor
             var roomEdge=floor.TransformPoint(new Vector3(0,.5f,.5f));
             var bridgeEdge=bridge.TransformPoint(new Vector3(0,.5f,-.5f));
             Check(Vector3.Distance(roomEdge,bridgeEdge)<.001f && bridge.GetComponent<Renderer>().sharedMaterial==j.floorSurface.Surface.sharedMaterial,"level floor meets without overlapping the threshold");
-            s.TryAcquireSentence("ending.reject","positive door",out var denied);
-            yield return Wait(()=>s.Find(denied.Id)==null,"entrance opening finishes and the door command retires");
-            Check(j.DoorProgress==0 && j.EntranceDoor.Progress==1 && door.Lift==0,"only the local entrance opens, without recruiting the white door mid-command");
+            Check(j.EntranceDoor.Progress==0 && door.Lift==0,"distant lifts stay closed");
             s.TryAcquireSentence("ending.on","positive light",out var lightOn);
             yield return Wait(()=>j.Brightness==1 && s.Find(lightOn.Id)==null,"lamps lit and light command finished");
             s.TryAcquireSentence("ending.gather","light move door",out var gather);
@@ -69,10 +92,12 @@ namespace PuzzleApple.V5.Editor
             var mark=door.Leaf.Find("Carved light").GetComponent<Renderer>().sharedMaterial;
             yield return Wait(()=>mark.GetColor("_GlyphEmission").maxColorComponent>.28f,"full charge gradually illuminates inscriptions");
             Check(mark.GetColor("_GlyphEmission").maxColorComponent<=.31f,"charged inscription emission stays restrained");
-            Check(door.Lift==0,"full charge does not open");
-            s.TryAcquireSentence("ending.open","positive door",out var opened);
-            yield return Wait(()=>door.Lift==1 && s.Find(opened.Id)==null,"rise and retire");
-            Check(j.DoorProgress==1 && j.EntranceDoor.Progress==1,"earlier doors share the global open command");
+            Check(door.Lift==0,"fully charged door stays closed at a distance");
+            s.TryAcquireSentence("ending.manual","positive door",out var manual);
+            yield return new WaitForSeconds(.2f);
+            Check(door.Lift==0 && !manual.Spoken,"manual command cannot open the charged terminal");
+            p.Teleport(door.transform.TransformPoint(new Vector3(0,.08f,door.LeafZ-1)),door.transform.rotation);
+            yield return Wait(()=>door.Lift==1,"full power and player proximity raise the slab");
         }
         public static void RunApproach(){
             var e=UnityEngine.Object.FindFirstObjectByType<WorldEntry>();
@@ -91,8 +116,8 @@ namespace PuzzleApple.V5.Editor
             Check(!noFloorTarget.Spoken && !s.JudgementLocked,"dark indoor floor has no target and leaves judgement available");
             foreach(var text in new[]{"positive door","negative door"}){
                 bool alreadyOpen=text=="positive door";
-                j.SetDoor(alreadyOpen);j.EntranceDoor.SetOpen(alreadyOpen);
-                yield return Wait(()=>j.DoorProgress==(alreadyOpen?1:0) && j.EntranceDoor.Progress==(alreadyOpen?1:0),"place other doors at the requested state before no-change feedback");
+                j.SetDoor(alreadyOpen);
+                yield return Wait(()=>j.DoorProgress==(alreadyOpen?1:0),"place other doors at the requested state before no-change feedback");
                 int weak=e.feedback.WeakCount,strong=e.feedback.StrongCount;
                 s.TryAcquireSentence("reject."+text,text,out var rejected);
                 yield return Wait(()=>e.feedback.WeakCount>weak,"empty door gives weak feedback "+text);
@@ -126,26 +151,7 @@ namespace PuzzleApple.V5.Editor
         static IEnumerator Controls(WorldEntry e){
             yield return OpenEnding(e);
             var j=e.journey;var d=j.EndingDoor;var p=e.player;var state=e.board.State;
-            state.TryAcquireSentence("ending.cycle","door move",out var cycle);
-            yield return Wait(()=>d.Lift>.3f && d.Lift<.8f,"charged door moves");
-            state.TryAcquireSentence("ending.freeze","negative move",out var freeze);
-            float held=d.Lift;yield return new WaitForSecondsRealtime(.26f);
-            Check(d.Lift==held,"no move freezes door");
-            var travel = d.MotionOutput.StateSource<ChargeDoor.LiftState>();
-            var saved = JsonUtility.FromJson<ChargeDoor.LiftState>(JsonUtility.ToJson(travel.CaptureState()));
-            var lower = saved;
-            lower.lift = .18f;
-            Check(travel.TryRestoreState(lower) && d.Lift == .18f, "restore frozen lift position");
-            yield return null;
-            Check(d.Lift == .18f && travel.TryRestoreState(saved) && d.Lift == held, "restore frozen cycle without reclaiming the command");
-            state.ReturnToLibrary(freeze.Id,0,true);
-            state.TryAcquireSentence("ending.takeover","positive door",out var open);
-            yield return Wait(()=>state.Find(open.Id)==null && d.Lift>.97f,"on completes during cycle");
-            Check(j.DoorProgress>.97f && j.EntranceDoor.Progress>.97f,"on door takes priority over every door cycle");
-            yield return Wait(()=>d.Lift<.72f,"cycle resumes after command");
-            state.ReturnToLibrary(cycle.Id,0,true);yield return null;yield return null;
-            held=d.Lift;yield return new WaitForSecondsRealtime(.25f);
-            Check(Mathf.Abs(held-d.Lift)<.001f,"splitting cycle holds height");
+            var held=d.Lift;
             var lamp=j.Lamps[0];var body=lamp.GetComponent<Rigidbody>();
             e.RequestExit();yield return Wait(()=>e.DialogReady,"off world closes");
             held=d.Lift;float energy=d.TotalEnergy;var location=body.position;
@@ -171,19 +177,21 @@ namespace PuzzleApple.V5.Editor
             }
             yield return Wait(() => !j.Stars.NeedsGather && state.Find(stars.Id) == null,
                 "first corridor stars dock and retire", details: GatherDetails);
-            Result="PASS: charged cycle, command priority and resumption, split, freeze, closed-world idle, white-door star gathering";
+            Result="PASS: powered proximity lift, closed-world idle and white-door star gathering";
         }
         static IEnumerator Exercise(WorldEntry e){
             yield return OpenEnding(e);
             var d=e.journey.EndingDoor;var s=e.board.State;var p=e.player;
             p.Teleport(d.transform.TransformPoint(new Vector3(0,.08f,d.LeafZ+.14f)),d.transform.rotation);
-            s.TryAcquireSentence("ending.lower","negative door",out var close);
-            yield return Wait(()=>d.Stunned,"slab stuns while closing");
-            yield return Wait(()=>!d.Stunned && s.Find(close.Id)==null,"stair-side respawn and command retirement");
-            Check(d.transform.InverseTransformPoint(p.transform.position).z>d.LeafZ,"respawn stays on stair side");
-            p.Teleport(d.RoomLanding,d.transform.rotation);yield return null;
-            s.TryAcquireSentence("ending.reopen","positive door",out var open);
-            yield return Wait(()=>d.Lift==1 && s.Find(open.Id)==null,"reopen");
+            yield return new WaitForSeconds(.2f);
+            Check(d.Lift==1 && !d.Stunned,"powered doorway stays open around its occupant");
+            s.TryAcquireSentence("ending.close","negative door",out var manual);
+            yield return new WaitForSeconds(.25f);
+            Check(d.Lift==1 && !manual.Spoken,"manual close cannot override occupied sensor");
+            p.Teleport(d.RoomLanding,d.transform.rotation);
+            yield return Wait(()=>d.Lift==0,"stepping away lowers the slab");
+            p.Teleport(d.transform.TransformPoint(new Vector3(0,.08f,d.LeafZ-1)),d.transform.rotation);
+            yield return Wait(()=>d.Lift==1,"approaching opens it again");
             p.Teleport(d.transform.TransformPoint(new Vector3(0,.08f,d.LeafZ-.14f)),d.transform.rotation);
             p.MovementLocked=true;
             s.TryAcquireSentence("ending.drain","light move",out var drift);
@@ -195,7 +203,7 @@ namespace PuzzleApple.V5.Editor
             Check(!d.TryRestoreState(unsafeDrop) && d.Lift == falling.lift, "restoring a lower slab cannot sweep through the player");
             yield return Wait(()=>d.Stunned,"fall impact");yield return Wait(()=>!d.Stunned && d.Lift==0,"room-side respawn");
             Check(d.transform.InverseTransformPoint(p.transform.position).z<d.LeafZ && s.Find(drift.Id)==drift,"correct side and continuous sentence survives");
-            Result="PASS: rejects empty door, gathering and parking, total energy, controlled lift and closure, power loss, impacts and both respawn sides";
+            Result="PASS: rejects empty door, gathering and parking, total energy, proximity lift and closure, manual exclusion, power loss, impact and room-side respawn";
         }
     }
 }

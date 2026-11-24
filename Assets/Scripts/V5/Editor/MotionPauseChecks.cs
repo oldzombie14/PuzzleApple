@@ -30,7 +30,6 @@ namespace PuzzleApple.V5.Editor
                 Check(heading.sqrMagnitude>1e-6f,label+" starts moving before pause "+reason+
                     " (effective="+group.Effective+", scope="+entry.sentenceRuntime.EffectScope(group)+
                     ", applied="+entry.sentenceRuntime.HasEffect(group.Signal)+", charge="+entry.journey.EndingDoor.Charged+
-                    ", cycle="+entry.journey.EndingDoor.AcceptedCycle(group.Established)+", driving="+entry.journey.EndingDoor.Driving+
                     ", lift="+entry.journey.EndingDoor.Lift+")");
                 if (group.ExecutionLocked && reason != 1) {
                     Check(state.Detach(group.Id,group.Words[1].Id)==null && !state.Unsay(group.Id),label+" rejects edits during travel");
@@ -144,8 +143,12 @@ namespace PuzzleApple.V5.Editor
             yield return new WaitForSeconds(.15f);
             var hovered = roomLights.CaptureState().lamps.Single(l => l.slot == anchor.slot);
             Check(hovered.dockTime > anchor.dockTime && hovered.dockPosition == anchor.dockPosition, "hover advances from saved phase");
-            var slab=e.journey.EndingDoor;slab.lowerSeconds=slab.riseSeconds=6;
-            yield return Probe(e,"door move","charged door",()=>Vector3.up*slab.Lift);
+            var slab=e.journey.EndingDoor;
+            var freeze=VitruvianChecks.Say(e.board,"negative","move");
+            float held=slab.Lift;
+            yield return new WaitForSecondsRealtime(.2f);
+            Check(slab.Lift==held,"sensor lift remains at its current height while frozen");
+            e.board.State.ReturnToLibrary(freeze.Id,0,true);
             e.outdoor.ArriveFromAscent();yield return null;
             var world=e.outdoor.World;var origin=world.transform.position;
             At(e,origin+Vector3.forward*12+Vector3.up*.2f,Quaternion.identity);

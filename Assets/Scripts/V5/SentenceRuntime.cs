@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using PuzzleApple.V5.Cognition;
 using UnityEngine;
+using Space=PuzzleApple.V5.PassageJourney.LightSpace;
 
 namespace PuzzleApple.V5
 {
+    internal enum SentenceResponse { NoTarget, Waiting, Remote, Local }
+
     // Requested grammar and applied effects are separate so presentation can defer new
     // changes without stopping already-running effects. A split always commits immediately.
     public sealed class SentenceRuntime : MonoBehaviour
@@ -159,8 +162,12 @@ namespace PuzzleApple.V5
             int version=++revision;
             presentation.Cancel();
             if(!entry.Entered)return;
-            foreach(var id in newConflicts)StartCoroutine(ConflictPulse(id,version));
+            if(kind==CognitionChange.Add || kind==CognitionChange.Join)
+                foreach(var id in newConflicts)StartCoroutine(ConflictPulse(id,version));
             // A world-close sequence owns the exit UI; it monitors its own sentence.
+            if(state.RequirePeriod && pendingTakeovers.Count>0 && added.All(g=>pendingTakeovers.ContainsKey(g.Id))){
+                Commit(groups,added,kind);return;
+            }
             if(pendingTakeovers.Count>0&&!entry.ConfirmingExit)
             {
                 // Stop the displaced effects at their current values while the new sentence is shown.
@@ -180,7 +187,7 @@ namespace PuzzleApple.V5
         IEnumerator ConflictPulse(int id,int version)
         {
             yield return null;
-            if(version==revision&&entry.board.State.Find(id)?.Conflicted==true)entry.feedback.Play(id,false);
+            if(version==revision&&entry.board.State.Find(id)?.Conflicted==true)entry.feedback.Play(id,UnexecutedResponse(entry.board.State.Find(id)));
         }
         IEnumerator Present(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind,int version)
         {
@@ -192,67 +199,83 @@ namespace PuzzleApple.V5
             CognitionState.Group shot=null;
             foreach(var g in added)
             {
-                bool changed=VisibleChange(g);
-                if(!WorldFlow(g))entry.feedback.Play(g.Id,changed);
-                if(changed&&shot==null&&presentation.HasShot(g))shot=g;
+                if(WorldFlow(g))continue; // The box owns its camera and feedback.
+                var response=Response(g,starting:true);
+                entry.feedback.Play(g.Id,response);
+                if(response==SentenceResponse.Local&&shot==null&&presentation.HasShot(g))shot=g;
             }
             if(shot!=null&&!entry.Busy)
                 yield return presentation.Play(shot.RuleId,()=>{if(version==revision)Commit(groups,added,kind);},Kind(shot)==SentenceKind.Command?shot:null,shot);
             else Commit(groups,added,kind);
         }
-        bool VisibleChange(CognitionState.Group g)
+        internal bool Committed(CognitionState.Group group)=>
+            previous.TryGetValue(group.Id,out var rule) && rule==group.RuleId;
+
+        internal SentenceResponse Response(CognitionState.Group group,bool starting=false)
         {
-            if(MotionFrozen&&Motion(g))return false;
-            var region=EffectScope(g);
-            if(g.Intent?.Action==SentenceAction.Legacy){
-                if(g.Signals.All(s=>appliedScopes.TryGetValue(s,out var active) && (active&region)==region))return false;
-            }else if(appliedIntents.Any(a=>a.intent.SameMeaning(g.Intent)&&(a.scope&region)==region))return false;
-            return g.Intent?.Action==SentenceAction.Move?motion.CanMove(g,region,true):HasSceneEffect(g);
+            var scope=EffectScope(group);
+            var local=scope & entry.journey.PlayerSpace;
+            bool moving=group.Intent?.Action==SentenceAction.Move;
+            bool responds=group.Effective && (!Motion(group) || !MotionFrozen);
+            if(responds && !moving){
+                // One shared effect has one feedback owner, including while a copy is being added.
+                responds=!entry.board.State.Groups.Any(other=>other!=group && other.Effective &&
+                    other.RuleId==group.RuleId && other.Established<group.Established &&
+                    (EffectScope(other)&scope)==scope);
+            }
+            bool Active(Space region){
+                if(region==0)return false;
+                if(moving && !starting && !group.OneShot)
+                    return motion.OwnsVisibleMotion(group,region);
+                if(moving)return motion.CanMove(group,region,starting);
+                return HasSceneEffect(group,region);
+            }
+            if(responds && Active(local))return SentenceResponse.Local;
+            if(responds && Active(scope & ~local))return SentenceResponse.Remote;
+            return HasPotential(group,scope)?SentenceResponse.Waiting:SentenceResponse.NoTarget;
         }
 
-        public bool SustainsFeedback(CognitionState.Group g)
+        internal SentenceResponse UnexecutedResponse(CognitionState.Group group)=>
+            HasPotential(group,EffectScope(group))?SentenceResponse.Waiting:SentenceResponse.NoTarget;
+
+        bool HasPotential(CognitionState.Group group,Space scope)
         {
-            if(Kind(g)!=SentenceKind.Sustained || (g.Intent?.Scope!=SentenceScopePolicy.Global && (Scope(g)&entry.journey.PlayerSpace)==0))return false;
-            if(g.Intent?.Action==SentenceAction.Move)
-                return g.Effective && entry.Entered && !MotionFrozen && motion.OwnsVisibleMotion(g,EffectScope(g)&entry.journey.PlayerSpace);
-            if(Motion(g) && !motion.CanMove(g,EffectScope(g)&entry.journey.PlayerSpace))return false;
-            return EffectInProgress(g);
+            if(group.Intent?.Action==SentenceAction.Move)return entry.Entities.Query<SentenceMotionOutput>(scope)
+                .Any(output=>output.HasPotentialTarget(group));
+            if(DoorStateEffect.Handles(group))return entry.Entities.QueryOutputs(scope,group.Intent.StateProperty)
+                .Any(output=>output.WouldChange(DoorStateEffect.Commands(group,true)));
+            if(WorldFlow(group))return entry.CanStartWorldCommand(group.Intent.Action==SentenceAction.On);
+            return HasSceneEffect(group,scope);
         }
 
-        bool EffectInProgress(CognitionState.Group g)
-        {
-            if(!g.Effective || !entry.Entered)return false;
-            if(MotionFrozen&&Motion(g))return false;
-            if(WorldFlow(g))return entry.RunningWorldCommand(g.Id);
-            if(!previous.TryGetValue(g.Id,out var rule)||rule!=g.RuleId || (g.Intent?.Action == SentenceAction.Legacy && g.Signals.Count == 0))return false;
-            // One applied effect has one feedback owner. A surviving duplicate can take over.
-            var region=EffectScope(g);
-            foreach(var other in entry.board.State.Groups)
-                if(other.Effective && other.RuleId==rule && other.Established<g.Established && (EffectScope(other)&region)==region)return false;
-            return HasSceneEffect(g);
-        }
+        public bool SustainsFeedback(CognitionState.Group g)=>
+            !g.OneShot && g.Effective && Committed(g) && Responding(Response(g));
+
+        internal static bool Responding(SentenceResponse response)=>
+            response==SentenceResponse.Local || response==SentenceResponse.Remote;
+
         bool CanStartCommand(CognitionState.Group group)
         {
             if (!entry.Entered || (MotionFrozen && (Motion(group) || WorldFlow(group)))) return false;
             if (WorldFlow(group)) return entry.CanStartWorldCommand(group.Intent.Action==SentenceAction.On);
-            return HasSceneEffect(group);
+            return HasSceneEffect(group,EffectScope(group));
         }
 
-        bool HasSceneEffect(CognitionState.Group g)
+        bool HasSceneEffect(CognitionState.Group g,Space scope)
         {
+            if(scope==0)return false;
             if(g.Intent?.Action==SentenceAction.Freeze)return true;
-            if(LightStateEffect.Handles(g))return lightState.WouldChange(g);
-            if(DoorStateEffect.Handles(g))return doorState.WouldChange(g);
-            if(entry.outdoor && entry.outdoor.InLesson && entry.outdoor.Lesson.HandlesMirror(g.Signal))
+            if(LightStateEffect.Handles(g))return lightState.WouldChange(g,scope);
+            if(DoorStateEffect.Handles(g))return doorState.WouldChange(g,scope);
+            if(entry.outdoor && (scope&Space.ChapterLesson)!=0 && entry.outdoor.InLesson && entry.outdoor.Lesson.HandlesMirror(g.Signal))
                 return entry.outdoor.Lesson.MirrorWouldChange(g.Signal);
             if(g.Signal==CognitionSignal.MirrorCopy || g.Signal==CognitionSignal.MirrorMove){
                 var pass=entry.outdoor;
-                var room=(Scope(g)&PassageJourney.LightSpace.Gallery)!=0?pass.Chapter:
-                    (Scope(g)&PassageJourney.LightSpace.Vitruvian)!=0?pass.Vitruvian:null;
-                return room && room.mirrors && room.mirrors.HasTargets;
+                return pass && ((scope&Space.Gallery)!=0 && pass.Chapter && pass.Chapter.mirrors && pass.Chapter.mirrors.HasTargets ||
+                    (scope&Space.Vitruvian)!=0 && pass.Vitruvian && pass.Vitruvian.mirrors && pass.Vitruvian.mirrors.HasTargets);
             }
-            if(MotionEffect.Handles(g))return motion.CanMove(g);
-            if(IlluminationEffects.Handles(g))return illumination.WouldChange(g);
+            if(MotionEffect.Handles(g))return motion.CanMove(g,scope);
+            if(IlluminationEffects.Handles(g))return illumination.WouldChange(g,scope);
             return false;
         }
         const float CommandFinishSeconds=.5f;
@@ -301,7 +324,7 @@ namespace PuzzleApple.V5
             if(Motion(group))return MotionFrozen || motion.CanMove(group,local);
             if(LightStateEffect.Handles(group))return lightState.Settling(group,local);
             if(DoorStateEffect.Handles(group))return doorState.WouldChange(group,local);
-            return EffectInProgress(group);
+            return HasSceneEffect(group,local);
         }
         IEnumerator Retire(CognitionState.Group group,long established)
         {
@@ -327,6 +350,11 @@ namespace PuzzleApple.V5
         int committedRevision;
         void Commit(CognitionState.Group[] groups,CognitionState.Group[] added,CognitionChange kind)
         {
+            if(entry.board.State.RequirePeriod){
+                // The camera lead can outlast a target or a connection. Release an unstarted command for a manual retry.
+                var unavailable=added.FirstOrDefault(g=>g.ExecutionLocked && !Committed(g) && !CanStartCommand(g));
+                if(unavailable!=null){entry.board.State.RejectBeforeExecution(unavailable);return;}
+            }
             committedRevision=revision;
             previous.Clear();foreach(var g in groups)previous[g.Id]=g.RuleId;
             foreach(var g in groups)pendingTakeovers.Remove(g.Id);

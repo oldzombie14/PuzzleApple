@@ -17,15 +17,18 @@ namespace PuzzleApple.V5
             j.Tutorial.LightOutput=BindLight(registry, j.Tutorial, j.Tutorial, () => Space.SphereRoom, () => j.Tutorial.SphereBrightness, stateType:typeof(MoveTutorialRoom.LightState));
             j.Tutorial.RegisterSentenceSubjects(registry,j.Tutorial.LightOutput);
             j.ReturnStars.LightOutput=BindLight(registry, j.ReturnStars, j.ReturnStars, () => Space.ReturnPath, () => j.ReturnStars.Brightness, () => j.ReturnStars.EmissionLevel > 0, stateType:typeof(CorridorStars.LightState));
+            j.RailRoom.LightOutput=BindLight(registry,j.RailRoom,j.RailRoom,()=>Space.RailRoom,()=>j.RailRoom.Brightness,stateType:typeof(EmissionState));
             j.FarLightOutput=BindLight(registry, j.Root, j.FarRoom, () => Space.FarRoom, () => j.Brightness, stateType:typeof(EmissionState));
             foreach (var lamp in j.Lamps) BindLightSubject(registry, lamp, () => Space.FarRoom, () => j.Brightness,j.FarLightOutput);
             if (j.Ascent && j.Ascent.Stars)
                 j.Ascent.Stars.LightOutput=BindLight(registry, j.Ascent.Stars, j.Ascent.Stars, () => Space.Ascent, () => j.Ascent.Stars.Brightness, () => j.Ascent.Stars.Lit, stateType:typeof(EmissionState));
             var catalog = SentenceCapabilityCatalog.Default;
             j.WhiteDoorOutput=BindDoor(registry, j.Door, j.WhiteDoor, () => j.WhiteDoorSpaces, catalog.hinge, () => j.DoorProgress, open => j.DoorProgress != (open ? 1 : 0), stateType:typeof(HingeState));
-            j.EntranceDoor.DoorOutput=BindDoor(registry, j.EntranceDoor, j.EntranceDoor, () => j.EntranceDoor.ControlSpaces, catalog.hinge, () => j.EntranceDoor.Progress, stateType:typeof(HingeState));
-            j.EndingDoor.DoorOutput=BindDoor(registry, j.EndingDoor, j.EndingDoor, () => j.EndingDoor.ControlSpaces, catalog.lift, () => j.EndingDoor.Lift, j.EndingDoor.CommandSettling, stateType:typeof(ChargeDoor.LiftState),
-                commandAccepted:() => j.EndingDoor.Driving);
+            foreach(var lift in new[]{j.GarageDoor,j.GarageExitDoor,j.EntranceDoor})
+                SentenceEntity.Bind(registry,lift,lift,()=>lift.ControlSpaces).WithProperty(catalog.door)
+                    .WithProperty(catalog.light,()=>lift.Energy>0);
+            SentenceEntity.Bind(registry,j.EndingDoor,j.EndingDoor,()=>j.EndingDoor.ControlSpaces)
+                .WithProperty(catalog.door).WithProperty(catalog.light,()=>j.EndingDoor.DoorGlow>0);
             SentenceMotionBindings.BindIntro(entry);
             SentenceFocusBindings.BindIntro(entry);
         }

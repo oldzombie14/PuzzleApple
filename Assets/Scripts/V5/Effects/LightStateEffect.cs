@@ -17,7 +17,9 @@ namespace PuzzleApple.V5
             var catalog = SentenceCapabilityCatalog.Default;
             return entry.Entities.QueryOutputs(entry.sentenceRuntime.EffectScope(g), g.Intent.StateProperty, catalog.emission);
         }
-        public bool WouldChange(CognitionState.Group g)=>Targets(g).Any(l=>l.WouldChange(Commands(g,true)));
+        public bool WouldChange(CognitionState.Group g,PassageJourney.LightSpace scope)=>
+            entry.Entities.QueryOutputs(scope,g.Intent.StateProperty,SentenceCapabilityCatalog.Default.emission)
+                .Any(output=>output.WouldChange(Commands(g,true)));
         public bool Settling(CognitionState.Group g,PassageJourney.LightSpace scope)=>
             entry.Entities.QueryOutputs(scope,g.Intent.StateProperty,SentenceCapabilityCatalog.Default.emission)
                 .Any(output=>output.Settling(Commands(g,true)));

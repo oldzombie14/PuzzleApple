@@ -1,7 +1,7 @@
 #ifndef PUZZLE_APPLE_SENTENCE_GLOW
 #define PUZZLE_APPLE_SENTENCE_GLOW
 float4x4 _P5JourneyInverse;
-float4 _P5SpaceEnds, _P5GardenPlane, _P5VitruvianCentre, _P5VitruvianExtents, _P5SpaceSentenceGlow[11];
+float4 _P5SpaceEnds, _P5GarageEnds, _P5GardenPlane, _P5VitruvianCentre, _P5VitruvianExtents, _P5SpaceSentenceGlow[13];
 float _P5ChapterMode, _P5AscentStart;
 int SentenceSpace(float3 world)
 {
@@ -11,6 +11,7 @@ int SentenceSpace(float3 world)
     if (_P5ChapterMode > .5) return 5;
     float z = mul(_P5JourneyInverse,float4(world,1)).z;
     if (z >= _P5AscentStart) return 9;
+    if (z >= _P5GarageEnds.x && z < _P5SpaceEnds.w) return z < _P5GarageEnds.y ? 11 : 12;
     return z < _P5SpaceEnds.x ? 0 : z < _P5SpaceEnds.y ? 1 : z < _P5SpaceEnds.z ? 2 : z < _P5SpaceEnds.w ? 3 : 4;
 }
 float SurfaceLightBoost(float4 levels) { return 1 + .25*smoothstep(0,1,levels.w); }

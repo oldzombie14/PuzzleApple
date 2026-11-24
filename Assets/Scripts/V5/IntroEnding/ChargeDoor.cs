@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace PuzzleApple.V5
 {
-    public sealed class ChargeDoor : MonoBehaviour, ISwitchableDoor, IProgressBoundary, ISentenceOutputState<ChargeDoor.LiftState>
+    public sealed class ChargeDoor : MonoBehaviour, IProgressBoundary, ISentenceOutputState<ChargeDoor.LiftState>
     {
         [Min(.1f)] public float width=3.6f,height=3.8f;
         [Min(.01f)] public float chargeRate=.19f,decayRate=.12f,bonus=1.5f;
@@ -19,7 +19,7 @@ namespace PuzzleApple.V5
         [Min(0)] public float railGap=.18f;
         public Color fullWarmColor=new Color(1,.90f,.85f);
         public Transform Leaf {get;private set;}
-        LiftState travel = new LiftState {cyclingUp = true, fallTime = -1};
+        LiftState travel = new LiftState {fallTime = -1};
         public float Lift
         {
             get => travel.lift;
@@ -61,7 +61,6 @@ namespace PuzzleApple.V5
         public struct LiftState
         {
             public float lift, fallTime, fallFrom;
-            public bool cyclingUp;
         }
         public LiftState CaptureState() => travel;
         public bool TryRestoreState(LiftState state)
@@ -74,7 +73,6 @@ namespace PuzzleApple.V5
             float next = falling ? state.lift : Mathf.SmoothStep(0, 1, state.lift);
             if (next < SlabFraction && PlayerInDescent(SlabFraction, next)) return false;
             if (falling || Falling) flash = falling ? Mathf.Max(0, warningSeconds - state.fallTime) : 0;
-            travel.cyclingUp = state.cyclingUp;
             travel.fallFrom = state.fallFrom;
             travel.fallTime = state.fallTime;
             Lift = state.lift;
@@ -82,8 +80,6 @@ namespace PuzzleApple.V5
             Physics.SyncTransforms();
             return true;
         }
-        bool command,raise;
-        long cycle=-1;
         float flash,glyphGlow;
         public Vector3 RoomLanding=>transform.TransformPoint(new Vector3(0,.08f,-2));
         public Vector3 StairLanding=>transform.TransformPoint(new Vector3(0,.12f,2.35f));
@@ -219,31 +215,6 @@ namespace PuzzleApple.V5
                 new Vector3(RailX+.35f,2*MouthHeight+2*RailX-arc,-.67f);
             return transform.TransformPoint(p);
         }
-        public bool WouldChange(bool open)=>Charged && !Falling && (open?Lift<1:Lift>0);
-        public void SetOpen(bool open){
-            if(!Charged || Falling){Reject();return;}
-            command=true;raise=open;
-        }
-        public bool Driving=>command;
-        public bool CommandSettling(bool open)=>Driving && WouldChange(open);
-        public void Hold()=>command=false;
-        public void Release()=>command=false;
-        public void ApplyMotion(SentenceMotionOutput output)
-        {
-            foreach(var established in output.Owners(SentenceMotion.Door))
-                if(!AcceptedCycle(established))StartCycle(established);
-        }
-        void StartCycle(long established){
-            if(!Charged || Falling){Reject();return;}
-            cycle=established;
-            if(Lift>=1)travel.cyclingUp=false;
-            else if(Lift<=0)travel.cyclingUp=true;
-        }
-        public bool CanCycle=>Charged && !Falling && !command;
-        public bool AcceptedCycle(long established)=>cycle==established;
-        internal SentenceStateOutput DoorOutput;
-        public SentenceMotionOutput MotionOutput {get;internal set;}
-        public void Reject(){flash=.35f;}
         float DistanceToRail(Vector3 p,int rail){
             var closest=rail==1?new Vector3(Mathf.Clamp(p.x,-RailX,RailX),RailHeight,-WallHalfDepth):
                 new Vector3(rail==0?-RailX:RailX,Mathf.Clamp(p.y,0,RailHeight),-WallHalfDepth);
@@ -288,7 +259,7 @@ namespace PuzzleApple.V5
             flash=Mathf.Max(0,flash-dt);
             float before=SlabFraction;
             if(!Charged && Lift>0 && !Falling){
-                travel.fallTime=0;travel.fallFrom=before;command=false;cycle=-1;
+                travel.fallTime=0;travel.fallFrom=before;
                 flash=warningSeconds;
                 if(strainClip)audioSource.PlayOneShot(strainClip);
             }
@@ -298,12 +269,10 @@ namespace PuzzleApple.V5
                 Lift=Mathf.Max(0,travel.fallFrom*(1-t*t)-Mathf.Min(travel.fallFrom,.008f)*Mathf.Clamp01(travel.fallTime/warningSeconds));
                 if(t>=1 || Lift<=0){Lift=0;travel.fallTime=-1;}
             }else if(Charged){
-                bool swing=cycle>=0 && MotionOutput?.HasMotion(SentenceMotion.Door)==true && MotionOutput.Owns(SentenceMotion.Door,cycle);
-                if(command || swing){
-                    bool up=command?raise:travel.cyclingUp;
-                    Lift=SentenceStateOutput.Advance(Lift,up?1:0,dt/(up?riseSeconds:lowerSeconds),DoorOutput);
-                    if(Lift==(up?1:0))travel.cyclingUp=!up;
-                }
+                var feet=transform.InverseTransformPoint(journey.entry.player.transform.position);
+                feet.z-=LeafZ;
+                bool near=PassageEntranceDoor.WithinSensor(feet,width,height,journey.sensorRange,journey.sensorRange);
+                Lift=Mathf.MoveTowards(Lift,near?1:0,dt/(near?riseSeconds:lowerSeconds));
             }
             Leaf.localPosition=new Vector3(0,height*(.5f+SlabFraction),LeafZ);
             if(before>SlabFraction){

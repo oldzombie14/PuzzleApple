@@ -23,7 +23,9 @@ namespace PuzzleApple.V5.Editor
             if(Application.isPlaying)throw new System.InvalidOperationException("Apply in Edit mode.");
             WriteLock("PassageRevealProgressLock",Space.FirstPath,Space.Chamber,1);
             WriteLock("WhiteDoorProgressLock",Space.SphereRoom|Space.ReturnPath,Space.FirstPath);
-            WriteLock("RoomEntranceProgressLock",Space.FarRoom,Space.ReturnPath);
+            WriteLock("RailRoomProgressLock",Space.RailRoom,Space.ReturnPath);
+            WriteLock("ApproachPathProgressLock",Space.ApproachPath,Space.RailRoom);
+            WriteLock("RoomEntranceProgressLock",Space.FarRoom,Space.ApproachPath);
             const string endingPath="Assets/Prefabs/V5/Resources/V5/IntroEnding.prefab";
             var ending=PrefabUtility.LoadPrefabContents(endingPath);
             try{

@@ -65,6 +65,9 @@ namespace PuzzleApple.V5.Cognition
             token.rectTransform.localScale=Vector3.one*board.PeriodScale(token.group);
             token.canvasRenderer.SetAlpha(ghost && token.group==source?0:token.opacity*board.PeriodVisibility(token.group));
         }
+        internal void DelayPrompt(int id,float seconds){
+            if(attached.TryGetValue(id,out var token))token.promptAfter=Time.unscaledTime+seconds;
+        }
         internal void DetachForFade(int id,RectTransform parent){
             if(!attached.Remove(id,out var token) || !token)return;
             token.raycastTarget=false;
@@ -136,7 +139,7 @@ namespace PuzzleApple.V5.Cognition
                 var token=pair.Value;var group=board.State.Find(pair.Key);
                 if(!token||group==null)continue;
                 float breath=.5f-.5f*Mathf.Cos(2*Mathf.PI*(Time.unscaledTime-token.born)/Style.breathSeconds);
-                bool prompt=board.Panel.IsOpen && !returning.Contains(group.Id) && board.State.CanPrompt(group);
+                bool prompt=Time.unscaledTime>=token.promptAfter && board.Panel.IsOpen && !returning.Contains(group.Id) && board.State.CanPrompt(group);
                 bool waiting=group.AwaitingRetry && !prompt;
                 float alpha=waiting ? CognitionBoard.ConflictAlpha : group.Spoken||token.hovered?1:Mathf.Lerp(CognitionBoard.ConflictAlpha,1,breath);
                 token.opacity=group.Spoken?1:Mathf.MoveTowards(token.opacity,alpha,dt/Style.hoverSeconds);
@@ -163,6 +166,7 @@ namespace PuzzleApple.V5.Cognition
         public int group;
         public float diameter,born,opacity;
         internal PeriodGlyph guide;
+        internal float promptAfter;
         public bool ring,hovered,wasSpoken;
         bool pressed,dragged;
         public void OnPointerEnter(PointerEventData e){hovered=true;}

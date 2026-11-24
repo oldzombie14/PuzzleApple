@@ -35,3 +35,7 @@ MonoBehaviour:
     space: {fileID: 11400000, guid: c9306e1ca5dea0040bbef162d829f1dd, type: 2}
   - legacy: 1024
     space: {fileID: 11400000, guid: c787fa6d257840d28d16c2fbd2d8327c, type: 2}
+  - legacy: 2048
+    space: {fileID: 11400000, guid: c21976aff5a34a0790e842705e0d49bc, type: 2}
+  - legacy: 4096
+    space: {fileID: 11400000, guid: 562ec75d1d74438f89eb2348c54b8b21, type: 2}

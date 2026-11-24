@@ -104,9 +104,35 @@ namespace PuzzleApple.V5.Editor
                         Check(!SentenceCameraDirector.Resolve(e.Entities, Probe(e, words), Region(room), all).HasValue, "current-view policy: " + words + " / " + room);
                 var onDoor = Probe(e, "positive door");
                 Point(SentenceCameraDirector.Resolve(e.Entities, onDoor, Region(Space.FirstPath), all), j.Door.position, "white-door hint");
-                Point(SentenceCameraDirector.Resolve(e.Entities, onDoor, Region(Space.ReturnPath), all), j.EntranceDoor.Leaf.position, "entrance-door hint");
+                Check(!SentenceCameraDirector.Resolve(e.Entities,onDoor,Region(Space.ApproachPath),all).HasValue,"sensor lift gives no manual open hint");
                 Check(!SentenceCameraDirector.Resolve(e.Entities, onDoor, Region(Space.FarRoom), all).HasValue, "unpowered charge door offers no hint");
                 Point(SentenceCameraDirector.Resolve(e.Entities, Probe(e, "floor move"), Region(Space.ReturnPath), all), j.Platform.Deck.bounds.center, "platform hint");
+                yield return ChargeDoorChecks.UnlockFirstPassage(e);
+                j.SetDoor(true);
+                yield return Wait(()=>j.DoorProgress==1,"unlock platform");
+                b.Panel.SetOpen(true);
+                yield return Wait(()=>b.Panel.FullyOpen,"visible panel for remote-only movement");
+                int strong=e.feedback.StrongCount;
+                var remote=VitruvianChecks.Say(b,"floor","move");
+                yield return Wait(()=>j.Platform.MotionOutput.HasMotion(SentenceMotion.Floor),"remote platform starts moving");
+                var word=b.GroupRect(remote.Id).GetComponentInChildren<CenteredSymbolImage>();
+                yield return Wait(()=>Mathf.Abs(word.canvasRenderer.GetAlpha()-.62f)<.01f,"remote words use middle opacity");
+                Check(b.Panel.IsOpen && !show.Playing && e.feedback.StrongCount==strong+1 &&
+                    e.sentenceRuntime.SustainsFeedback(remote),"remote platform gives stars without a cutscene");
+                p.Teleport(j.Platform.Deck.bounds.center+Vector3.up*.4f,j.Root.rotation*Quaternion.Euler(0,65,0));
+                yield return Wait(()=>j.PlayerSpace==Space.ReturnPath && word.canvasRenderer.GetAlpha()>.99f,"enter platform space and brighten the running sentence");
+                Check(!show.Playing && remote.Spoken,"crossing refreshes feedback without another presentation");
+                b.State.Unsay(remote.Id);
+                yield return null;
+                p.view.rotation=j.Root.rotation*Quaternion.Euler(-5,65,2);
+                p.AdoptCurrentView();
+                VitruvianChecks.Say(b,"floor","move");
+                yield return Wait(()=>show.Playing,"platform presentation starts");
+                angles=p.view.eulerAngles;
+                yield return Wait(()=>show.CanInterrupt,"platform presentation aims");
+                now=p.view.eulerAngles;
+                Check(Mathf.Abs(Mathf.DeltaAngle(angles.y,now.y))<.01f && Mathf.Abs(Mathf.DeltaAngle(angles.z,now.z))<.01f &&
+                    Mathf.Abs(Mathf.DeltaAngle(angles.x,now.x)-14)<.05f,"platform lowers pitch by 14 degrees while holding yaw and roll");
                 Result = "PASS: registered local focus, live eligibility and lifetime, bounded real period-triggered camera, scope-independent execution, current-view fallback, completion and interruption";
             }
             finally { registration.enabled = true; show.Cancel(); p.MovementLocked = false; }

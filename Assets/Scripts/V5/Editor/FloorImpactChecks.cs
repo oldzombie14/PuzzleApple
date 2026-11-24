@@ -32,7 +32,7 @@ namespace PuzzleApple.V5.Editor
             var state=e.board.State;
             e.board.Panel.SetOpen(false);
             j.SetDoor(true);yield return Until(()=>j.DoorProgress==1);
-            j.EntranceDoor.SetOpen(true);yield return Until(()=>j.EntranceDoor.Progress==1);
+            yield return ChargeDoorChecks.ReachRoomThree(e);
             // Leave the tutorial exit clear while exercising the rail puzzle in isolation.
             j.Tutorial.Sphere.localPosition+=Vector3.back*6;
             Physics.SyncTransforms();

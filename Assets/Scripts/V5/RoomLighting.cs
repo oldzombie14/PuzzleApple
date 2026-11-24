@@ -59,15 +59,15 @@ namespace PuzzleApple.V5
             Color dim=Color.white*(style?style.darkFill:.055f);
             Color outside=dim;
             var view=journey?journey.entry.player.view:Camera.main?Camera.main.transform:null;
-            var hiddenRoom=journey&&journey.InReturnPath?journey.FarRoomFill:null;
+            var hiddenRoom=journey&&!journey.InSecondRoom?journey.FarRoomFill:null;
             if(view&&RoomLightBalance.FillAt(view.position,out float fill,out float weight,hiddenRoom))
                 outside=Color.Lerp(dim,Color.white*fill,weight);
             // In a corridor, take the fill of the room it opens into: the sphere room through the
             // white door, and the far room through its right-hinged entrance.
-            if(journey&&journey.InCorridor)
+            if(journey&&journey.InCorridor&&!journey.InReturnPath)
             {
-                var ahead=journey.InReturnPath?journey.FarRoomFill:journey.Tutorial?journey.Tutorial.Fill:null;
-                float open=journey.InReturnPath?(journey.EntranceDoor?journey.EntranceDoor.Progress:0):journey.DoorProgress;
+                var ahead=journey.InApproach?journey.FarRoomFill:journey.Tutorial?journey.Tutorial.Fill:null;
+                float open=journey.InApproach?(journey.EntranceDoor?journey.EntranceDoor.Progress:0):journey.DoorProgress;
                 float far=ahead?Mathf.Lerp(dim.r,ahead.Fill,openDoorFill*open):dim.r;
                 if(far>outside.r)outside=Color.white*far;
             }

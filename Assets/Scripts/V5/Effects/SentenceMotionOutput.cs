@@ -189,6 +189,12 @@ namespace PuzzleApple.V5
                     applied.group.RuleId==applied.rule && applied.motion!=motion)return true;
             return false;
         }
+        internal bool HasPotentialTarget(CognitionState.Group group)
+        {
+            var motion=ResolveMotion(group);
+            return motion!=default && HasSubject(group) && changes(motion,group);
+        }
+
         public bool WouldChange(CognitionState.Group group,Space scope)
         {
             var motion=ResolveMotion(group);

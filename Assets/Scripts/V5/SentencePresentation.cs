@@ -62,14 +62,18 @@ namespace PuzzleApple.V5
             for(float t=0;t<lead&&token==revision;t+=Time.unscaledDeltaTime)
                 yield return null;
             if(token!=revision)yield break;
+            var group=affected??sentence;
+            if(group!=null && runtime.Response(group,starting:true)!=SentenceResponse.Local){
+                Cancel();apply();yield break;
+            }
             Entry.board.Panel.SetOpen(false);Cursor.lockState=CursorLockMode.None;Cursor.visible=false;
             caption=SentenceCaption.Show(transform,sentence);
             var view=Entry.player.view;
             shotRoll=view.eulerAngles.z;
             Quaternion start=view.rotation;
-            Vector3? point=FocusTarget(affected??sentence);
+            Vector3? point=FocusTarget(group);
             bool holdView=!point.HasValue;
-            Quaternion goal=holdView?start:Nudge(start,point.Value);
+            Quaternion goal=holdView?start:Nudge(start,point.Value,group.Intent?.Motion==SentenceMotion.Floor);
             for(float t=0;t<current.enter&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 float u=Mathf.SmoothStep(0,1,t/Mathf.Max(.001f,current.enter));
@@ -79,7 +83,9 @@ namespace PuzzleApple.V5
             if(token!=revision)yield break;
             if(!holdView)view.rotation=goal;
             Bars(1);
-            apply();CanInterrupt=true;
+            apply();
+            if(token!=revision)yield break;
+            CanInterrupt=true;
             for(float t=0;t<current.hold&&token==revision;t+=Time.unscaledDeltaTime)
             {
                 FadeCaption(t);
@@ -106,12 +112,18 @@ namespace PuzzleApple.V5
                 spaces.FromLegacy(runtime.EffectScope(group)));
         }
 
-        Quaternion Nudge(Quaternion start,Vector3 point)
+        Quaternion Nudge(Quaternion start,Vector3 point,bool floorMove)
         {
             Vector3 delta=point-Entry.player.view.position;
             if (delta.sqrMagnitude<.0001f) return start;
             var desired=Quaternion.LookRotation(delta,Vector3.up).eulerAngles;
             var initial=start.eulerAngles;
+            if(floorMove)
+            {
+                float pitch=Mathf.DeltaAngle(0,initial.x);
+                float targetPitch=Mathf.Clamp(Mathf.DeltaAngle(0,desired.x)+4f,pitch,89f);
+                return Quaternion.Euler(Mathf.MoveTowards(pitch,targetPitch,14f),initial.y,shotRoll);
+            }
             return Quaternion.Euler(Mathf.MoveTowardsAngle(initial.x,desired.x,10),
                 Mathf.MoveTowardsAngle(initial.y,desired.y,15),shotRoll);
         }

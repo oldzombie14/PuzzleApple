@@ -130,7 +130,27 @@ namespace PuzzleApple.V5
         void ShowLightCapacity()
         {
             if(entries.TryGetValue("light",out var tile) && !tile.GetComponent<LightCapacityDots>())
-                tile.gameObject.AddComponent<LightCapacityDots>();
+            {
+                var dots=tile.gameObject.AddComponent<LightCapacityDots>();
+                if(worldEntry.journey.Ascent&&!worldEntry.journey.Ascent.Completed)dots.AwaitArrival();
+            }
+        }
+        public void IntroduceLight()
+        {
+            if(!entries.TryGetValue("light",out var tile))return;
+            Show(false);
+            Canvas.ForceUpdateCanvases();
+            scroll.StopMovement();
+            // Reveal the source even if the player left the vocabulary list scrolled.
+            var viewport=scroll.viewport;
+            var bounds=RectTransformUtility.CalculateRelativeRectTransformBounds(viewport,tile.transform);
+            float travel=scroll.content.rect.height-viewport.rect.height;
+            if(travel>0){
+                float distance=bounds.min.y<viewport.rect.yMin?bounds.min.y-viewport.rect.yMin:
+                    Mathf.Max(0,bounds.max.y-viewport.rect.yMax);
+                scroll.verticalNormalizedPosition=Mathf.Clamp01(scroll.verticalNormalizedPosition+distance/travel);
+            }
+            tile.GetComponent<LightCapacityDots>().Introduce(board);
         }
         public void ForgetMemories(IEnumerable<string> ids)
         {

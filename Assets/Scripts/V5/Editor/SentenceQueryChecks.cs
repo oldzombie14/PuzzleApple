@@ -214,8 +214,6 @@ namespace PuzzleApple.V5.Editor
             var j = e.journey;
             if ((scope & Space.Outdoor) != 0) yield return e.outdoor.World;
             if ((scope & j.WhiteDoorSpaces) != 0) yield return j.WhiteDoor;
-            if (j.EntranceDoor && (scope & j.EntranceDoor.ControlSpaces) != 0) yield return j.EntranceDoor;
-            if (j.EndingDoor && (scope & j.EndingDoor.ControlSpaces) != 0) yield return j.EndingDoor;
         }
     }
 }

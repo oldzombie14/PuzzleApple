@@ -81,7 +81,10 @@ namespace PuzzleApple.V5
             board.State.Changed-=OnSentences;
             board.State.CommandBlocked-=OnCommandBlocked;
         }
-        void OnCommandBlocked(int groupId)=>feedback.Play(groupId,false);
+        void OnCommandBlocked(int groupId){
+            feedback.Play(groupId,sentenceRuntime.UnexecutedResponse(board.State.Find(groupId)));
+            board.DelayRetryPrompt(groupId,feedback.duration*1.2f);
+        }
         void OnSentences(CognitionChange change)=>sentenceRuntime.Refresh(change);
         void Update()
         {
